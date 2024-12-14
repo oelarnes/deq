@@ -2,6 +2,9 @@ import polars as pl
 from spells import summon, ColName, ColType, ColSpec
 from spells.extension import stat_cols, context_cols
 
+pl.Config.set_tbl_rows(1000)
+pl.Config.set_tbl_cols(100)
+
 P1_PICK_EQUITY = 0.03
 ATA_DENOM = 14
 
@@ -19,17 +22,29 @@ ext = {
     ),
     'cohort': ColSpec(
         col_type=ColType.GROUP_BY,
-        expr=pl.when((UNG >= 500) & (UGWR > 0.65) | (UNG >= 100) & (UGWR > 0.73)).then('1 Best').otherwise(
-            pl.when((UNG >= 500) & (UGWR > 0.61) | (UNG >= 100) & (UGWR > 0.65)).then('2 Elite').otherwise(
-                pl.when((UNG >= 100) & (UGWR > 0.57) | (UNG >= 50) & (UGWR > 0.61)).then('3 Competitive').otherwise(
-                    pl.when((UNG >= 100) & (UGWR > 0.53) | (UGWR > 0.57)).then('4 Solid').otherwise('5 Poor')
+        expr=pl.when((UNG >= 500) & (UGWR > 0.65) | (UNG >= 100) & (UGWR > 0.73)).then(pl.lit('1 Best')).otherwise(
+            pl.when((UNG >= 500) & (UGWR > 0.61) | (UNG >= 100) & (UGWR > 0.65)).then(pl.lit('2 Elite')).otherwise(
+                pl.when((UNG >= 100) & (UGWR > 0.57) | (UNG >= 50) & (UGWR > 0.61)).then(pl.lit('3 Competitive')).otherwise(
+                    pl.when((UNG >= 100) & (UGWR > 0.53) | (UGWR > 0.57)).then(pl.lit('4 Solid')).otherwise(pl.lit('5 Poor'))
                 )
             )
         )
     ),
-    'alsa_pick_equity': ColSpec(
+    'deck_over_colors': ColSpec(
         col_type=ColType.AGG,
-        expr=P1_PICK_EQUITY * (1 - pl.col(ColName.ALSA) / ATA_DENOM).pow(2),
+        expr=pl.col(ColName.DECK).over(pl.col(ColName.COLOR)).sum(),
+    ),
+    'won_deck_over_colors': ColSpec(
+        col_type=ColType.AGG,
+        expr=pl.col(ColName.WON_DECK).over(pl.col(ColName.COLOR)).sum(),
+    ),
+    'gp_wr_excess_over_colors': ColSpec(
+        col_type=ColType.AGG,
+        expr=pl.col('won_deck_over_colors') / pl.col('deck_over_colors') - pl.col('gp_wr_mean')
+    ),
+    'gp_wr_bias_in': ColSpec(
+        col_type=ColType.PICK_SUM,
+        expr=lambda name, card_context: pl.lit(1),
     )
 }
 
@@ -39,7 +54,7 @@ meta_filter = {'$and': [top_filter, date_filter]}
 
 sets = ['KTK', 'MKM', 'OTJ', 'MH3', 'BLB', 'DSK', 'FDN']
 
-check_metrics = ['pick_equity', 'alsa_pick_equity', 'gp_wr', 'oh_wr', 'gih_wr', 'deq_base']
+check_metrics = ['pick_equity', 'gp_wr', 'oh_wr', 'gih_wr', 'deq_base']
 
 def behavior_query(set_code: str, check_metric: str):
     attr_ext = stat_cols(check_metric, silent=True)
