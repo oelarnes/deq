@@ -1895,7 +1895,7 @@ files = [
 
 [[package]]
 name = "spells-mtg"
-version = "0.7.1"
+version = "0.7.2"
 requires_python = ">=3.11"
 summary = "analaysis of 17Lands.com public datasets"
 groups = ["default"]
@@ -1904,8 +1904,8 @@ dependencies = [
     "wget>=3.2",
 ]
 files = [
-    {file = "spells_mtg-0.7.1-py3-none-any.whl", hash = "sha256:2e953f3b03d0fa7e66a2000eea9b53543dd023ae001b69777856f9dd3c232fc4"},
-    {file = "spells_mtg-0.7.1.tar.gz", hash = "sha256:ab0175af3645eae6d35a65d8c107a91d20c98c8e02f582f4432941d771dc9fc0"},
+    {file = "spells_mtg-0.7.2-py3-none-any.whl", hash = "sha256:1c4e6d3732ff7ede9fc988d7112934e09259cc62517a862cbd5c32309c47b456"},
+    {file = "spells_mtg-0.7.2.tar.gz", hash = "sha256:7473944cc9da7933f7c0f2805dbdde0577982a97a7d6a3d44fd2d7c3b705395c"},
 ]
 
 [[package]]

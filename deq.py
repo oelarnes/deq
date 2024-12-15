@@ -6,7 +6,7 @@ pl.Config.set_tbl_rows(1000)
 pl.Config.set_tbl_cols(100)
 
 P1_PICK_EQUITY = 0.03
-ATA_DENOM = 14
+ATA_DENOM = 13
 
 UNG = pl.col(ColName.USER_N_GAMES_BUCKET)
 UGWR = pl.col(ColName.USER_GAME_WIN_RATE_BUCKET)
@@ -14,7 +14,7 @@ UGWR = pl.col(ColName.USER_GAME_WIN_RATE_BUCKET)
 ext = {
     'pick_equity': ColSpec(
         col_type=ColType.AGG,
-        expr=P1_PICK_EQUITY * (1 - pl.col(ColName.ATA) / ATA_DENOM).pow(2),
+        expr=P1_PICK_EQUITY * (1 - (pl.col(ColName.ATA)-1) / ATA_DENOM).pow(2),
     ),
     'deq_base': ColSpec(
         col_type=ColType.AGG,
@@ -32,19 +32,85 @@ ext = {
     ),
     'deck_over_colors': ColSpec(
         col_type=ColType.AGG,
-        expr=pl.col(ColName.DECK).over(pl.col(ColName.COLOR)).sum(),
+        expr=pl.col(ColName.DECK).sum().over(pl.col(ColName.COLOR)),
     ),
     'won_deck_over_colors': ColSpec(
         col_type=ColType.AGG,
-        expr=pl.col(ColName.WON_DECK).over(pl.col(ColName.COLOR)).sum(),
+        expr=pl.col(ColName.WON_DECK).sum().over(pl.col(ColName.COLOR)),
     ),
     'gp_wr_excess_over_colors': ColSpec(
         col_type=ColType.AGG,
         expr=pl.col('won_deck_over_colors') / pl.col('deck_over_colors') - pl.col('gp_wr_mean')
     ),
+}
+
+context_ext = {
     'gp_wr_bias_in': ColSpec(
-        col_type=ColType.PICK_SUM,
-        expr=lambda name, card_context: pl.lit(1),
+        col_type=ColType.CARD_ATTR,
+        expr=lambda set_context: pl.when(
+            pl.col(ColName.COLOR) == "UW").then(
+                0.5 * set_context['gp_wr_excess_over_colors_UW'] 
+                + 0.25 * set_context['gp_wr_excess_over_colors_W']
+                + 0.25 * set_context['gp_wr_excess_over_colors_U']
+            ).otherwise(pl.when(pl.col(ColName.COLOR) == "BW").then(
+                0.5 * set_context['gp_wr_excess_over_colors_BW'] 
+                + 0.25 * set_context['gp_wr_excess_over_colors_W']
+                + 0.25 * set_context['gp_wr_excess_over_colors_B']
+            ).otherwise(pl.when(pl.col(ColName.COLOR) == "RW").then(
+                0.5 * set_context['gp_wr_excess_over_colors_RW'] 
+                + 0.25 * set_context['gp_wr_excess_over_colors_W']
+                + 0.25 * set_context['gp_wr_excess_over_colors_R']
+            ).otherwise(pl.when(pl.col(ColName.COLOR) == "GW").then(
+                0.5 * set_context['gp_wr_excess_over_colors_GW'] 
+                + 0.25 * set_context['gp_wr_excess_over_colors_W']
+                + 0.25 * set_context['gp_wr_excess_over_colors_G']
+            ).otherwise(pl.when(pl.col(ColName.COLOR) == "BW").then(
+                0.5 * set_context['gp_wr_excess_over_colors_BW'] 
+                + 0.25 * set_context['gp_wr_excess_over_colors_W']
+                + 0.25 * set_context['gp_wr_excess_over_colors_B']
+            ).otherwise(pl.when(pl.col(ColName.COLOR) == "BU").then(
+                0.5 * set_context['gp_wr_excess_over_colors_BU'] 
+                + 0.25 * set_context['gp_wr_excess_over_colors_U']
+                + 0.25 * set_context['gp_wr_excess_over_colors_B']
+            ).otherwise(pl.when(pl.col(ColName.COLOR) == "RU").then(
+                0.5 * set_context['gp_wr_excess_over_colors_RU'] 
+                + 0.25 * set_context['gp_wr_excess_over_colors_U']
+                + 0.25 * set_context['gp_wr_excess_over_colors_R']
+            ).otherwise(pl.when(pl.col(ColName.COLOR) == "GU").then(
+                0.5 * set_context['gp_wr_excess_over_colors_GU'] 
+                + 0.25 * set_context['gp_wr_excess_over_colors_U']
+                + 0.25 * set_context['gp_wr_excess_over_colors_G']
+            ).otherwise(pl.when(pl.col(ColName.COLOR) == "BR").then(
+                0.5 * set_context['gp_wr_excess_over_colors_BR'] 
+                + 0.25 * set_context['gp_wr_excess_over_colors_R']
+                + 0.25 * set_context['gp_wr_excess_over_colors_B']
+            ).otherwise(pl.when(pl.col(ColName.COLOR) == "BG").then(
+                0.5 * set_context['gp_wr_excess_over_colors_BG'] 
+                + 0.25 * set_context['gp_wr_excess_over_colors_G']
+                + 0.25 * set_context['gp_wr_excess_over_colors_B']
+            ).otherwise(pl.when(pl.col(ColName.COLOR) == "GR").then(
+                0.5 * set_context['gp_wr_excess_over_colors_GR'] 
+                + 0.25 * set_context['gp_wr_excess_over_colors_G']
+                + 0.25 * set_context['gp_wr_excess_over_colors_R']
+            ).otherwise(pl.when(pl.col(ColName.COLOR) == "W").then(
+                set_context['gp_wr_excess_over_colors_W']
+            ).otherwise(pl.when(pl.col(ColName.COLOR) == "U").then(
+                set_context['gp_wr_excess_over_colors_U']
+            ).otherwise(pl.when(pl.col(ColName.COLOR) == "B").then(
+                set_context['gp_wr_excess_over_colors_B']
+            ).otherwise(pl.when(pl.col(ColName.COLOR) == "R").then(
+                set_context['gp_wr_excess_over_colors_R']
+            ).otherwise(pl.when(pl.col(ColName.COLOR) == "G").then(
+                set_context['gp_wr_excess_over_colors_G']
+            ).otherwise(0))))))))))))))))
+    ),
+    'deq_bias_adj': ColSpec(
+        col_type=ColType.AGG,
+        expr=(pl.col('pick_equity') / P1_PICK_EQUITY - 1) * pl.col('gp_wr_bias_in'),
+    ),
+    'deq': ColSpec(
+        col_type=ColType.AGG,
+        expr=pl.col('deq_base') + pl.col('deq_bias_adj')
     )
 }
 
@@ -52,9 +118,17 @@ top_filter = {ColName.PLAYER_COHORT: 'Top'}
 date_filter = {'lhs': ColName.FORMAT_DAY, 'op': '>=', 'rhs': 10}
 meta_filter = {'$and': [top_filter, date_filter]}
 
-sets = ['KTK', 'MKM', 'OTJ', 'MH3', 'BLB', 'DSK', 'FDN']
+sets = ['FND', 'DSK', 'BLB', 'MH3', 'OTJ', 'MKM', 'LCI', 'WOE', 'LTR', 'MOM', 'ONE', 'BRO', 'DMU', 'SNC', 'NEO']
 
 check_metrics = ['pick_equity', 'gp_wr', 'oh_wr', 'gih_wr', 'deq_base']
+
+def deq_bias_set_context(set_code: str):
+    gpwr_oc = summon(set_code, columns=['gp_wr_excess_over_colors'], group_by=['color'], filter_spec=meta_filter, extensions=ext)
+    select = ['gp_wr_excess_over_colors_' + pl.col('color'), 'gp_wr_excess_over_colors']
+
+    set_context = {key:value[0] for key, value in gpwr_oc.select(select).rows_by_key('literal', unique=True).items()}
+    return set_context
+
 
 def behavior_query(set_code: str, check_metric: str):
     attr_ext = stat_cols(check_metric, silent=True)
