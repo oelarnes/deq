@@ -42,6 +42,14 @@ ext = {
         col_type=ColType.AGG,
         expr=pl.col('won_deck_over_colors') / pl.col('deck_over_colors') - pl.col('gp_wr_mean')
     ),
+    'deq_bias_adj': ColSpec(
+        col_type=ColType.AGG,
+        expr=(pl.col('pick_equity') / P1_PICK_EQUITY - 1) * pl.col('gp_wr_bias_in'),
+    ),
+    'deq': ColSpec(
+        col_type=ColType.AGG,
+        expr=pl.col('deq_base') + pl.col('deq_bias_adj')
+    )
 }
 
 context_ext = {
@@ -104,23 +112,21 @@ context_ext = {
                 set_context['gp_wr_excess_over_colors_G']
             ).otherwise(0))))))))))))))))
     ),
-    'deq_bias_adj': ColSpec(
-        col_type=ColType.AGG,
-        expr=(pl.col('pick_equity') / P1_PICK_EQUITY - 1) * pl.col('gp_wr_bias_in'),
-    ),
-    'deq': ColSpec(
-        col_type=ColType.AGG,
-        expr=pl.col('deq_base') + pl.col('deq_bias_adj')
-    )
 }
 
 top_filter = {ColName.PLAYER_COHORT: 'Top'}
 date_filter = {'lhs': ColName.FORMAT_DAY, 'op': '>=', 'rhs': 10}
 meta_filter = {'$and': [top_filter, date_filter]}
 
+pack_1_filter = {'pack_num': 1}
+pick_1_filter = {'pick_num': 1}
+
+p1p1_filter = {'$and': [pick_1_filter, pack_1_filter]}
+p1p1_date_filter = {'$and': [p1p1_filter, date_filter]}
+
 sets = ['FND', 'DSK', 'BLB', 'MH3', 'OTJ', 'MKM', 'LCI', 'WOE', 'LTR', 'MOM', 'ONE', 'BRO', 'DMU', 'SNC', 'NEO']
 
-check_metrics = ['pick_equity', 'gp_wr', 'oh_wr', 'gih_wr', 'deq_base']
+metrics = ['pick_equity', 'gp_wr', 'deq_base', 'deq']
 
 def deq_bias_set_context(set_code: str):
     gpwr_oc = summon(set_code, columns=['gp_wr_excess_over_colors'], group_by=['color'], filter_spec=meta_filter, extensions=ext)
@@ -130,17 +136,19 @@ def deq_bias_set_context(set_code: str):
     return set_context
 
 
-def behavior_query(set_code: str, check_metric: str):
-    attr_ext = stat_cols(check_metric, silent=True)
+def behavior_query(set_code: str, metric: str):
+    set_context = deq_bias_set_context(set_code)
 
-    metric = f"{check_metric}_pwz"
+    stat_ext = stat_cols(metric, silent=True)
 
-    context_df = summon(set_code, columns=[metric], filter_spec=meta_filter, extensions=[ext, attr_ext])
+    metric = f"{metric}_pwz"
+
+    context_df = summon(set_code, columns=[metric], filter_spec=meta_filter, extensions=[ext, stat_ext], set_context=set_context)
 
     z_attr_ext = context_cols(metric, silent=True)
-    columns = [f""]
+    columns = [f"greatest_{metric}_taken_rate", f"pick_{metric}_vs_greatest_mean"]
 
-    result_df = summon(set_code, columns=columns, group_by=['cohort'], filter_spec=date_filter, extensions=[z_attr_ext, ext], card_context=context_df)
+    result_df = summon(set_code, columns=columns, group_by=['cohort'], filter_spec=p1p1_date_filter, extensions=[z_attr_ext, ext], card_context=context_df)
 
     return result_df
 
@@ -164,3 +172,11 @@ def attenuate(wr, gp):
     new_total = assumed_games + extra_games
 
     return round(new_wins / new_total * 50) / 50
+
+def check_metrics(set_code:str, metrics=metrics):
+    result =[behavior_query(set_code, metric) for metric in metrics] 
+    for df in result:
+        print(df)
+    return result
+
+result = check_metrics('OTJ')
