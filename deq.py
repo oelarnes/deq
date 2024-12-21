@@ -95,59 +95,59 @@ needs_excess_ext = {
         col_type=ColType.CARD_ATTR,
         expr=lambda set_context: pl.when(
             pl.col(ColName.COLOR) == "UW").then(
-                0.5 * set_context.get('gp_wr_excess_over_colors_UW') 
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_W')
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_U')
+                0.5 * set_context.get('gp_wr_excess_over_colors_UW', 0) 
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_W', 0)
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_U', 0)
             ).otherwise(pl.when(pl.col(ColName.COLOR) == "BW").then(
-                0.5 * set_context.get('gp_wr_excess_over_colors_BW') 
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_W')
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_B')
+                0.5 * set_context.get('gp_wr_excess_over_colors_BW', 0) 
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_W', 0)
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_B', 0)
             ).otherwise(pl.when(pl.col(ColName.COLOR) == "RW").then(
-                0.5 * set_context.get('gp_wr_excess_over_colors_RW') 
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_W')
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_R')
+                0.5 * set_context.get('gp_wr_excess_over_colors_RW', 0) 
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_W', 0)
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_R', 0)
             ).otherwise(pl.when(pl.col(ColName.COLOR) == "GW").then(
-                0.5 * set_context.get('gp_wr_excess_over_colors_GW') 
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_W')
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_G')
+                0.5 * set_context.get('gp_wr_excess_over_colors_GW', 0) 
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_W', 0)
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_G', 0)
             ).otherwise(pl.when(pl.col(ColName.COLOR) == "BW").then(
-                0.5 * set_context.get('gp_wr_excess_over_colors_BW') 
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_W')
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_B')
+                0.5 * set_context.get('gp_wr_excess_over_colors_BW', 0) 
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_W', 0)
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_B', 0)
             ).otherwise(pl.when(pl.col(ColName.COLOR) == "BU").then(
-                0.5 * set_context.get('gp_wr_excess_over_colors_BU') 
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_U')
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_B')
+                0.5 * set_context.get('gp_wr_excess_over_colors_BU', 0) 
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_U', 0)
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_B', 0)
             ).otherwise(pl.when(pl.col(ColName.COLOR) == "RU").then(
-                0.5 * set_context.get('gp_wr_excess_over_colors_RU') 
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_U')
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_R')
+                0.5 * set_context.get('gp_wr_excess_over_colors_RU', 0) 
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_U', 0)
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_R', 0)
             ).otherwise(pl.when(pl.col(ColName.COLOR) == "GU").then(
-                0.5 * set_context.get('gp_wr_excess_over_colors_GU') 
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_U')
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_G')
+                0.5 * set_context.get('gp_wr_excess_over_colors_GU', 0) 
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_U', 0)
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_G', 0)
             ).otherwise(pl.when(pl.col(ColName.COLOR) == "BR").then(
-                0.5 * set_context.get('gp_wr_excess_over_colors_BR') 
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_R')
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_B')
+                0.5 * set_context.get('gp_wr_excess_over_colors_BR', 0) 
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_R', 0)
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_B', 0)
             ).otherwise(pl.when(pl.col(ColName.COLOR) == "BG").then(
-                0.5 * set_context.get('gp_wr_excess_over_colors_BG') 
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_G')
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_B')
+                0.5 * set_context.get('gp_wr_excess_over_colors_BG', 0) 
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_G', 0)
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_B', 0)
             ).otherwise(pl.when(pl.col(ColName.COLOR) == "GR").then(
-                0.5 * set_context.get('gp_wr_excess_over_colors_GR') 
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_G')
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_R')
+                0.5 * set_context.get('gp_wr_excess_over_colors_GR', 0) 
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_G', 0)
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_R', 0)
             ).otherwise(pl.when(pl.col(ColName.COLOR) == "W").then(
-                set_context.get('gp_wr_excess_over_colors_W')
+                set_context.get('gp_wr_excess_over_colors_W', 0)
             ).otherwise(pl.when(pl.col(ColName.COLOR) == "U").then(
-                set_context.get('gp_wr_excess_over_colors_U')
+                set_context.get('gp_wr_excess_over_colors_U', 0)
             ).otherwise(pl.when(pl.col(ColName.COLOR) == "B").then(
-                set_context.get('gp_wr_excess_over_colors_B')
+                set_context.get('gp_wr_excess_over_colors_B', 0)
             ).otherwise(pl.when(pl.col(ColName.COLOR) == "R").then(
-                set_context.get('gp_wr_excess_over_colors_R')
+                set_context.get('gp_wr_excess_over_colors_R', 0)
             ).otherwise(pl.when(pl.col(ColName.COLOR) == "G").then(
-                set_context.get('gp_wr_excess_over_colors_G')
+                set_context.get('gp_wr_excess_over_colors_G', 0)
             ).otherwise(0))))))))))))))))
     ),
 }
@@ -186,7 +186,11 @@ def deq_bias_set_context(set_codes: list[str], metric_filter: dict):
     return set_context
 
 
-def p1_strat_analysis(set_codes: list[str], metric: str, metric_filter: dict, results_filter: dict):
+def p1_strat_analysis(set_codes: list[str], metric: str, metric_filter: dict | None, results_filter: dict | None = None):
+    p1_results_filter = {'$and': [p1p1_filter, results_filter]} if results_filter else p1p1_filter
+
+    metric_filter = meta_filter if metric_filter is None else metric_filter
+
     if metric in ['deq', 'gp_wr_bias_adj']:
         set_context = deq_bias_set_context(set_codes, metric_filter)
         context_ext = [ext, needs_excess_ext]
@@ -212,7 +216,7 @@ def p1_strat_analysis(set_codes: list[str], metric: str, metric_filter: dict, re
         set_codes, 
         columns=[f"seen_{metric}_is_greatest"], 
         group_by=['expansion', 'name', 'wr_group'], 
-        filter_spec=p1p1_date_filter, 
+        filter_spec=p1_results_filter, 
         extensions=[metric_cols, ext], 
         card_context=context_df
     ).filter((pl.col(f"seen_{metric}_is_greatest")>0) & group_filter & ~pl.col('name').is_in(BASIC_LANDS))
@@ -221,7 +225,7 @@ def p1_strat_analysis(set_codes: list[str], metric: str, metric_filter: dict, re
         set_codes, 
         columns=[ColName.PICKED_MATCH_WR, ColName.NUM_TAKEN, 'matches_per_pick', 'mean_day_picked'], 
         group_by=['expansion', 'name', 'wr_group'], 
-        filter_spec={'$and': [{f"greatest_{metric}_taken": True}, results_filter]},
+        filter_spec={'$and': [{f"greatest_{metric}_taken": True}, p1_results_filter]},
         extensions=[metric_cols, ext],
         card_context=context_df
         ).filter(group_filter & wr_filter)
@@ -230,7 +234,7 @@ def p1_strat_analysis(set_codes: list[str], metric: str, metric_filter: dict, re
         set_codes,
         columns=[ColName.PICKED_MATCH_WR, ColName.NUM_TAKEN, 'matches_per_pick', 'mean_day_picked'],
         group_by=['expansion', 'name', 'wr_group'],
-        filter_spec=results_filter,
+        filter_spec=p1_results_filter,
         extensions=[ext],
     ).filter(group_filter & wr_filter)
 
@@ -300,12 +304,14 @@ def get_simulated_winrates(reweight_df, metric):
     ])
     return wr_df.sort('wr_group')
 
-def p1p1_win_rate(set_codes, results_filter:dict):
+def p1p1_win_rate(set_codes, results_filter:dict | None = None):
+    p1_results_filter = {'$and': [p1p1_filter, results_filter]} if results_filter else p1p1_filter
+
     return summon(
         set_codes, 
         columns=[ColName.PICKED_MATCH_WR, ColName.EVENT_MATCHES_SUM, 'mean_day_picked'], 
         group_by=['wr_group'], 
         extensions=ext,
-        filter_spec=results_filter
+        filter_spec=p1_results_filter
     ).filter(~pl.col('wr_group').is_null()).sort('wr_group')
 
