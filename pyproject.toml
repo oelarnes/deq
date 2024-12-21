@@ -11,7 +11,7 @@ dependencies = [
     "requests>=2.32.3",
     "matplotlib>=3.9.2",
     "scikit-learn>=1.5.2",
-    "spells-mtg>=0.0.2",
+    "spells-mtg @ file:///Users/joel/Projects/spells",
 ]
 requires-python = ">=3.11"
 readme = "README.md"
@@ -29,4 +29,5 @@ distribution = true
 dev = [
     "ruff>=0.8.2",
     "pyright>=1.1.390",
+    "matplotlib>=3.10.0",
 ]

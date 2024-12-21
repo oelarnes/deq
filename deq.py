@@ -1,12 +1,17 @@
 import polars as pl
-from spells import summon, ColName, ColType, ColSpec
+from spells import summon, ColName, ColType, ColSpec, view_select, get_names
 from spells.extension import stat_cols, context_cols
+from spells.config import all_sets
 
 pl.Config.set_tbl_rows(1000)
 pl.Config.set_tbl_cols(100)
 
+BASIC_LANDS = ['Plains', 'Island', 'Swamp', 'Mountain', 'Forest']
 P1_PICK_EQUITY = 0.03
 ATA_DENOM = 13
+
+BAYES_GAMES = 150
+BAYES_MU = 0.54
 
 UNG = pl.col(ColName.USER_N_GAMES_BUCKET)
 UGWR = pl.col(ColName.USER_GAME_WIN_RATE_BUCKET)
@@ -18,7 +23,7 @@ ext = {
     ),
     'deq_base': ColSpec(
         col_type=ColType.AGG,
-        expr=(pl.col(ColName.GP_WR_EXCESS) + pl.col('pick_equity')) * pl.col(ColName.PCT_GP)
+        expr=pl.when(pl.col(ColName.DECK) < 100).then(None).otherwise((pl.col(ColName.GP_WR_EXCESS) + pl.col('pick_equity')) * pl.col(ColName.PCT_GP))
     ),
     'cohort': ColSpec(
         col_type=ColType.GROUP_BY,
@@ -29,6 +34,15 @@ ext = {
                 )
             )
         )
+    ),
+    'wr_group': ColSpec(
+        col_type=ColType.GROUP_BY,
+        expr=pl.min_horizontal([pl.max_horizontal([((pl.when(UNG == 1000).then(1200/(1200 + BAYES_GAMES)).otherwise(
+            pl.when(UNG == 500).then(750/(750+BAYES_GAMES)).otherwise(
+            pl.when(UNG == 100).then(300/(300+BAYES_GAMES)).otherwise(
+            pl.when(UNG == 50).then(75/(75+BAYES_GAMES)).otherwise(
+            pl.when(UNG == 10).then(30/(30+BAYES_GAMES)).otherwise(0)))))
+                * (UGWR - BAYES_MU) + BAYES_MU) * 50).round() * 2, 40]), 68]),
     ),
     'deck_over_colors': ColSpec(
         col_type=ColType.AGG,
@@ -42,74 +56,98 @@ ext = {
         col_type=ColType.AGG,
         expr=pl.col('won_deck_over_colors') / pl.col('deck_over_colors') - pl.col('gp_wr_mean')
     ),
+    'gih_wr': ColSpec(
+        col_type=ColType.AGG,
+        expr=(BAYES_MU * BAYES_GAMES + pl.col(ColName.NUM_GIH_WON))/ (pl.col(ColName.NUM_GIH) + BAYES_GAMES)
+    ),
+    'gp_wr': ColSpec(
+        col_type=ColType.AGG,
+        expr=(BAYES_MU * BAYES_GAMES + pl.col(ColName.WON_DECK)) / (pl.col(ColName.DECK) + BAYES_GAMES),
+    ),
     'deq_bias_adj': ColSpec(
         col_type=ColType.AGG,
         expr=(pl.col('pick_equity') / P1_PICK_EQUITY - 1) * pl.col('gp_wr_bias_in'),
     ),
     'deq': ColSpec(
         col_type=ColType.AGG,
-        expr=pl.col('deq_base') + pl.col('deq_bias_adj')
+        expr=pl.col('deq_base') + pl.col('deq_bias_adj') * pl.col('pct_gp')
+    ),
+    'gp_wr_bias_adj': ColSpec(
+        col_type=ColType.AGG,
+        expr=pl.col('gp_wr') + pl.col('deq_bias_adj')
+    ),
+    'matches_per_pick': ColSpec(
+        col_type=ColType.AGG,
+        expr=pl.col(ColName.EVENT_MATCHES_SUM) / pl.col(ColName.NUM_TAKEN)
+    ),
+    'format_day_sum': ColSpec(
+        col_type=ColType.PICK_SUM,
+        expr=pl.col(ColName.FORMAT_DAY)
+    ),
+    'mean_day_picked': ColSpec(
+        col_type=ColType.AGG,
+        expr=pl.col('format_day_sum') / pl.col(ColName.NUM_TAKEN)
     )
 }
 
-context_ext = {
+needs_excess_ext = {
     'gp_wr_bias_in': ColSpec(
         col_type=ColType.CARD_ATTR,
         expr=lambda set_context: pl.when(
             pl.col(ColName.COLOR) == "UW").then(
-                0.5 * set_context['gp_wr_excess_over_colors_UW'] 
-                + 0.25 * set_context['gp_wr_excess_over_colors_W']
-                + 0.25 * set_context['gp_wr_excess_over_colors_U']
+                0.5 * set_context.get('gp_wr_excess_over_colors_UW') 
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_W')
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_U')
             ).otherwise(pl.when(pl.col(ColName.COLOR) == "BW").then(
-                0.5 * set_context['gp_wr_excess_over_colors_BW'] 
-                + 0.25 * set_context['gp_wr_excess_over_colors_W']
-                + 0.25 * set_context['gp_wr_excess_over_colors_B']
+                0.5 * set_context.get('gp_wr_excess_over_colors_BW') 
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_W')
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_B')
             ).otherwise(pl.when(pl.col(ColName.COLOR) == "RW").then(
-                0.5 * set_context['gp_wr_excess_over_colors_RW'] 
-                + 0.25 * set_context['gp_wr_excess_over_colors_W']
-                + 0.25 * set_context['gp_wr_excess_over_colors_R']
+                0.5 * set_context.get('gp_wr_excess_over_colors_RW') 
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_W')
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_R')
             ).otherwise(pl.when(pl.col(ColName.COLOR) == "GW").then(
-                0.5 * set_context['gp_wr_excess_over_colors_GW'] 
-                + 0.25 * set_context['gp_wr_excess_over_colors_W']
-                + 0.25 * set_context['gp_wr_excess_over_colors_G']
+                0.5 * set_context.get('gp_wr_excess_over_colors_GW') 
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_W')
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_G')
             ).otherwise(pl.when(pl.col(ColName.COLOR) == "BW").then(
-                0.5 * set_context['gp_wr_excess_over_colors_BW'] 
-                + 0.25 * set_context['gp_wr_excess_over_colors_W']
-                + 0.25 * set_context['gp_wr_excess_over_colors_B']
+                0.5 * set_context.get('gp_wr_excess_over_colors_BW') 
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_W')
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_B')
             ).otherwise(pl.when(pl.col(ColName.COLOR) == "BU").then(
-                0.5 * set_context['gp_wr_excess_over_colors_BU'] 
-                + 0.25 * set_context['gp_wr_excess_over_colors_U']
-                + 0.25 * set_context['gp_wr_excess_over_colors_B']
+                0.5 * set_context.get('gp_wr_excess_over_colors_BU') 
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_U')
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_B')
             ).otherwise(pl.when(pl.col(ColName.COLOR) == "RU").then(
-                0.5 * set_context['gp_wr_excess_over_colors_RU'] 
-                + 0.25 * set_context['gp_wr_excess_over_colors_U']
-                + 0.25 * set_context['gp_wr_excess_over_colors_R']
+                0.5 * set_context.get('gp_wr_excess_over_colors_RU') 
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_U')
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_R')
             ).otherwise(pl.when(pl.col(ColName.COLOR) == "GU").then(
-                0.5 * set_context['gp_wr_excess_over_colors_GU'] 
-                + 0.25 * set_context['gp_wr_excess_over_colors_U']
-                + 0.25 * set_context['gp_wr_excess_over_colors_G']
+                0.5 * set_context.get('gp_wr_excess_over_colors_GU') 
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_U')
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_G')
             ).otherwise(pl.when(pl.col(ColName.COLOR) == "BR").then(
-                0.5 * set_context['gp_wr_excess_over_colors_BR'] 
-                + 0.25 * set_context['gp_wr_excess_over_colors_R']
-                + 0.25 * set_context['gp_wr_excess_over_colors_B']
+                0.5 * set_context.get('gp_wr_excess_over_colors_BR') 
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_R')
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_B')
             ).otherwise(pl.when(pl.col(ColName.COLOR) == "BG").then(
-                0.5 * set_context['gp_wr_excess_over_colors_BG'] 
-                + 0.25 * set_context['gp_wr_excess_over_colors_G']
-                + 0.25 * set_context['gp_wr_excess_over_colors_B']
+                0.5 * set_context.get('gp_wr_excess_over_colors_BG') 
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_G')
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_B')
             ).otherwise(pl.when(pl.col(ColName.COLOR) == "GR").then(
-                0.5 * set_context['gp_wr_excess_over_colors_GR'] 
-                + 0.25 * set_context['gp_wr_excess_over_colors_G']
-                + 0.25 * set_context['gp_wr_excess_over_colors_R']
+                0.5 * set_context.get('gp_wr_excess_over_colors_GR') 
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_G')
+                + 0.25 * set_context.get('gp_wr_excess_over_colors_R')
             ).otherwise(pl.when(pl.col(ColName.COLOR) == "W").then(
-                set_context['gp_wr_excess_over_colors_W']
+                set_context.get('gp_wr_excess_over_colors_W')
             ).otherwise(pl.when(pl.col(ColName.COLOR) == "U").then(
-                set_context['gp_wr_excess_over_colors_U']
+                set_context.get('gp_wr_excess_over_colors_U')
             ).otherwise(pl.when(pl.col(ColName.COLOR) == "B").then(
-                set_context['gp_wr_excess_over_colors_B']
+                set_context.get('gp_wr_excess_over_colors_B')
             ).otherwise(pl.when(pl.col(ColName.COLOR) == "R").then(
-                set_context['gp_wr_excess_over_colors_R']
+                set_context.get('gp_wr_excess_over_colors_R')
             ).otherwise(pl.when(pl.col(ColName.COLOR) == "G").then(
-                set_context['gp_wr_excess_over_colors_G']
+                set_context.get('gp_wr_excess_over_colors_G')
             ).otherwise(0))))))))))))))))
     ),
 }
@@ -124,59 +162,150 @@ pick_1_filter = {'pick_num': 1}
 p1p1_filter = {'$and': [pick_1_filter, pack_1_filter]}
 p1p1_date_filter = {'$and': [p1p1_filter, date_filter]}
 
-sets = ['FND', 'DSK', 'BLB', 'MH3', 'OTJ', 'MKM', 'LCI', 'WOE', 'LTR', 'MOM', 'ONE', 'BRO', 'DMU', 'SNC', 'NEO']
-
 metrics = ['pick_equity', 'gp_wr', 'deq_base', 'deq']
 
-def deq_bias_set_context(set_code: str):
-    gpwr_oc = summon(set_code, columns=['gp_wr_excess_over_colors'], group_by=['color'], filter_spec=meta_filter, extensions=ext)
+
+def deq_bias_set_context(set_codes: list[str], metric_filter: dict):
+    gpwr_oc = summon(
+        set_codes, 
+        columns=['gp_wr_excess_over_colors'], 
+        group_by=['expansion', 'color'], 
+        filter_spec=metric_filter, 
+        extensions=ext
+    )
+
     select = ['gp_wr_excess_over_colors_' + pl.col('color'), 'gp_wr_excess_over_colors']
 
-    set_context = {key:value[0] for key, value in gpwr_oc.select(select).rows_by_key('literal', unique=True).items()}
+    set_context = {
+        set_code: {
+            key:value[0] for key, value in gpwr_oc.filter(pl.col('expansion') == set_code).select(
+                select
+            ).rows_by_key('literal', unique=True).items()
+        } for set_code in set_codes
+    }
     return set_context
 
 
-def behavior_query(set_code: str, metric: str):
-    set_context = deq_bias_set_context(set_code)
+def p1_strat_analysis(set_codes: list[str], metric: str, metric_filter: dict, results_filter: dict):
+    if metric in ['deq', 'gp_wr_bias_adj']:
+        set_context = deq_bias_set_context(set_codes, metric_filter)
+        context_ext = [ext, needs_excess_ext]
+    else:
+        set_context = None
+        context_ext = ext
 
-    stat_ext = stat_cols(metric, silent=True)
+    context_df = summon(
+        set_codes, 
+        columns=[metric], 
+        filter_spec=metric_filter, 
+        group_by=['expansion', 'name'],
+        extensions=context_ext, 
+        set_context=set_context
+    )
 
-    metric = f"{metric}_pwz"
+    metric_cols = context_cols(metric, silent=True)
 
-    context_df = summon(set_code, columns=[metric], filter_spec=meta_filter, extensions=[ext, stat_ext], set_context=set_context)
+    group_filter = ~pl.col('wr_group').is_null()
+    wr_filter = ~pl.col(ColName.PICKED_MATCH_WR).is_null()
 
-    z_attr_ext = context_cols(metric, silent=True)
-    columns = [f"greatest_{metric}_taken_rate", f"pick_{metric}_vs_greatest_mean"]
+    weights_df = summon(
+        set_codes, 
+        columns=[f"seen_{metric}_is_greatest"], 
+        group_by=['expansion', 'name', 'wr_group'], 
+        filter_spec=p1p1_date_filter, 
+        extensions=[metric_cols, ext], 
+        card_context=context_df
+    ).filter((pl.col(f"seen_{metric}_is_greatest")>0) & group_filter & ~pl.col('name').is_in(BASIC_LANDS))
 
-    result_df = summon(set_code, columns=columns, group_by=['cohort'], filter_spec=p1p1_date_filter, extensions=[z_attr_ext, ext], card_context=context_df)
+    greatest_taken_wr_df = summon(
+        set_codes, 
+        columns=[ColName.PICKED_MATCH_WR, ColName.NUM_TAKEN, 'matches_per_pick', 'mean_day_picked'], 
+        group_by=['expansion', 'name', 'wr_group'], 
+        filter_spec={'$and': [{f"greatest_{metric}_taken": True}, results_filter]},
+        extensions=[metric_cols, ext],
+        card_context=context_df
+        ).filter(group_filter & wr_filter)
 
-    return result_df
+    wr_df = summon(
+        set_codes,
+        columns=[ColName.PICKED_MATCH_WR, ColName.NUM_TAKEN, 'matches_per_pick', 'mean_day_picked'],
+        group_by=['expansion', 'name', 'wr_group'],
+        filter_spec=results_filter,
+        extensions=[ext],
+    ).filter(group_filter & wr_filter)
 
+    out_one_col = pl.when(pl.col('wr_group') - 54 > -1).then(pl.col('wr_group') + 2).otherwise(
+        pl.when(pl.col('wr_group') - 54 < -1).then(pl.col('wr_group') - 2)).alias('wr_group')
 
-def attenuate(wr, gp):
-    next_gp = {
-        1: 5,
-        5: 10,
-        10: 50,
-        50: 100,
-        100: 500,
-        500: 1000,
-        1000: 2000
-    }[gp]
+    down_one_col = (pl.col('wr_group') - 2).alias('wr_group')
+    
+    select_cols = [
+        'expansion', 
+        'name', 
+        ColName.PICKED_MATCH_WR,
+        'matches_per_pick',
+        'mean_day_picked'
+    ]
 
-    assumed_games = 1/3 * next_gp + 2/3 * gp
-    extra_games = 200
-    extra_wr = 0.54
+    to_join_pair = [greatest_taken_wr_df.select(select_cols + ['wr_group']), wr_df.select(select_cols + ['wr_group'])]
+    go_down_pair = list(to_join_pair)
 
-    new_wins = assumed_games * wr + extra_wr * extra_games
-    new_total = assumed_games + extra_games
+    good_dfs = []
+    remaining_df = weights_df
 
-    return round(new_wins / new_total * 50) / 50
+    iter = 0
+    join_keys = ['expansion', 'name', 'wr_group']
+    while iter < 20 and len(remaining_df):
+        parity = iter % 2
+        discrepancy = pl.lit(iter-parity).alias('discrepancy')
+        join_df = remaining_df.join(to_join_pair[parity], on=join_keys)
+        join_df = join_df.with_columns(discrepancy)
+        good_dfs.append(join_df)
+        
+        remaining_df = remaining_df.join(to_join_pair[parity], on=join_keys, how='anti')
 
-def check_metrics(set_code:str, metrics=metrics):
-    result =[behavior_query(set_code, metric) for metric in metrics] 
-    for df in result:
-        print(df)
-    return result
+        join_df = remaining_df.join(go_down_pair[parity], on=join_keys)
+        join_df = join_df.with_columns(discrepancy)
+        good_dfs.append(join_df)
+        
+        remaining_df = remaining_df.join(go_down_pair[parity], on=join_keys, how='anti')
 
-result = check_metrics('OTJ')
+        if iter % 2 == 1:
+            for i in [0,1]:
+                to_join_pair[i] = to_join_pair[i].select(select_cols + [out_one_col])
+                go_down_pair[i] = go_down_pair[i].select(select_cols + [down_one_col])
+        iter += 1
+
+    final_df = pl.concat(good_dfs)
+
+    return get_simulated_winrates(final_df, metric), remaining_df
+
+def get_simulated_winrates(reweight_df, metric):
+    weight_col = (pl.col(f'seen_{metric}_is_greatest') * pl.col('matches_per_pick')).alias('weight')
+    weight_df = reweight_df.select([
+        'wr_group',
+        weight_col,
+        (weight_col * pl.col(ColName.PICKED_MATCH_WR)).alias('wr_weight'),
+        (weight_col * pl.col('mean_day_picked')).alias('day_weight'),
+        (weight_col * pl.col('discrepancy')).alias('discrepancy_weight'),
+    ])
+
+    group_sum = weight_df.group_by(['wr_group']).sum()
+    wr_df = group_sum.select([
+        'wr_group',
+        pl.col('weight'),
+        (pl.col('wr_weight') / pl.col('weight')).alias(f'{metric}_strategy_win_rate'),
+        (pl.col('day_weight') / pl.col('weight')).alias(f'{metric}_strategy_mean_day'),
+        (pl.col('discrepancy_weight') / pl.col('weight')).alias(f'{metric}_strategy_discrepancy'),
+    ])
+    return wr_df.sort('wr_group')
+
+def p1p1_win_rate(set_codes, results_filter:dict):
+    return summon(
+        set_codes, 
+        columns=[ColName.PICKED_MATCH_WR, ColName.EVENT_MATCHES_SUM, 'mean_day_picked'], 
+        group_by=['wr_group'], 
+        extensions=ext,
+        filter_spec=results_filter
+    ).filter(~pl.col('wr_group').is_null()).sort('wr_group')
+
