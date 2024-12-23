@@ -87,13 +87,10 @@ ext = {
     'mean_day_picked': ColSpec(
         col_type=ColType.AGG,
         expr=pl.col('format_day_sum') / pl.col(ColName.NUM_TAKEN)
-    )
-}
-
-needs_excess_ext = {
+    ),
     'gp_wr_bias_in': ColSpec(
         col_type=ColType.CARD_ATTR,
-        expr=lambda set_context: pl.when(
+        expr=lambda set_context: pl.lit(None) if 'gp_wr_excess_over_colors_W' not in set_context else pl.when(
             pl.col(ColName.COLOR) == "UW").then(
                 0.5 * set_context.get('gp_wr_excess_over_colors_UW', 0) 
                 + 0.25 * set_context.get('gp_wr_excess_over_colors_W', 0)
@@ -153,7 +150,7 @@ needs_excess_ext = {
 }
 
 top_filter = {ColName.PLAYER_COHORT: 'Top'}
-date_filter = {'lhs': ColName.FORMAT_DAY, 'op': '>=', 'rhs': 10}
+date_filter = {'lhs': ColName.FORMAT_DAY, 'op': '>=', 'rhs': 13}
 meta_filter = {'$and': [top_filter, date_filter]}
 
 pack_1_filter = {'pack_num': 1}
@@ -162,8 +159,7 @@ pick_1_filter = {'pick_num': 1}
 p1p1_filter = {'$and': [pick_1_filter, pack_1_filter]}
 p1p1_date_filter = {'$and': [p1p1_filter, date_filter]}
 
-metrics = ['pick_equity', 'gp_wr', 'deq_base', 'deq']
-
+metrics = ['pick_equity', 'gp_wr', 'deq_base', 'deq', 'gp_wr_bias_adj', 'gih_wr']
 
 def deq_bias_set_context(set_codes: list[str], metric_filter: dict):
     gpwr_oc = summon(
@@ -186,24 +182,24 @@ def deq_bias_set_context(set_codes: list[str], metric_filter: dict):
     return set_context
 
 
-def p1_strat_analysis(set_codes: list[str], metric: str, metric_filter: dict | None, results_filter: dict | None = None):
+def p1_strat_analysis(set_codes: list[str], metric: str, metric_filter: dict | None = None, results_filter: dict | None = None):
+    assert isinstance(set_codes, list), "Pass a list of set_codes!"
     p1_results_filter = {'$and': [p1p1_filter, results_filter]} if results_filter else p1p1_filter
 
     metric_filter = meta_filter if metric_filter is None else metric_filter
 
     if metric in ['deq', 'gp_wr_bias_adj']:
         set_context = deq_bias_set_context(set_codes, metric_filter)
-        context_ext = [ext, needs_excess_ext]
     else:
         set_context = None
-        context_ext = ext
 
+    print(f"Calculation metric {metric} value for context")
     context_df = summon(
         set_codes, 
         columns=[metric], 
         filter_spec=metric_filter, 
         group_by=['expansion', 'name'],
-        extensions=context_ext, 
+        extensions=ext, 
         set_context=set_context
     )
 
@@ -212,31 +208,25 @@ def p1_strat_analysis(set_codes: list[str], metric: str, metric_filter: dict | N
     group_filter = ~pl.col('wr_group').is_null()
     wr_filter = ~pl.col(ColName.PICKED_MATCH_WR).is_null()
 
+    print("Calculating seen greatest counts for weights")
     weights_df = summon(
         set_codes, 
-        columns=[f"seen_{metric}_is_greatest"], 
+        columns=[f"seen_{metric}_is_greatest", ColName.PICKED_MATCH_WR, ColName.EVENT_MATCHES_SUM, 'matches_per_pick', 'mean_day_picked'], 
         group_by=['expansion', 'name', 'wr_group'], 
         filter_spec=p1_results_filter, 
         extensions=[metric_cols, ext], 
         card_context=context_df
     ).filter((pl.col(f"seen_{metric}_is_greatest")>0) & group_filter & ~pl.col('name').is_in(BASIC_LANDS))
 
+    print("Calculating greatest taken df for simulation drafts")
     greatest_taken_wr_df = summon(
         set_codes, 
-        columns=[ColName.PICKED_MATCH_WR, ColName.NUM_TAKEN, 'matches_per_pick', 'mean_day_picked'], 
+        columns=[ColName.PICKED_MATCH_WR, 'matches_per_pick', 'mean_day_picked'], 
         group_by=['expansion', 'name', 'wr_group'], 
         filter_spec={'$and': [{f"greatest_{metric}_taken": True}, p1_results_filter]},
         extensions=[metric_cols, ext],
         card_context=context_df
         ).filter(group_filter & wr_filter)
-
-    wr_df = summon(
-        set_codes,
-        columns=[ColName.PICKED_MATCH_WR, ColName.NUM_TAKEN, 'matches_per_pick', 'mean_day_picked'],
-        group_by=['expansion', 'name', 'wr_group'],
-        filter_spec=p1_results_filter,
-        extensions=[ext],
-    ).filter(group_filter & wr_filter)
 
     out_one_col = pl.when(pl.col('wr_group') - 54 > -1).then(pl.col('wr_group') + 2).otherwise(
         pl.when(pl.col('wr_group') - 54 < -1).then(pl.col('wr_group') - 2)).alias('wr_group')
@@ -251,12 +241,13 @@ def p1_strat_analysis(set_codes: list[str], metric: str, metric_filter: dict | N
         'mean_day_picked'
     ]
 
-    to_join_pair = [greatest_taken_wr_df.select(select_cols + ['wr_group']), wr_df.select(select_cols + ['wr_group'])]
+    to_join_pair = [greatest_taken_wr_df.select(select_cols + ['wr_group']), weights_df.select(select_cols + ['wr_group'])]
     go_down_pair = list(to_join_pair)
 
     good_dfs = []
     remaining_df = weights_df
 
+    print("Joining and calculating results")
     iter = 0
     join_keys = ['expansion', 'name', 'wr_group']
     while iter < 20 and len(remaining_df):
@@ -282,7 +273,24 @@ def p1_strat_analysis(set_codes: list[str], metric: str, metric_filter: dict | N
 
     final_df = pl.concat(good_dfs)
 
-    return get_simulated_winrates(final_df, metric), remaining_df
+    base_weight = pl.col(ColName.EVENT_MATCHES_SUM)
+    base_wr_df = weights_df.select([
+        'wr_group', 
+        base_weight, 
+        (base_weight * pl.col('mean_day_picked')).alias('day_weight'),
+        (base_weight * pl.col(ColName.PICKED_MATCH_WR)).alias('wr_weight')
+    ]).group_by('wr_group').sum().select([
+        'wr_group',
+        base_weight,
+        (pl.col('wr_weight') / base_weight).alias("actual_win_rate"),
+        (pl.col('day_weight') / base_weight).alias("mean_day_picked"),
+    ]).sort('wr_group')
+
+    sim_df = get_simulated_winrates(final_df, metric)
+    ret_df = base_wr_df.join(sim_df, on=["wr_group"])
+
+    print(f"Returning, {len(remaining_df)} rows unaccounted for")
+    return ret_df, remaining_df
 
 def get_simulated_winrates(reweight_df, metric):
     weight_col = (pl.col(f'seen_{metric}_is_greatest') * pl.col('matches_per_pick')).alias('weight')
@@ -315,3 +323,5 @@ def p1p1_win_rate(set_codes, results_filter:dict | None = None):
         filter_spec=p1_results_filter
     ).filter(~pl.col('wr_group').is_null()).sort('wr_group')
 
+def all_metrics_analysis(metrics: list[str], metric_filter: dict | None = None, results_filter: dict | None = None):
+    pass
