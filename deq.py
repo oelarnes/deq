@@ -204,6 +204,7 @@ def p1_strat_analysis(set_codes: list[str], metric: str, metric_filter: dict | N
     )
 
     metric_cols = context_cols(metric, silent=True)
+    seen_is_greatest = f"seen_{metric}_is_greatest"
 
     group_filter = ~pl.col('wr_group').is_null()
     wr_filter = ~pl.col(ColName.PICKED_MATCH_WR).is_null()
@@ -211,12 +212,18 @@ def p1_strat_analysis(set_codes: list[str], metric: str, metric_filter: dict | N
     print("Calculating seen greatest counts for weights")
     weights_df = summon(
         set_codes, 
-        columns=[f"seen_{metric}_is_greatest", ColName.PICKED_MATCH_WR, ColName.EVENT_MATCHES_SUM, 'matches_per_pick', 'mean_day_picked'], 
+        columns=[seen_is_greatest, ColName.PICKED_MATCH_WR, ColName.EVENT_MATCHES_SUM, 'matches_per_pick', 'mean_day_picked'], 
         group_by=['expansion', 'name', 'wr_group'], 
         filter_spec=p1_results_filter, 
         extensions=[metric_cols, ext], 
         card_context=context_df
-    ).filter((pl.col(f"seen_{metric}_is_greatest")>0) & group_filter & ~pl.col('name').is_in(BASIC_LANDS))
+    )
+
+    wr_df = weights_df.drop(seen_is_greatest).filter(group_filter & wr_filter)
+
+    weights_df = weights_df.select(
+        ['expansion', 'name', 'wr_group', seen_is_greatest]
+    ).filter((pl.col(seen_is_greatest)>0) & group_filter & ~pl.col('name').is_in(BASIC_LANDS))
 
     print("Calculating greatest taken df for simulation drafts")
     greatest_taken_wr_df = summon(
@@ -241,7 +248,7 @@ def p1_strat_analysis(set_codes: list[str], metric: str, metric_filter: dict | N
         'mean_day_picked'
     ]
 
-    to_join_pair = [greatest_taken_wr_df.select(select_cols + ['wr_group']), weights_df.select(select_cols + ['wr_group'])]
+    to_join_pair = [greatest_taken_wr_df.select(select_cols + ['wr_group']), wr_df.select(select_cols + ['wr_group'])]
     go_down_pair = list(to_join_pair)
 
     good_dfs = []
@@ -274,7 +281,7 @@ def p1_strat_analysis(set_codes: list[str], metric: str, metric_filter: dict | N
     final_df = pl.concat(good_dfs)
 
     base_weight = pl.col(ColName.EVENT_MATCHES_SUM)
-    base_wr_df = weights_df.select([
+    base_wr_df = wr_df.select([
         'wr_group', 
         base_weight, 
         (base_weight * pl.col('mean_day_picked')).alias('day_weight'),
@@ -288,29 +295,28 @@ def p1_strat_analysis(set_codes: list[str], metric: str, metric_filter: dict | N
 
     sim_df = get_simulated_winrates(final_df, metric)
     ret_df = base_wr_df.join(sim_df, on=["wr_group"])
+    ret_df = ret_df.with_columns(
+        [(pl.col(f"{metric}_strategy_win_rate") - pl.col("actual_win_rate")).alias("f{metric}_strat_wr_delta")])
 
     print(f"Returning, {len(remaining_df)} rows unaccounted for")
     return ret_df, remaining_df
 
 def get_simulated_winrates(reweight_df, metric):
     weight_col = (pl.col(f'seen_{metric}_is_greatest') * pl.col('matches_per_pick')).alias('weight')
-    weight_df = reweight_df.select([
+
+    return reweight_df.select([
         'wr_group',
         weight_col,
         (weight_col * pl.col(ColName.PICKED_MATCH_WR)).alias('wr_weight'),
         (weight_col * pl.col('mean_day_picked')).alias('day_weight'),
         (weight_col * pl.col('discrepancy')).alias('discrepancy_weight'),
-    ])
-
-    group_sum = weight_df.group_by(['wr_group']).sum()
-    wr_df = group_sum.select([
+    ]).group_by(['wr_group']).sum().select([
         'wr_group',
         pl.col('weight'),
         (pl.col('wr_weight') / pl.col('weight')).alias(f'{metric}_strategy_win_rate'),
         (pl.col('day_weight') / pl.col('weight')).alias(f'{metric}_strategy_mean_day'),
         (pl.col('discrepancy_weight') / pl.col('weight')).alias(f'{metric}_strategy_discrepancy'),
-    ])
-    return wr_df.sort('wr_group')
+    ]).sort('wr_group')
 
 def p1p1_win_rate(set_codes, results_filter:dict | None = None):
     p1_results_filter = {'$and': [p1p1_filter, results_filter]} if results_filter else p1p1_filter
