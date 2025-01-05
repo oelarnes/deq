@@ -5,6 +5,8 @@ BASIC_LANDS = ['Plains', 'Island', 'Swamp', 'Mountain', 'Forest']
 P1_PICK_EQUITY = 0.03
 ATA_DENOM = 13
 
+PRECISION = 2 ** 20
+
 BAYES_GAMES = 150
 BAYES_MU = 0.54
 
@@ -12,6 +14,22 @@ UNG = pl.col(ColName.USER_N_GAMES_BUCKET)
 UGWR = pl.col(ColName.USER_GAME_WIN_RATE_BUCKET)
 
 ext = {
+    ColName.DECK_TOTAL: ColSpec(
+        col_type=ColType.AGG,
+        expr=pl.col(ColName.DECK).sum().over('expansion'),
+    ),
+    ColName.WON_DECK_TOTAL: ColSpec(
+        col_type=ColType.AGG,
+        expr=pl.col(ColName.WON_DECK).sum().over('expansion'),
+    ),
+    ColName.GP_WR_MEAN: ColSpec(
+        col_type=ColType.AGG,
+        expr=pl.col(ColName.WON_DECK_TOTAL) / pl.col(ColName.DECK_TOTAL),
+    ),
+    ColName.GP_WR_EXCESS: ColSpec(
+        col_type=ColType.AGG,
+        expr=pl.col(ColName.GP_WR) - pl.col(ColName.GP_WR_MEAN),
+    ),
     'pick_equity': ColSpec(
         col_type=ColType.AGG,
         expr=P1_PICK_EQUITY * (1 - (pl.col(ColName.ATA)-1) / ATA_DENOM).pow(2),
@@ -41,15 +59,15 @@ ext = {
     ),
     'deck_over_colors': ColSpec(
         col_type=ColType.AGG,
-        expr=pl.col(ColName.DECK).sum().over(pl.col(ColName.COLOR)),
+        expr=pl.col(ColName.DECK).sum().over([pl.col(ColName.EXPANSION), pl.col(ColName.COLOR)]),
     ),
     'won_deck_over_colors': ColSpec(
         col_type=ColType.AGG,
-        expr=pl.col(ColName.WON_DECK).sum().over(pl.col(ColName.COLOR)),
+        expr=pl.col(ColName.WON_DECK).sum().over([pl.col(ColName.EXPANSION), pl.col(ColName.COLOR)]),
     ),
     'gp_wr_excess_over_colors': ColSpec(
         col_type=ColType.AGG,
-        expr=pl.col('won_deck_over_colors') / pl.col('deck_over_colors') - pl.col('gp_wr_mean')
+        expr=((pl.col('won_deck_over_colors') / pl.col('deck_over_colors') - pl.col('gp_wr_mean')) * PRECISION).round() / PRECISION
     ),
     'gih_wr': ColSpec(
         col_type=ColType.AGG,
@@ -158,10 +176,9 @@ def deq_bias_set_context(set_codes: list[str], metric_filter: dict):
     set_context = {
         set_code: {
             key:value[0] for key, value in gpwr_oc.filter(pl.col('expansion') == set_code).select(
-                select
-            ).rows_by_key('literal', unique=True).items()
+                select).rows_by_key('literal', unique=True).items()
         } for set_code in set_codes
     }
-    return set_context
 
+    return set_context
 

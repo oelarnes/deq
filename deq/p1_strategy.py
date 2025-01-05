@@ -1,25 +1,27 @@
 import polars as pl
 from spells import summon, ColName
 from spells.extension import context_cols
+from spells.log import make_verbose
 
 from deq.deq import deq_bias_set_context, BASIC_LANDS, ext
 
 TOP_FILTER = {ColName.PLAYER_COHORT: 'Top'}
-DATE_FILTER = {'lhs': ColName.FORMAT_DAY, 'op': '>=', 'rhs': 13}
-META_FILTER = {'$and': [TOP_FILTER, DATE_FILTER]}
+LATE_FORMAT = {'lhs': ColName.FORMAT_DAY, 'op': '>=', 'rhs': 13}
+EARLY_FORMAT = {'$not': LATE_FORMAT}
+META_FILTER = {'$and': [TOP_FILTER, LATE_FORMAT]}
 
 PACK_1_FILTER = {'pack_num': 1}
 PICK_1_FILTER = {'pick_num': 1}
 
-P1P1_FILTER = {'$and': [PICK_1_FILTER, PACK_1_FILTER]}
-P1P1_DATE_FILTER = {'$and': [P1P1_FILTER, DATE_FILTER]}
-
+P1P1 = {'$and': [PICK_1_FILTER, PACK_1_FILTER]}
 PRECISION = 2 ** 20
 
 metrics = ['pick_equity', 'gp_wr', 'deq_base', 'deq', 'gp_wr_bias_adj', 'gih_wr']
+
+@make_verbose
 def p1_strat_analysis(set_codes: list[str], metric: str, metric_filter: dict | None = None, results_filter: dict | None = None):
     assert isinstance(set_codes, list), "Pass a list of set_codes!"
-    p1_results_filter = {'$and': [P1P1_FILTER, results_filter]} if results_filter else P1P1_FILTER
+    p1_results_filter = {'$and': [P1P1, results_filter]} if results_filter else P1P1
 
     metric_filter = META_FILTER if metric_filter is None else metric_filter
 
@@ -51,7 +53,7 @@ def p1_strat_analysis(set_codes: list[str], metric: str, metric_filter: dict | N
         group_by=['expansion', 'name', 'wr_group'], 
         filter_spec=p1_results_filter, 
         extensions=[metric_cols, ext], 
-        card_context=context_df
+        card_context=context_df,
     )
 
     wr_df = weights_df.drop(seen_is_greatest).filter(group_filter & wr_filter)
@@ -62,13 +64,13 @@ def p1_strat_analysis(set_codes: list[str], metric: str, metric_filter: dict | N
 
     print("Calculating greatest taken df for simulation drafts")
     greatest_taken_wr_df = summon(
-        set_codes, 
+        set_codes,
         columns=[ColName.PICKED_MATCH_WR, 'matches_per_pick', 'mean_day_picked'], 
-        group_by=['expansion', 'name', 'wr_group'], 
+        group_by=['expansion', 'name', 'wr_group'],
         filter_spec={'$and': [{f"greatest_{metric}_taken": True}, p1_results_filter]},
         extensions=[metric_cols, ext],
-        card_context=context_df
-        ).filter(group_filter & wr_filter)
+        card_context=context_df,
+    ).filter(group_filter & wr_filter)
 
     out_one_col = pl.when(pl.col('wr_group') - 54 > -1).then(pl.col('wr_group') + 2).otherwise(
         pl.when(pl.col('wr_group') - 54 < -1).then(pl.col('wr_group') - 2)).alias('wr_group')
@@ -154,7 +156,7 @@ def get_simulated_winrates(reweight_df, metric):
     ]).sort('wr_group')
 
 def p1p1_win_rate(set_codes, results_filter:dict | None = None):
-    p1_results_filter = {'$and': [P1P1_FILTER, results_filter]} if results_filter else P1P1_FILTER
+    p1_results_filter = {'$and': [P1P1, results_filter]} if results_filter else P1P1
 
     return summon(
         set_codes, 
