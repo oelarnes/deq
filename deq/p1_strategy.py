@@ -1,9 +1,13 @@
+import logging
 import polars as pl
-from spells import summon, ColName
+import functools
+
+from spells import summon, ColName, ColSpec, ColType
 from spells.extension import context_cols
 from spells.log import make_verbose
+from spells.config import all_sets
 
-from deq.deq import deq_bias_set_context, BASIC_LANDS, ext
+from deq.deq import deq_bias_set_context, BASIC_LANDS, ext, BAYES_GAMES, BAYES_MU
 
 TOP_FILTER = {ColName.PLAYER_COHORT: 'Top'}
 LATE_FORMAT = {'lhs': ColName.FORMAT_DAY, 'op': '>=', 'rhs': 13}
@@ -18,8 +22,35 @@ PRECISION = 2 ** 20
 
 metrics = ['pick_equity', 'gp_wr', 'deq_base', 'deq', 'gp_wr_bias_adj', 'gih_wr']
 
-@make_verbose
-def p1_strat_analysis(set_codes: list[str], metric: str, metric_filter: dict | None = None, results_filter: dict | None = None):
+@make_verbose(logging.INFO)
+def p1_strat_analysis(
+    set_codes: list[str], 
+    metric: str, 
+    metric_filter: dict | None = None, 
+    results_filter: dict | None = None,
+    p1_skill_control: bool = False
+):
+    assert not p1_skill_control or metric == "pick_equity", "use pick equity for skill control pass"
+    # to use existing cache for other metrics, add to ext when convenient
+    if metric == ColName.IWD:
+        extensions = {
+            ColName.GNS_WR: ColSpec(
+                col_type=ColType.AGG,
+                expr=(BAYES_MU * BAYES_GAMES + pl.col(ColName.WON_NUM_GNS))/ (pl.col(ColName.NUM_GNS) + BAYES_GAMES)
+            ),
+            ColName.NUM_GNS: ColSpec(
+                col_type=ColType.NAME_SUM,
+                expr=lambda name: pl.max_horizontal(
+                    0,
+                    pl.col(f"deck_{name}")
+                    - pl.col(f"drawn_{name}")
+                    - pl.col(f"opening_hand_{name}"),
+                ), # lazy way to use SNC and NEO which don't have "tutored"
+            ),
+            **ext
+        }
+    else:
+        extensions = dict(ext)
     assert isinstance(set_codes, list), "Pass a list of set_codes!"
     p1_results_filter = {'$and': [P1P1, results_filter]} if results_filter else P1P1
 
@@ -30,13 +61,13 @@ def p1_strat_analysis(set_codes: list[str], metric: str, metric_filter: dict | N
     else:
         set_context = None
 
-    print(f"Calculation metric {metric} value for context")
+    logging.info(f"Calculation metric {metric} value for context")
     context_df = summon(
         set_codes, 
         columns=[metric], 
         filter_spec=metric_filter, 
         group_by=['expansion', 'name'],
-        extensions=ext, 
+        extensions=extensions, 
         set_context=set_context
     ).select(["expansion", "name", (pl.col(metric) * PRECISION).round() / PRECISION])
 
@@ -46,7 +77,7 @@ def p1_strat_analysis(set_codes: list[str], metric: str, metric_filter: dict | N
     group_filter = ~pl.col('wr_group').is_null()
     wr_filter = ~pl.col(ColName.PICKED_MATCH_WR).is_null()
 
-    print("Calculating seen greatest counts for weights")
+    logging.info("Calculating seen greatest counts for weights")
     weights_df = summon(
         set_codes, 
         columns=[seen_is_greatest, ColName.PICKED_MATCH_WR, ColName.EVENT_MATCHES_SUM, 'matches_per_pick', 'mean_day_picked'], 
@@ -54,6 +85,7 @@ def p1_strat_analysis(set_codes: list[str], metric: str, metric_filter: dict | N
         filter_spec=p1_results_filter, 
         extensions=[metric_cols, ext], 
         card_context=context_df,
+        use_streaming=True,
     )
 
     wr_df = weights_df.drop(seen_is_greatest).filter(group_filter & wr_filter)
@@ -62,7 +94,7 @@ def p1_strat_analysis(set_codes: list[str], metric: str, metric_filter: dict | N
         ['expansion', 'name', 'wr_group', seen_is_greatest]
     ).filter((pl.col(seen_is_greatest)>0) & group_filter & ~pl.col('name').is_in(BASIC_LANDS))
 
-    print("Calculating greatest taken df for simulation drafts")
+    logging.info("Calculating greatest taken df for simulation drafts")
     greatest_taken_wr_df = summon(
         set_codes,
         columns=[ColName.PICKED_MATCH_WR, 'matches_per_pick', 'mean_day_picked'], 
@@ -70,6 +102,7 @@ def p1_strat_analysis(set_codes: list[str], metric: str, metric_filter: dict | N
         filter_spec={'$and': [{f"greatest_{metric}_taken": True}, p1_results_filter]},
         extensions=[metric_cols, ext],
         card_context=context_df,
+        use_streaming=True,
     ).filter(group_filter & wr_filter)
 
     out_one_col = pl.when(pl.col('wr_group') - 54 > -1).then(pl.col('wr_group') + 2).otherwise(
@@ -91,10 +124,11 @@ def p1_strat_analysis(set_codes: list[str], metric: str, metric_filter: dict | N
     good_dfs = []
     remaining_df = weights_df
 
-    print("Joining and calculating results")
+    logging.info("Joining and calculating results")
     iter = 0
     join_keys = ['expansion', 'name', 'wr_group']
-    while iter < 20 and len(remaining_df):
+    iter_max = 2 if p1_skill_control else 20
+    while iter < iter_max and len(remaining_df):
         parity = iter % 2
         discrepancy = pl.lit(iter-parity).alias('discrepancy')
         join_df = remaining_df.join(to_join_pair[parity], on=join_keys)
@@ -170,3 +204,6 @@ def all_metrics_analysis(sets: list[str], metrics: list[str], metric_filter: dic
     metrics = []
     metric_results = {metric: p1_strat_analysis(sets, metric, metric_filter, results_filter) for metric in metrics}
 
+@functools.lru_cache(maxsize=None)
+def p1_skill_control_df():
+    return p1_strat_analysis(all_sets, "pick_equity", p1_skill_control=True)

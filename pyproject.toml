@@ -11,7 +11,7 @@ dependencies = [
     "requests>=2.32.3",
     "matplotlib>=3.9.2",
     "scikit-learn>=1.5.2",
-    "spells-mtg @ file:///Users/joel/Projects/spells",
+    "spells-mtg @ file:///home/joel/dev/spells",
 ]
 requires-python = ">=3.11"
 readme = "README.md"
@@ -21,13 +21,12 @@ license = {text = "MIT"}
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
 
-
 [tool.pdm]
 distribution = true
 
 [dependency-groups]
 dev = [
-    "ruff>=0.8.2",
+    "ruff>=0.8.6",
     "pyright>=1.1.390",
     "matplotlib>=3.10.0",
 ]

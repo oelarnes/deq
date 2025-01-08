@@ -3,6 +3,7 @@ import importlib
 import os
 
 import polars as pl
+from spells.config import all_sets
 import numpy as np
 
 from spells import *
