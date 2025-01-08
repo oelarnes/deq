@@ -1941,7 +1941,7 @@ files = [
 
 [[package]]
 name = "spells-mtg"
-version = "0.9.6.dev2"
+version = "0.9.7.dev1"
 requires_python = ">=3.11"
 path = "/home/joel/dev/spells"
 summary = "analaysis of 17Lands.com public datasets"
