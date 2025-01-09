@@ -14,6 +14,19 @@ UNG = pl.col(ColName.USER_N_GAMES_BUCKET)
 UGWR = pl.col(ColName.USER_GAME_WIN_RATE_BUCKET)
 
 ext = {
+    ColName.GNS_WR: ColSpec(
+        col_type=ColType.AGG,
+        expr=(BAYES_MU * BAYES_GAMES + pl.col(ColName.WON_NUM_GNS))/ (pl.col(ColName.NUM_GNS) + BAYES_GAMES)
+    ),
+    ColName.NUM_GNS: ColSpec(
+        col_type=ColType.NAME_SUM,
+        expr=lambda name: pl.max_horizontal(
+            0,
+            pl.col(f"deck_{name}")
+            - pl.col(f"drawn_{name}")
+            - pl.col(f"opening_hand_{name}"),
+        ), # lazy way to use SNC and NEO which don't have "tutored"
+    ),
     ColName.DECK_TOTAL: ColSpec(
         col_type=ColType.AGG,
         expr=pl.col(ColName.DECK).sum().over('expansion'),

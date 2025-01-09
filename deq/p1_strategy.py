@@ -41,9 +41,15 @@ class Mapped:
     unmapped: pl.DataFrame
 
 @dataclass
-class Result:
+class MetricResult:
     df: pl.DataFrame
     mapped: Mapped
+
+@dataclass
+class AnalysisResult:
+    df: pl.DataFrame
+    metric_results: dict[str, MetricResult]
+
 
 def get_model_dfs(
     set_codes: list[str], 
@@ -51,28 +57,9 @@ def get_model_dfs(
     results_filter: dict | None, 
     metric_filter: dict | None
 ) -> ModelDFs:
-    if metric == ColName.IWD:
-        extensions = {
-            ColName.GNS_WR: ColSpec(
-                col_type=ColType.AGG,
-                expr=(BAYES_MU * BAYES_GAMES + pl.col(ColName.WON_NUM_GNS))/ (pl.col(ColName.NUM_GNS) + BAYES_GAMES)
-            ),
-            ColName.NUM_GNS: ColSpec(
-                col_type=ColType.NAME_SUM,
-                expr=lambda name: pl.max_horizontal(
-                    0,
-                    pl.col(f"deck_{name}")
-                    - pl.col(f"drawn_{name}")
-                    - pl.col(f"opening_hand_{name}"),
-                ), # lazy way to use SNC and NEO which don't have "tutored"
-            ),
-            **ext
-        }
-    else:
-        extensions = dict(ext)
     assert isinstance(set_codes, list), "Pass a list of set_codes!"
-    p1_results_filter = {'$and': [P1P1, results_filter]} if results_filter else P1P1
 
+    p1_results_filter = {'$and': [P1P1, results_filter]} if results_filter else P1P1
     metric_filter = META_FILTER if metric_filter is None else metric_filter
 
     if metric in ['deq', 'gp_wr_bias_adj']:
@@ -86,7 +73,7 @@ def get_model_dfs(
         columns=[metric], 
         filter_spec=metric_filter, 
         group_by=['expansion', 'name'],
-        extensions=extensions, 
+        extensions=ext, 
         set_context=set_context
     ).select(["expansion", "name", (pl.col(metric) * PRECISION).round() / PRECISION])
 
@@ -114,11 +101,16 @@ def get_model_dfs(
         use_streaming=True,
     ).filter(GROUP_FILTER & WR_FILTER)
 
-    wr_df = weights_df.drop(SEEN_IS_GREATEST.format(metric)).filter(GROUP_FILTER & WR_FILTER)
+    wr_df = weights_df.drop(SEEN_IS_GREATEST.format(metric)).filter(
+        GROUP_FILTER & WR_FILTER
+    )
 
     weights_df = weights_df.select(
         ['expansion', 'name', 'wr_group', SEEN_IS_GREATEST.format(metric)]
-    ).filter((pl.col(SEEN_IS_GREATEST.format(metric))>0) & GROUP_FILTER & ~pl.col('name').is_in(BASIC_LANDS))
+    ).filter(
+        (pl.col(SEEN_IS_GREATEST.format(metric))>0) & 
+        GROUP_FILTER & ~pl.col('name').is_in(BASIC_LANDS)
+    )
 
     return ModelDFs(
         weights_df=weights_df,
@@ -127,22 +119,30 @@ def get_model_dfs(
     )
 
 def strategy_mapped_df(model_dfs: ModelDFs, card_parity: bool = False) -> Mapped:
-    out_one_col = pl.when(pl.col('wr_group') - 54 > -1).then(pl.col('wr_group') + 2).otherwise(
-        pl.when(pl.col('wr_group') - 54 < -1).then(pl.col('wr_group') - 2)).alias('wr_group')
+    up_one_cols = [
+        pl.col('wr_group') + 2,
+        pl.col(ColName.PICKED_MATCH_WR) + 0.02,
+    ]
 
-    down_one_col = (pl.col('wr_group') - 2).alias('wr_group')
+    down_one_cols = [
+        pl.col('wr_group') - 2,
+        pl.col(ColName.PICKED_MATCH_WR) - 0.02,
+    ]
     
     select_cols = [
         'expansion', 
         'name', 
-        ColName.PICKED_MATCH_WR,
         'matches_per_pick',
         'mean_day_picked'
     ]
 
     to_join_pair = [
-        model_dfs.greatest_taken_wr_df.select(select_cols + ['wr_group']), 
-        model_dfs.wr_df.select(select_cols + ['wr_group'])
+        model_dfs.greatest_taken_wr_df.select(
+            select_cols + ['wr_group', ColName.PICKED_MATCH_WR]
+        ), 
+        model_dfs.wr_df.select(
+            select_cols + ['wr_group', ColName.PICKED_MATCH_WR]
+        )
     ]
     go_down_pair = list(to_join_pair)
 
@@ -175,15 +175,17 @@ def strategy_mapped_df(model_dfs: ModelDFs, card_parity: bool = False) -> Mapped
 
         if iter % 2 == 1:
             for i in [0,1]:
-                to_join_pair[i] = to_join_pair[i].select(select_cols + [out_one_col])
-                go_down_pair[i] = go_down_pair[i].select(select_cols + [down_one_col])
+                to_join_pair[i] = to_join_pair[i].select(select_cols + up_one_cols)
+                go_down_pair[i] = go_down_pair[i].select(select_cols + down_one_cols)
         iter += 1
 
     final_df = pl.concat(good_dfs)
 
     if card_parity:
         num_wr_groups = len(final_df.group_by('wr_group').count())
-        keys_df = final_df.group_by(['expansion', 'name']).count().filter(pl.col('count') == num_wr_groups).select(['expansion', 'name'])
+        keys_df = final_df.group_by(['expansion', 'name']).count().filter(
+            pl.col('count') == num_wr_groups).select(['expansion', 'name']
+        )
         final_df = final_df.join(keys_df, on=['expansion', 'name'])
 
     return Mapped(
@@ -223,18 +225,25 @@ def p1_strat_analysis(
     sim_df = get_simulated_winrates(mapped.df, metric, luck_control=luck_control)
     ret_df = base_wr_df.join(sim_df, on=["wr_group"])
     ret_df = ret_df.with_columns(
-        [(pl.col(f"{metric}_strategy_win_rate") - pl.col("actual_win_rate")).alias(f"{metric}_strat_wr_delta")])
+        [(pl.col(f"{metric}_strategy_win_rate") - pl.col("actual_win_rate")).alias(
+            f"{metric}_strat_wr_delta")]
+    )
 
-    print(f"Returning, {len(mapped.unmapped)} rows unaccounted for")
-    return Result(
+    logging.info(f"Returning, {len(mapped.unmapped)} rows unaccounted for")
+    return MetricResult(
         df=ret_df, 
         mapped=mapped
     )
 
-def get_simulated_winrates(reweight_df: pl.DataFrame, metric: str, luck_control: bool = False) -> pl.DataFrame:
+
+def get_simulated_winrates(
+    reweight_df: pl.DataFrame, 
+    metric: str, 
+    luck_control: bool = False
+) -> pl.DataFrame:
     base_weight_col = (pl.col(f'seen_{metric}_is_greatest') * pl.col('matches_per_pick'))
     weight_col = (
-         base_weight_col.sum() if luck_control else base_weight_col 
+         base_weight_col.sum().over(['expansion', 'name']) if luck_control else base_weight_col 
     ).alias('weight')
 
     return reweight_df.select([
@@ -262,9 +271,22 @@ def p1p1_win_rate(set_codes, results_filter:dict | None = None):
         filter_spec=p1_results_filter
     ).filter(~pl.col('wr_group').is_null()).sort('wr_group')
 
-def all_metrics_analysis(sets: list[str], metrics: list[str], metric_filter: dict | None = None, results_filter: dict | None = None):
+def all_metrics_analysis(
+    sets: list[str], 
+    metrics: list[str], 
+    metric_filter: dict | None = None, 
+    results_filter: dict | None = None
+):
     metrics = []
     metric_results = {metric: p1_strat_analysis(sets, metric, metric_filter, results_filter) for metric in metrics}
+    delta_dfs = [metric_results[metric].df.select(['wr_group', f"{metric}_strategy_delta"]) for metric in metrics]
+
+    result_df = functools.reduce(lambda prev, curr: prev.join(curr, on="wr_group"), delta_dfs)
+    return AnalysisResult(
+        df=result_df,
+        metric_results=metric_results
+    )
+    
 
 @functools.lru_cache(maxsize=None)
 def p1_skill_control_df():
