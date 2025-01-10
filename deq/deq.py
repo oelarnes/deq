@@ -173,6 +173,22 @@ ext = {
                 set_context.get('gp_wr_excess_over_colors_G', 0)
             ).otherwise(0))))))))))))))))
     ),
+#    'num_drafts_wr_group': ColSpec(
+#        col_type=ColType.AGG,
+#        expr=pl.col('num_drafts').sum().over('wr_group')
+#    ),
+#    'wr_group_weighted_wr': ColSpec(
+#        col_type=ColType.AGG,
+#        expr=pl.col('picked_match_wr') * pl.col('num_drafts_wr_group')
+#    ),
+#    'wr_weight_over_days': ColSpec(
+#        col_type=ColType.AGG,
+#        expr=pl.col('wr_group_weighted_wr').sum().over('format_day')
+#    ),
+#    'format_day_wr': ColSpec(
+#        col_type=ColType.AGG,
+#        expr=pl.col('wr_weight_over_days') / pl.col('num_drafts').sum()
+#    )
 }
 
 def deq_bias_set_context(set_codes: list[str], metric_filter: dict):
