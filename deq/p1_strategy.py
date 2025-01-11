@@ -5,6 +5,7 @@ import functools
 import polars as pl
 
 from spells import summon, ColName
+from spells.log import make_verbose
 from spells.extension import context_cols
 from spells.config import all_sets
 
@@ -18,6 +19,8 @@ META_FILTER = {'$and': [TOP_FILTER, LATE_FORMAT]}
 PACK_1_FILTER = {'pack_num': 1}
 PICK_1_FILTER = {'pick_num': 1}
 
+P1P1_PICK_EQUITY = 0.025
+
 P1P1 = {'$and': [PICK_1_FILTER, PACK_1_FILTER]}
 PRECISION = 2 ** 20
 
@@ -29,20 +32,18 @@ SEEN_IS_GREATEST = "seen_{0}_is_greatest"
 METRICS = ['pick_equity', 'gp_wr', 'deq_base', 'deq', 'gp_wr_bias_adj', 'gih_wr', 'iwd']
 LOG_TO_CONSOLE = logging.INFO
 
+SETS = list(set(all_sets) - {'PIO', 'SIR'})
+
 @dataclass
 class ModelDFs:
     weights_df: pl.DataFrame
     wr_df: pl.DataFrame
-
-@dataclass
-class Mapped:
-    df: pl.DataFrame
-    unmapped: pl.DataFrame
+    fallback_df: pl.DataFrame
 
 @dataclass
 class MetricResult:
     df: pl.DataFrame
-    mapped: Mapped
+    mapped_df: pl.DataFrame
 
 @dataclass
 class AnalysisResult:
@@ -74,7 +75,6 @@ def get_model_dfs(
         group_by=['expansion', 'name'],
         extensions=ext, 
         set_context=set_context,
-        log_to_console=LOG_TO_CONSOLE, # type: ignore
     ).select(["expansion", "name", (pl.col(metric) * PRECISION).round() / PRECISION])
 
     metric_cols = context_cols(metric, silent=True)
@@ -88,11 +88,22 @@ def get_model_dfs(
         extensions=[metric_cols, ext], 
         card_context=context_df,
         use_streaming=True,
-        log_to_console=LOG_TO_CONSOLE, # type: ignore
     )
 
     wr_df = weights_df.drop(SEEN_IS_GREATEST.format(metric)).filter(
         GROUP_FILTER & WR_FILTER
+    )
+
+    # assume cards picked by nobody ever provide no value as a first pick
+    # 'matches_per_pick' will be slightly wrong...
+    fallback_df = summon(
+        set_codes,
+        columns=[ColName.PICKED_MATCH_WR, 'matches_per_pick', 'mean_day_picked'],
+        group_by=['wr_group'],
+        filter_spec=p1_results_filter,
+        extensions=ext,
+    ).select(
+        ['wr_group', pl.col(ColName.PICKED_MATCH_WR) - P1P1_PICK_EQUITY, 'mean_day_picked', 'matches_per_pick']
     )
 
     weights_df = weights_df.select(
@@ -104,14 +115,16 @@ def get_model_dfs(
 
     return ModelDFs(
         weights_df=weights_df,
-        wr_df=wr_df
+        wr_df=wr_df,
+        fallback_df=fallback_df
     )
 
 def strategy_mapped_df(
     model_dfs: ModelDFs, 
     card_parity: bool = False, 
-) -> Mapped:
+) -> pl.DataFrame:
     wr_df = model_dfs.wr_df
+    fallback_df = model_dfs.fallback_df
 
     if not card_parity:
         skill_control_df = p1_skill_control_df()
@@ -156,22 +169,28 @@ def strategy_mapped_df(
     while iter < iter_max and len(remaining_df):
         discrepancy = pl.lit(iter).alias('discrepancy')
 
-        join_df = remaining_df.join(go_up_df, on=join_keys)
-        join_df = join_df.with_columns(discrepancy)
-        good_dfs.append(join_df)
-        
+        good_dfs.append(
+            remaining_df.join(go_up_df, on=join_keys).with_columns(discrepancy)
+        )
         remaining_df = remaining_df.join(go_up_df, on=join_keys, how='anti')
 
-        join_df = remaining_df.join(go_down_df, on=join_keys)
-        join_df = join_df.with_columns(discrepancy)
-        good_dfs.append(join_df)
-        
+        good_dfs.append(
+            remaining_df.join(go_down_df, on=join_keys).with_columns(discrepancy)
+        )
         remaining_df = remaining_df.join(go_down_df, on=join_keys, how='anti')
 
         go_up_df = go_up_df.select(select_cols + up_one_cols)
         go_down_df = go_down_df.select(select_cols + down_one_cols)
 
         iter += 1
+
+    good_dfs.append(remaining_df.join(fallback_df, on='wr_group').with_columns(
+        [
+            pl.lit(None).alias('up_one_wr_mod'), 
+            pl.lit(None).alias('down_one_wr_mod'),
+            pl.lit(iter_max).alias('discrepancy'),
+        ]
+    ).select(good_dfs[0].columns))
 
     final_df = pl.concat(good_dfs)
 
@@ -182,10 +201,7 @@ def strategy_mapped_df(
         )
         final_df = final_df.join(keys_df, on=['expansion', 'name'])
 
-    return Mapped(
-        df=final_df,
-        unmapped=remaining_df
-    )
+    return final_df
 
 def p1_strat_analysis(
     set_codes: list[str], 
@@ -195,9 +211,10 @@ def p1_strat_analysis(
     card_parity: bool = False,
     luck_control: bool = False,
 ):
+    logging.info(f"Running p1 strategy analysis for metric {metric}")
     model_dfs = get_model_dfs(set_codes, metric, results_filter, metric_filter)
 
-    mapped = strategy_mapped_df(model_dfs, card_parity)
+    mapped_df = strategy_mapped_df(model_dfs, card_parity)
 
     base_weight = pl.col(ColName.EVENT_MATCHES_SUM)
     base_wr_df = model_dfs.wr_df.select([
@@ -212,17 +229,16 @@ def p1_strat_analysis(
         (pl.col('day_weight') / base_weight).alias("mean_day_picked"),
     ]).sort('wr_group')
 
-    sim_df = get_simulated_winrates(mapped.df, metric, luck_control=luck_control)
+    sim_df = get_simulated_winrates(mapped_df, metric, luck_control=luck_control)
     ret_df = base_wr_df.join(sim_df, on=["wr_group"])
     ret_df = ret_df.with_columns(
         [(pl.col(f"{metric}_strategy_win_rate") - pl.col("actual_win_rate")).alias(
             f"{metric}_strat_delta")]
     )
 
-    logging.info(f"Returning, {len(mapped.unmapped)} rows unaccounted for")
     return MetricResult(
         df=ret_df, 
-        mapped=mapped
+        mapped_df=mapped_df
     )
 
 
@@ -244,20 +260,21 @@ def get_simulated_winrates(
         (weight_col * pl.col('discrepancy')).alias('discrepancy_weight'),
     ]).group_by(['wr_group']).sum().select([
         'wr_group',
-        pl.col('weight'),
+        pl.col('weight').alias(f'{metric}_weight'),
         (pl.col('wr_weight') / pl.col('weight')).alias(f'{metric}_strategy_win_rate'),
         (pl.col('day_weight') / pl.col('weight')).alias(f'{metric}_strategy_mean_day'),
         (pl.col('discrepancy_weight') / pl.col('weight')).alias(f'{metric}_strategy_discrepancy'),
     ]).sort('wr_group')
 
 
+@make_verbose(logging.INFO)
 def all_metrics_analysis(
     metric_filter: dict | None = None, 
     results_filter: dict | None = None,
 ):
     metrics = METRICS 
     metric_results = {metric: p1_strat_analysis(
-        all_sets, 
+        SETS, 
         metric, 
         metric_filter=metric_filter, 
         results_filter=results_filter, 
@@ -283,7 +300,7 @@ def p1_skill_control_df():
     group from the previous. So for the "down one" modification, which will map a group's results
     to be used by the group below, we want the opposite of that. So subtract.
     """
-    res = p1_strat_analysis(all_sets, "pick_equity", card_parity=True, luck_control=True)
+    res = p1_strat_analysis(SETS, "pick_equity", card_parity=True, luck_control=True)
     return res.df.select([
         'wr_group', 
         pl.col('pick_equity_strategy_win_rate').diff(1).alias('down_one_wr_mod'), 
