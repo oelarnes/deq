@@ -8,6 +8,7 @@ from spells import summon, ColName
 from spells.log import make_verbose
 from spells.extension import context_cols
 from spells.config import all_sets
+from spells.utils import wavg
 
 from deq.deq import deq_bias_set_context, BASIC_LANDS, ext
 
@@ -33,6 +34,7 @@ METRICS = ['pick_equity', 'gp_wr', 'deq_base', 'deq', 'gp_wr_bias_adj', 'gih_wr'
 LOG_TO_CONSOLE = logging.INFO
 
 SETS = list(set(all_sets) - {'PIO', 'SIR'})
+NEIGHBORS = 4 # 66 looks at 60 - (N-1)*2
 
 @dataclass
 class ModelDFs:
@@ -48,6 +50,7 @@ class MetricResult:
 @dataclass
 class AnalysisResult:
     df: pl.DataFrame
+    agg_df: pl.DataFrame
     metric_results: dict[str, MetricResult]
 
 
@@ -165,17 +168,17 @@ def strategy_mapped_df(
     logging.info("Joining and calculating results")
     join_keys = ['expansion', 'name', 'wr_group']
     iter = 0
-    iter_max = 1 if card_parity else 10
+    iter_max = 1 if card_parity else NEIGHBORS
     while iter < iter_max and len(remaining_df):
-        discrepancy = pl.lit(iter).alias('discrepancy')
+        misrep = pl.lit(iter).alias('misrep')
 
         good_dfs.append(
-            remaining_df.join(go_up_df, on=join_keys).with_columns(discrepancy)
+            remaining_df.join(go_up_df, on=join_keys).with_columns(misrep)
         )
         remaining_df = remaining_df.join(go_up_df, on=join_keys, how='anti')
 
         good_dfs.append(
-            remaining_df.join(go_down_df, on=join_keys).with_columns(discrepancy)
+            remaining_df.join(go_down_df, on=join_keys).with_columns(misrep)
         )
         remaining_df = remaining_df.join(go_down_df, on=join_keys, how='anti')
 
@@ -188,7 +191,7 @@ def strategy_mapped_df(
         [
             pl.lit(None).alias('up_one_wr_mod'), 
             pl.lit(None).alias('down_one_wr_mod'),
-            pl.lit(iter_max).alias('discrepancy'),
+            pl.lit(iter_max).alias('misrep'),
         ]
     ).select(good_dfs[0].columns))
 
@@ -250,20 +253,20 @@ def get_simulated_winrates(
     base_weight_col = (pl.col(f'seen_{metric}_is_greatest') * pl.col('matches_per_pick'))
     weight_col = (
          base_weight_col.sum().over(['expansion', 'name']) if luck_control else base_weight_col 
-    ).alias('weight')
+    ).alias(f'{metric}_weight')
 
     return reweight_df.select([
         'wr_group',
         weight_col,
         (weight_col * pl.col(ColName.PICKED_MATCH_WR)).alias('wr_weight'),
         (weight_col * pl.col('mean_day_picked')).alias('day_weight'),
-        (weight_col * pl.col('discrepancy')).alias('discrepancy_weight'),
+        (weight_col * pl.col('misrep')).alias('misrep_weight'),
     ]).group_by(['wr_group']).sum().select([
         'wr_group',
-        pl.col('weight').alias(f'{metric}_weight'),
+        f'{metric}_weight',
         (pl.col('wr_weight') / pl.col('weight')).alias(f'{metric}_strategy_win_rate'),
         (pl.col('day_weight') / pl.col('weight')).alias(f'{metric}_strategy_mean_day'),
-        (pl.col('discrepancy_weight') / pl.col('weight')).alias(f'{metric}_strategy_discrepancy'),
+        (pl.col('misrep_weight') / pl.col('weight')).alias(f'{metric}_strategy_misrep'),
     ]).sort('wr_group')
 
 
@@ -279,11 +282,20 @@ def all_metrics_analysis(
         metric_filter=metric_filter, 
         results_filter=results_filter, 
     ) for metric in metrics}
-    delta_dfs = [metric_results[metric].df.select(['wr_group', f"{metric}_strat_delta"]) for metric in metrics]
+    delta_dfs = [metric_results[metric].df.select([
+        'wr_group', 
+        f"{metric}_strat_delta", 
+        f"{metric}_weight",
+        f"{metric}_strategy_misrep"
+    ]) for metric in metrics]
 
     result_df = functools.reduce(lambda prev, curr: prev.join(curr, on="wr_group"), delta_dfs)
+
+    agg_df = wavg(result_df, [f"{metric}_strat_delta" for metric in metrics], [f"{metric}_weight" for metric in metrics])
+
     return AnalysisResult(
         df=result_df,
+        agg_df=agg_df,
         metric_results=metric_results
     )
     
