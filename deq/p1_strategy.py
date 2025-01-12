@@ -264,9 +264,9 @@ def get_simulated_winrates(
     ]).group_by(['wr_group']).sum().select([
         'wr_group',
         f'{metric}_weight',
-        (pl.col('wr_weight') / pl.col('weight')).alias(f'{metric}_strategy_win_rate'),
-        (pl.col('day_weight') / pl.col('weight')).alias(f'{metric}_strategy_mean_day'),
-        (pl.col('misrep_weight') / pl.col('weight')).alias(f'{metric}_strategy_misrep'),
+        (pl.col('wr_weight') / pl.col(f'{metric}_weight')).alias(f'{metric}_strategy_win_rate'),
+        (pl.col('day_weight') / pl.col(f'{metric}_weight')).alias(f'{metric}_strategy_mean_day'),
+        (pl.col('misrep_weight') / pl.col(f'{metric}_weight')).alias(f'{metric}_misrep'),
     ]).sort('wr_group')
 
 
@@ -286,7 +286,7 @@ def all_metrics_analysis(
         'wr_group', 
         f"{metric}_strat_delta", 
         f"{metric}_weight",
-        f"{metric}_strategy_misrep"
+        f"{metric}_misrep"
     ]) for metric in metrics]
 
     result_df = functools.reduce(lambda prev, curr: prev.join(curr, on="wr_group"), delta_dfs)
