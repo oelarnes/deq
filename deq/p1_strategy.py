@@ -15,7 +15,8 @@ from deq.deq import deq_bias_set_context, BASIC_LANDS, ext
 TOP_FILTER = {ColName.PLAYER_COHORT: 'Top'}
 LATE_FORMAT = {'lhs': ColName.FORMAT_DAY, 'op': '>=', 'rhs': 13}
 EARLY_FORMAT = {'$not': LATE_FORMAT}
-META_FILTER = {'$and': [TOP_FILTER, LATE_FORMAT]}
+LATE_TOP = {'$and': [TOP_FILTER, LATE_FORMAT]}
+EARLY_TOP = {'$and': [TOP_FILTER, EARLY_FORMAT]}
 
 PACK_1_FILTER = {'pack_num': 1}
 PICK_1_FILTER = {'pick_num': 1}
@@ -42,10 +43,12 @@ class ModelDFs:
     wr_df: pl.DataFrame
     fallback_df: pl.DataFrame
 
+
 @dataclass
 class MetricResult:
     df: pl.DataFrame
     mapped_df: pl.DataFrame
+
 
 @dataclass
 class AnalysisResult:
@@ -63,7 +66,7 @@ def get_model_dfs(
     assert isinstance(set_codes, list), "Pass a list of set_codes!"
 
     p1_results_filter = {'$and': [P1P1, results_filter]} if results_filter else P1P1
-    metric_filter = META_FILTER if metric_filter is None else metric_filter
+    metric_filter = LATE_TOP if metric_filter is None else metric_filter
 
     if metric in ['deq', 'gp_wr_bias_adj']:
         set_context = deq_bias_set_context(set_codes, metric_filter)
@@ -85,7 +88,13 @@ def get_model_dfs(
     logging.info("Calculating seen greatest counts for weights")
     weights_df = summon(
         set_codes, 
-        columns=[SEEN_IS_GREATEST.format(metric), ColName.PICKED_MATCH_WR, ColName.EVENT_MATCHES_SUM, 'matches_per_pick', 'mean_day_picked'], 
+        columns=[
+            SEEN_IS_GREATEST.format(metric), 
+            ColName.PICKED_MATCH_WR, 
+            ColName.EVENT_MATCHES_SUM, 
+            'matches_per_pick', 
+            'mean_day_picked'
+        ], 
         group_by=['expansion', 'name', 'wr_group'], 
         filter_spec=p1_results_filter, 
         extensions=[metric_cols, ext], 
@@ -106,7 +115,8 @@ def get_model_dfs(
         filter_spec=p1_results_filter,
         extensions=ext,
     ).select(
-        ['wr_group', pl.col(ColName.PICKED_MATCH_WR) - P1P1_PICK_EQUITY, 'mean_day_picked', 'matches_per_pick']
+        ['wr_group', pl.col(ColName.PICKED_MATCH_WR) - P1P1_PICK_EQUITY, 
+            'mean_day_picked', 'matches_per_pick']
     )
 
     weights_df = weights_df.select(
@@ -121,6 +131,7 @@ def get_model_dfs(
         wr_df=wr_df,
         fallback_df=fallback_df
     )
+
 
 def strategy_mapped_df(
     model_dfs: ModelDFs, 
@@ -187,13 +198,14 @@ def strategy_mapped_df(
 
         iter += 1
 
-    good_dfs.append(remaining_df.join(fallback_df, on='wr_group').with_columns(
-        [
-            pl.lit(None).alias('up_one_wr_mod'), 
-            pl.lit(None).alias('down_one_wr_mod'),
-            pl.lit(iter_max).alias('misrep'),
-        ]
-    ).select(good_dfs[0].columns))
+    if not card_parity:
+        good_dfs.append(remaining_df.join(fallback_df, on='wr_group').with_columns(
+            [
+                pl.lit(None).alias('up_one_wr_mod'), 
+                pl.lit(None).alias('down_one_wr_mod'),
+                pl.lit(iter_max).alias('misrep'),
+            ]
+        ).select(good_dfs[0].columns))
 
     final_df = pl.concat(good_dfs)
 
@@ -206,6 +218,28 @@ def strategy_mapped_df(
 
     return final_df
 
+
+@functools.lru_cache(maxsize=None)
+def p1_skill_control_df():
+    """
+    When we map events to neighboring groups, we want to adjust the observed win rates for the
+    expected change in win rate due to everything about the skill cohort except the distribution
+    of opening picks, since we will be controlling that.
+
+    the analysis will generate win rates that reflect that controlled pick for each group, then
+    diff(1) will take (this - prev), that is, the boost in win rate attributable to going to this
+    group from the previous. So for the "down one" modification, which will map a group's results
+    to be used by the group below, we want the opposite of that. So subtract.
+    """
+    res = p1_strat_analysis(SETS, "pick_equity", card_parity=True, luck_control=True)
+    return res.df.select([
+        'wr_group', 
+        pl.col('pick_equity_strategy_win_rate').diff(1).alias('down_one_wr_mod'), 
+        pl.col('pick_equity_strategy_win_rate').diff(-1).alias('up_one_wr_mod')
+    ])
+
+
+@make_verbose()
 def p1_strat_analysis(
     set_codes: list[str], 
     metric: str, 
@@ -270,7 +304,7 @@ def get_simulated_winrates(
     ]).sort('wr_group')
 
 
-@make_verbose(logging.INFO)
+@make_verbose()
 def all_metrics_analysis(
     metric_filter: dict | None = None, 
     results_filter: dict | None = None,
@@ -290,8 +324,18 @@ def all_metrics_analysis(
     ]) for metric in metrics]
 
     result_df = functools.reduce(lambda prev, curr: prev.join(curr, on="wr_group"), delta_dfs)
+    base_df = metric_results[metrics[0]].df.select([
+        'wr_group',
+        'event_matches_sum',
+        'actual_win_rate'
+    ])
+    result_df = result_df.join(base_df, on="wr_group")
 
-    agg_df = wavg(result_df, [f"{metric}_strat_delta" for metric in metrics], [f"{metric}_weight" for metric in metrics])
+    agg_df = wavg(
+        result_df, 
+        [f"{metric}_strat_delta" for metric in metrics], 
+        [f"{metric}_weight" for metric in metrics]
+    )
 
     return AnalysisResult(
         df=result_df,
@@ -299,22 +343,3 @@ def all_metrics_analysis(
         metric_results=metric_results
     )
     
-
-@functools.lru_cache(maxsize=None)
-def p1_skill_control_df():
-    """
-    When we map events to neighboring groups, we want to adjust the observed win rates for the
-    expected change in win rate due to everything about the skill cohort except the distribution
-    of opening picks, since we will be controlling that.
-
-    the analysis will generate win rates that reflect that controlled pick for each group, then
-    diff(1) will take (this - prev), that is, the boost in win rate attributable to going to this
-    group from the previous. So for the "down one" modification, which will map a group's results
-    to be used by the group below, we want the opposite of that. So subtract.
-    """
-    res = p1_strat_analysis(SETS, "pick_equity", card_parity=True, luck_control=True)
-    return res.df.select([
-        'wr_group', 
-        pl.col('pick_equity_strategy_win_rate').diff(1).alias('down_one_wr_mod'), 
-        pl.col('pick_equity_strategy_win_rate').diff(-1).alias('up_one_wr_mod')
-    ])

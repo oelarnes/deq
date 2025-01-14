@@ -90,7 +90,7 @@ def p1strat_line_plot(
         }
     }[mode]
 
-    title = config['title'] + '' if title_extra is None else ' - ' + title_extra
+    title = config['title'] + ('' if title_extra is None else ' - ' + title_extra)
 
     def graph_fn(i: int, metric: str):
         x = analysis.df['wr_group'].to_numpy()
