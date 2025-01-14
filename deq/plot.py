@@ -33,6 +33,7 @@ class StyledSegment:
     y: NDArray[np.float64]
     style: str
 
+
 @dataclass
 class MultiPhaseLineGraph:
     "A class describing a series for a line plot with styled segments"
@@ -40,13 +41,23 @@ class MultiPhaseLineGraph:
     color: str
     segments: list[StyledSegment]
 
+
+def style_xticks(
+    analysis: AnalysisResult,
+    ax: Axes,
+) -> None:
+    ax.set_xticks(analysis.df['wr_group'].to_numpy())
+    ax.xaxis.set_major_formatter(mtick.PercentFormatter(100, decimals=0))
+    ax.set_xlabel("Skill Cohort")
+
+
 def two_phase_line_graph(
     name: str,
     color: str,
     x: NDArray[np.float64],
     y: NDArray[np.float64],
     q: NDArray[np.bool_],
-):
+) -> MultiPhaseLineGraph:
     assert len(x) == len(y) == len(q), "x, y, q must be the same length"
     segments = []
     for i in range(len(x) - 1):
@@ -103,14 +114,12 @@ def p1strat_line_plot(
     ax = plot_two_phase_series_pyplot(
         title,
         graphs,
-        'Skill Cohort',
         config["y_label"],
     )
 
-    ax.set_xticks(analysis.df['wr_group'].to_numpy())
     if 'y_formatter' in config:
         ax.yaxis.set_major_formatter(config['y_formatter'])
-    ax.xaxis.set_major_formatter(mtick.PercentFormatter(100, decimals=0))
+    style_xticks(analysis, ax)
 
     if mode=="misrep":
         x = analysis.df["wr_group"]
@@ -139,13 +148,11 @@ def p1strat_line_plot(
 def plot_two_phase_series_pyplot(
     title: str,
     graphs: list[MultiPhaseLineGraph],
-    x_label: str,
     y_label: str,
 ) -> Axes:
     _, ax = plt.subplots(figsize=FIG_SIZE)
 
     ax.set_title(title)
-    ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
 
     handles = []
@@ -163,3 +170,29 @@ def plot_two_phase_series_pyplot(
     ax.legend(handles=handles)
 
     return ax
+
+def metric_weight_bar_plot(
+    analysis: AnalysisResult,
+    metrics: list[str] = ["iwd", "deq"],
+) -> Axes:
+    num_bars = len(metrics) + 1
+    df = analysis.df
+
+    _, ax = plt.subplots(figsize=FIG_SIZE)
+    width = 2 / (num_bars + 1)
+    offset = -1 + width 
+    ax.bar(df['wr_group'] + offset, df['event_matches_sum'], width=width, label='Actual')
+    for i, metric in enumerate(metrics):
+        ax.bar(
+            df['wr_group'] + offset + (i + 1) * width, 
+            df[f'{metric}_weight'], 
+            width=width, 
+            label=METRIC_LABELS[metric]
+        )
+    style_xticks(analysis, ax)
+    ax.set_ylabel('Millions of Matches')
+    ax.set_title("Actual and simulated matches for some strategies")
+    ax.legend()
+
+    return ax
+
