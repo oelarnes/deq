@@ -31,4 +31,5 @@ dev = [
     "ruff>=0.8.6",
     "pyright>=1.1.390",
     "matplotlib>=3.10.0",
+    "jupyter-book>=1.0.3",
 ]

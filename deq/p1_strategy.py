@@ -308,8 +308,10 @@ def get_simulated_winrates(
 def all_metrics_analysis(
     metric_filter: dict | None = None, 
     results_filter: dict | None = None,
+    metrics: list[str] | None = None,
 ):
-    metrics = METRICS 
+    if metrics is None:
+        metrics = METRICS 
     metric_results = {metric: p1_strat_analysis(
         SETS, 
         metric, 
