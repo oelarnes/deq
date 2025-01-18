@@ -4,5 +4,5 @@
 format: jb-book
 root: intro
 chapters:
-- file: DEq Introduction.ipynb
-- file: Bayesian Cohorts.ipynb
+- file: deq.ipynb
+- file: bayes-cohorts.ipynb
