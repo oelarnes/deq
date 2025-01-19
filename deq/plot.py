@@ -3,6 +3,8 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
+from great_tables import GT
+
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
 import matplotlib.ticker as mtick
@@ -142,6 +144,7 @@ def p1strat_line_plot(
         leg.set_loc(9)
         ax.legend(handles=handles, loc=1)
         ax.add_artist(leg)
+    ax.grid(color='lightgray')
     return ax
 
 
@@ -196,3 +199,17 @@ def metric_weight_bar_plot(
 
     return ax
 
+def cohort_summary_table(
+    analysis: AnalysisResult
+) -> GT:
+    return GT(analysis.df.select(
+        ['wr_group', 'actual_win_rate', 'event_matches_sum']
+    )).fmt_percent(
+        'actual_win_rate', decimals=1
+    ).fmt_percent(
+        'wr_group', scale_values=False, decimals=0
+    ).cols_label({
+        'wr_group': 'Skill Cohort',
+        'actual_win_rate': 'Match Win Rate',
+        'event_matches_sum': 'Num Matches'
+    })

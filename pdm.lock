@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:7f0b61a3770903a84240583a2a4650dcf7366cad3085fffe60d9a7a188a79e53"
+content_hash = "sha256:3476a3b881a3966b717e04c75e57eb49a1e7515b086d1822acd457b1f030c6c9"
 
 [[metadata.targets]]
 requires_python = ">=3.11"
@@ -361,6 +361,19 @@ files = [
 ]
 
 [[package]]
+name = "commonmark"
+version = "0.9.1"
+summary = "Python parser for the CommonMark Markdown spec"
+groups = ["default"]
+dependencies = [
+    "future>=0.14.0; python_version < \"3\"",
+]
+files = [
+    {file = "commonmark-0.9.1-py2.py3-none-any.whl", hash = "sha256:da2f38c92590f83de410ba1a3cbceafbc74fee9def35f9251ba9a971d6d66fd9"},
+    {file = "commonmark-0.9.1.tar.gz", hash = "sha256:452f9dc859be7f06631ddcb328b6919c67984aca654e5fefb3914d54691aed60"},
+]
+
+[[package]]
 name = "contourpy"
 version = "1.3.1"
 requires_python = ">=3.10"
@@ -411,6 +424,27 @@ files = [
     {file = "contourpy-1.3.1-cp313-cp313t-win32.whl", hash = "sha256:8eb96e79b9f3dcadbad2a3891672f81cdcab7f95b27f28f1c67d75f045b6b4f1"},
     {file = "contourpy-1.3.1-cp313-cp313t-win_amd64.whl", hash = "sha256:287ccc248c9e0d0566934e7d606201abd74761b5703d804ff3df8935f523d546"},
     {file = "contourpy-1.3.1.tar.gz", hash = "sha256:dfd97abd83335045a913e3bcc4a09c0ceadbe66580cf573fe961f4a825efa699"},
+]
+
+[[package]]
+name = "css-inline"
+version = "0.14.6"
+requires_python = ">=3.7"
+summary = "High-performance library for inlining CSS into HTML 'style' attributes"
+groups = ["default"]
+files = [
+    {file = "css_inline-0.14.6-cp37-abi3-macosx_10_12_x86_64.macosx_11_0_arm64.macosx_10_12_universal2.whl", hash = "sha256:cefbf6320b27f8c0dddb753fcf9c3babdf29f3cbbcc9b7b6175dd065017b9716"},
+    {file = "css_inline-0.14.6-cp37-abi3-macosx_10_12_x86_64.whl", hash = "sha256:8480013f5e4d089cf9339822520fb4dfe7855975739134608477c906eb94c511"},
+    {file = "css_inline-0.14.6-cp37-abi3-manylinux_2_12_i686.manylinux2010_i686.whl", hash = "sha256:22afe654a2fcaccfccaf49cae561c7e09711051e60150aa7fcab87fdee80c72e"},
+    {file = "css_inline-0.14.6-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:fa62ff057edbc9f6fe05871f0ec8abbc13aa344ccfefefca1f252efca816e242"},
+    {file = "css_inline-0.14.6-cp37-abi3-manylinux_2_24_aarch64.whl", hash = "sha256:e6f081528993f5f518bb5f2fe0bdaac8aa4ab704bebb41e02fb89866fd7d1c82"},
+    {file = "css_inline-0.14.6-cp37-abi3-manylinux_2_24_armv7l.whl", hash = "sha256:e4660adaef5cd0d3c44adcb2f48f46643b66ae69251b1f073b0d923827b9f113"},
+    {file = "css_inline-0.14.6-cp37-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:f5195b19c6376a23fc6de6f70689c632cdc4fc185e6807822409dc884922d0e1"},
+    {file = "css_inline-0.14.6-cp37-abi3-musllinux_1_2_armv7l.whl", hash = "sha256:eb55fa5069d50e2b63a63a2d4e223965dd5f032544dc1d47bfad6e5c2bef71dc"},
+    {file = "css_inline-0.14.6-cp37-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:d0012aa2b61e0ac6667b64dbd45df35edab8db86c623dd20c746344f5e3bceec"},
+    {file = "css_inline-0.14.6-cp37-abi3-win32.whl", hash = "sha256:0633c5bce98e36f90f3377d146640c3738826d465681373ce8368e9a6dad563e"},
+    {file = "css_inline-0.14.6-cp37-abi3-win_amd64.whl", hash = "sha256:c32f07918dbfb21ed935d2187d1c8e086db06da7c33d91db2e33591c78a501b8"},
+    {file = "css_inline-0.14.6.tar.gz", hash = "sha256:a6ac1411bc9524cab0de59fe87bf1779c822fd6f38d789a037879ebcbcc3e14b"},
 ]
 
 [[package]]
@@ -492,6 +526,20 @@ files = [
 ]
 
 [[package]]
+name = "faicons"
+version = "0.2.2"
+requires_python = ">=3.8"
+summary = "An interface to Font-Awesome for use in Shiny."
+groups = ["default"]
+dependencies = [
+    "htmltools>=0.1.4.9002",
+]
+files = [
+    {file = "faicons-0.2.2-py3-none-any.whl", hash = "sha256:d45d7c2635b53582a3375c67d7e975a28a91d2c16ef5f6b5033b5cdd507224b6"},
+    {file = "faicons-0.2.2.tar.gz", hash = "sha256:6b7d7b19180179b6b83783f91bf6c9311c0f00ae0f97d41be1d24d9942361659"},
+]
+
+[[package]]
 name = "fastjsonschema"
 version = "2.21.1"
 summary = "Fastest Python implementation of JSON schema"
@@ -548,6 +596,28 @@ dependencies = [
 files = [
     {file = "fqdn-1.5.1-py3-none-any.whl", hash = "sha256:3a179af3761e4df6eb2e026ff9e1a3033d3587bf980a0b1b2e1e5d08d7358014"},
     {file = "fqdn-1.5.1.tar.gz", hash = "sha256:105ed3677e767fb5ca086a0c1f4bb66ebc3c100be518f0e0d755d9eae164d89f"},
+]
+
+[[package]]
+name = "great-tables"
+version = "0.15.0"
+requires_python = ">=3.9"
+summary = "Easily generate information-rich, publication-quality tables from Python."
+groups = ["default"]
+dependencies = [
+    "Babel>=2.13.1",
+    "commonmark>=0.9.1",
+    "css-inline>=0.14.1",
+    "faicons>=0.2.2",
+    "htmltools>=0.4.1",
+    "importlib-metadata",
+    "importlib-resources",
+    "numpy>=1.22.4",
+    "typing-extensions>=3.10.0.0",
+]
+files = [
+    {file = "great_tables-0.15.0-py3-none-any.whl", hash = "sha256:e4f7007aaaef747db7e613d2c85858aeca2e675924169649a8b48dbbb6fe0125"},
+    {file = "great_tables-0.15.0.tar.gz", hash = "sha256:e0d37e5fdde4bd3d21290945f3de6b00410abca05e46a045cdda9259eaa8f590"},
 ]
 
 [[package]]
@@ -610,6 +680,21 @@ files = [
 ]
 
 [[package]]
+name = "htmltools"
+version = "0.6.0"
+requires_python = ">=3.9"
+summary = "Tools for HTML generation and output."
+groups = ["default"]
+dependencies = [
+    "packaging>=20.9",
+    "typing-extensions>=3.10.0.0",
+]
+files = [
+    {file = "htmltools-0.6.0-py3-none-any.whl", hash = "sha256:072a274ff5e2851e0acce13fc5bb2bbdbbad8268dc8b123f881c05012ce7dce0"},
+    {file = "htmltools-0.6.0.tar.gz", hash = "sha256:e8a3fb023d748935035db7ff17f620612ffc814a6a80b6ae388f7b7ab182adf7"},
+]
+
+[[package]]
 name = "httpcore"
 version = "1.0.7"
 requires_python = ">=3.8"
@@ -668,7 +753,7 @@ name = "importlib-metadata"
 version = "8.5.0"
 requires_python = ">=3.8"
 summary = "Read metadata from Python packages"
-groups = ["dev"]
+groups = ["default", "dev"]
 dependencies = [
     "typing-extensions>=3.6.4; python_version < \"3.8\"",
     "zipp>=3.20",
@@ -676,6 +761,20 @@ dependencies = [
 files = [
     {file = "importlib_metadata-8.5.0-py3-none-any.whl", hash = "sha256:45e54197d28b7a7f1559e60b95e7c567032b602131fbd588f1497f47880aa68b"},
     {file = "importlib_metadata-8.5.0.tar.gz", hash = "sha256:71522656f0abace1d072b9e5481a48f07c138e00f079c38c8f883823f9c26bd7"},
+]
+
+[[package]]
+name = "importlib-resources"
+version = "6.5.2"
+requires_python = ">=3.9"
+summary = "Read resources from Python packages"
+groups = ["default"]
+dependencies = [
+    "zipp>=3.1.0; python_version < \"3.10\"",
+]
+files = [
+    {file = "importlib_resources-6.5.2-py3-none-any.whl", hash = "sha256:789cfdc3ed28c78b67a06acb8126751ced69a3d5f79c095a98298cd8a760ccec"},
+    {file = "importlib_resources-6.5.2.tar.gz", hash = "sha256:185f87adef5bcc288449d98fb4fba07cea78bc036455dd44c5fc4a2fe78fed2c"},
 ]
 
 [[package]]
@@ -2838,7 +2937,7 @@ name = "zipp"
 version = "3.21.0"
 requires_python = ">=3.9"
 summary = "Backport of pathlib-compatible object wrapper for zip files"
-groups = ["dev"]
+groups = ["default", "dev"]
 files = [
     {file = "zipp-3.21.0-py3-none-any.whl", hash = "sha256:ac1bbe05fd2991f160ebce24ffbac5f6d11d83dc90891255885223d42b3cd931"},
     {file = "zipp-3.21.0.tar.gz", hash = "sha256:2c9958f6430a2040341a52eb608ed6dd93ef4392e02ffe219417c1b28b5dd1f4"},
