@@ -24,7 +24,9 @@ METRIC_LABELS = {
     'pick_equity': 'ATA',
     'iwd': 'IWD',
     'deq_base': 'DEq Base',
-    'gp_wr_bias_adj': 'GP WR Bias Adj.'
+    'gp_wr_bias_adj': 'GP WR Bias Adj.',
+    'oh_wr': 'OH WR',
+    'gns_wr': 'GNS WR',
 }
 
 FIG_SIZE = (8,6)
@@ -82,7 +84,7 @@ def p1strat_line_plot(
     analysis: AnalysisResult,
     mode: str = 'wr_delta',
     metrics: list[str] | None = None,
-    quality_threshold: float = 0.15, # less than this value
+    quality_threshold: float = -3, # greater than this value
     colors: str = 'pyplot',
     title_extra: str | None = None,
 ):
@@ -96,11 +98,16 @@ def p1strat_line_plot(
             'y_label': 'Simulated Match WR Delta',
             'y_formatter': mtick.PercentFormatter(1.0, decimals=1)
         },
-        'misrep': {
-            'title': 'Metric Misrepresentation Index by Skill Cohort',
-            'value_template': "{metric}_misrep",
-            'y_label': 'Misrepresentation Index',
-        }
+        'entropy': {
+            'title': 'Representative Entropy by Skill Cohort',
+            'value_template': "{metric}_entropy",
+            'y_label': 'Representative Entropy',
+        },
+        'entropy_loss': {
+            'title': 'Representative Entropy Loss by Skill cohort',
+            'value_template': "{metric}_entropy_loss",
+            'y_label': 'Representative Entropy Loss',
+        },
     }[mode]
 
     title = config['title'] + ('' if title_extra is None else ' - ' + title_extra)
@@ -108,7 +115,7 @@ def p1strat_line_plot(
     def graph_fn(i: int, metric: str):
         x = analysis.df['wr_group'].to_numpy()
         y = analysis.df[config["value_template"].format(metric=metric)].to_numpy()
-        q = analysis.df[f"{metric}_misrep"].to_numpy() < quality_threshold
+        q = analysis.df[f"{metric}_entropy_loss"].to_numpy() > quality_threshold
         return two_phase_line_graph(METRIC_LABELS[metric], COLOR_LIST[colors][i], x, y, q)
 
     graphs = [graph_fn(i, metric) for i, metric in enumerate(metrics)]
@@ -123,10 +130,11 @@ def p1strat_line_plot(
         ax.yaxis.set_major_formatter(config['y_formatter'])
     style_xticks(analysis, ax)
 
-    if mode=="misrep":
+    if mode=="entropy":
         x = analysis.df["wr_group"]
-        ax.plot(x, [quality_threshold] * len(x), linestyle="dotted", color="gray")
-        ax.text(50, 0.135, "(arbitrary threshold)", color="gray")
+        line, = ax.plot(x, analysis.df['total_entropy'], color='black', label='Total Entropy')
+        h = ax.get_legend().legend_handles
+        ax.legend(handles=[line, *h])
     elif mode=="wr_delta":
         handles = []
         for i, metric in enumerate(metrics):
@@ -134,7 +142,7 @@ def p1strat_line_plot(
             h, = ax.plot(
                 54, 
                 value, 
-                linestyle="none", 
+                linestyle="none",
                 marker="o", 
                 color=COLOR_LIST[colors][i], 
                 label=f"{value * 100:.2f}%"
@@ -144,6 +152,11 @@ def p1strat_line_plot(
         leg.set_loc(9)
         ax.legend(handles=handles, loc=1)
         ax.add_artist(leg)
+    elif mode=="entropy_loss":
+        x = analysis.df["wr_group"]
+        ax.plot(x, [quality_threshold] * len(x), linestyle="dotted", color="gray")
+        percent_val = 1 - 2 ** quality_threshold
+        ax.text(50, quality_threshold - 0.2, f"({100 * percent_val:.2f}% information loss)", color="gray")
     ax.grid(color='lightgray')
     return ax
 
@@ -213,3 +226,22 @@ def cohort_summary_table(
         'actual_win_rate': 'Match Win Rate',
         'event_matches_sum': 'Num Matches'
     })
+
+def set_by_set_plot(
+    analyses: dict[str, AnalysisResult]
+):
+    x = list(analyses.keys())
+
+    _, ax = plt.subplots(figsize=FIG_SIZE)
+    for metric in ['deq', 'gih_wr']:
+        y = [val.agg_df[f"{metric}_strat_delta"] for val in analyses.values()]
+        ax.plot(x, y, label=METRIC_LABELS[metric])
+
+    ax.yaxis.set_major_formatter(mtick.PercentFormatter(1.0, decimals=1))
+    ax.set_title('Mean WR Delta by Set')
+    ax.set_ylabel('Strategy Win Rate Delta')
+    ax.set_xlabel('Set')
+    ax.legend()
+    ax.grid(color='lightgray')
+    return ax
+    

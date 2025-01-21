@@ -16,3 +16,5 @@ from deq.p1_strategy import get_model_dfs, strategy_mapped_df, LATE_FORMAT, EARL
 pl.Config.set_tbl_rows(1000)
 pl.Config.set_tbl_cols(100)
 
+DAY_ONE = {'format_day': 1}
+

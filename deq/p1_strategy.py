@@ -27,7 +27,6 @@ P1P1 = {'$and': [PICK_1_FILTER, PACK_1_FILTER]}
 PRECISION = 2 ** 20
 
 GROUP_FILTER = ~pl.col('wr_group').is_null()
-WR_FILTER = ~pl.col(ColName.PICKED_MATCH_WR).is_null()
 
 SEEN_IS_GREATEST = "seen_{0}_is_greatest"
 
@@ -39,6 +38,7 @@ NEIGHBORS = 4 # 66 looks at 60 - (N-1)*2
 
 @dataclass
 class ModelDFs:
+    metric: str
     weights_df: pl.DataFrame
     wr_df: pl.DataFrame
     fallback_df: pl.DataFrame
@@ -73,7 +73,7 @@ def get_model_dfs(
     else:
         set_context = None
 
-    logging.info(f"Calculation metric {metric} value for context")
+    logging.info(f"Calculating metric {metric} value for context")
     context_df = summon(
         set_codes, 
         columns=[metric], 
@@ -85,15 +85,14 @@ def get_model_dfs(
 
     metric_cols = context_cols(metric, silent=True)
 
-    logging.info("Calculating seen greatest counts for weights")
+    logging.info("Calculating substitution weights and results")
     weights_df = summon(
         set_codes, 
         columns=[
             SEEN_IS_GREATEST.format(metric), 
-            ColName.PICKED_MATCH_WR, 
+            ColName.EVENT_MATCH_WINS_SUM, 
             ColName.EVENT_MATCHES_SUM, 
-            'matches_per_pick', 
-            'mean_day_picked'
+            ColName.NUM_TAKEN,
         ], 
         group_by=['expansion', 'name', 'wr_group'], 
         filter_spec=p1_results_filter, 
@@ -103,20 +102,23 @@ def get_model_dfs(
     )
 
     wr_df = weights_df.drop(SEEN_IS_GREATEST.format(metric)).filter(
-        GROUP_FILTER & WR_FILTER
+        GROUP_FILTER & (pl.col(ColName.NUM_TAKEN) > 0) & (pl.col(ColName.EVENT_MATCHES_SUM) > 0)
     )
 
     # assume cards picked by nobody ever provide no value as a first pick
-    # 'matches_per_pick' will be slightly wrong...
     fallback_df = summon(
         set_codes,
-        columns=[ColName.PICKED_MATCH_WR, 'matches_per_pick', 'mean_day_picked'],
+        columns=[ColName.EVENT_MATCH_WINS_SUM, ColName.EVENT_MATCHES_SUM, ColName.NUM_TAKEN],
         group_by=['wr_group'],
         filter_spec=p1_results_filter,
         extensions=ext,
     ).select(
-        ['wr_group', pl.col(ColName.PICKED_MATCH_WR) - P1P1_PICK_EQUITY, 
-            'mean_day_picked', 'matches_per_pick']
+        [
+            'wr_group', 
+            pl.col(ColName.EVENT_MATCH_WINS_SUM) - P1P1_PICK_EQUITY * pl.col(ColName.EVENT_MATCHES_SUM), 
+            pl.col(ColName.EVENT_MATCHES_SUM),
+            pl.col(ColName.NUM_TAKEN)
+        ]
     )
 
     weights_df = weights_df.select(
@@ -127,6 +129,7 @@ def get_model_dfs(
     )
 
     return ModelDFs(
+        metric=metric,
         weights_df=weights_df,
         wr_df=wr_df,
         fallback_df=fallback_df
@@ -138,85 +141,83 @@ def strategy_mapped_df(
     card_parity: bool = False, 
 ) -> pl.DataFrame:
     wr_df = model_dfs.wr_df
-    fallback_df = model_dfs.fallback_df
 
-    if not card_parity:
-        skill_control_df = p1_skill_control_df()
-        wr_df = wr_df.join(skill_control_df, on=["wr_group"])
-    else:
-        wr_df = wr_df.with_columns([
-            pl.lit(None).alias('up_one_wr_mod'), 
-            pl.lit(None).alias('down_one_wr_mod')
-        ])
-
-    up_one_cols = [
-        pl.col('wr_group') + 2,
-        pl.col(ColName.PICKED_MATCH_WR) - pl.col('up_one_wr_mod'),
-    ]
-
-    down_one_cols = [
-        pl.col('wr_group') - 2,
-        pl.col(ColName.PICKED_MATCH_WR) - pl.col('down_one_wr_mod'),
-    ]
-    
     select_cols = [
         'expansion', 
         'name', 
-        'matches_per_pick',
-        'mean_day_picked',
-        'up_one_wr_mod',
-        'down_one_wr_mod',
+        ColName.EVENT_MATCHES_SUM,
+        ColName.NUM_TAKEN,
     ]
 
-    go_up_df = wr_df.select(
-        select_cols + ['wr_group', ColName.PICKED_MATCH_WR]
-    )
-    go_down_df = go_up_df
-
-    good_dfs = []
+    join_keys = ['expansion', 'name', 'wr_group']
     remaining_df = model_dfs.weights_df
 
+    substitution_df = remaining_df.join(
+        wr_df.select(select_cols + [
+            'wr_group',
+            pl.col(ColName.EVENT_MATCH_WINS_SUM).cast(pl.Float64),
+            pl.lit('In Group').alias('representation_class')
+        ]),
+        on = join_keys 
+    )
+
     logging.info("Joining and calculating results")
-    join_keys = ['expansion', 'name', 'wr_group']
-    iter = 0
-    iter_max = 1 if card_parity else NEIGHBORS
-    while iter < iter_max and len(remaining_df):
-        misrep = pl.lit(iter).alias('misrep')
-
-        good_dfs.append(
-            remaining_df.join(go_up_df, on=join_keys).with_columns(misrep)
-        )
-        remaining_df = remaining_df.join(go_up_df, on=join_keys, how='anti')
-
-        good_dfs.append(
-            remaining_df.join(go_down_df, on=join_keys).with_columns(misrep)
-        )
-        remaining_df = remaining_df.join(go_down_df, on=join_keys, how='anti')
-
-        go_up_df = go_up_df.select(select_cols + up_one_cols)
-        go_down_df = go_down_df.select(select_cols + down_one_cols)
-
-        iter += 1
-
+    
     if not card_parity:
-        good_dfs.append(remaining_df.join(fallback_df, on='wr_group').with_columns(
-            [
-                pl.lit(None).alias('up_one_wr_mod'), 
-                pl.lit(None).alias('down_one_wr_mod'),
-                pl.lit(iter_max).alias('misrep'),
+        remaining_df = remaining_df.join(wr_df, on = join_keys, how='anti')
+        sub_dfs = []
+
+        go_up_df = go_down_df = wr_df 
+        iter = 1
+        skill_control_df = p1_skill_control_df()
+        for iter in range(NEIGHBORS):
+            up_one_cols = [
+                pl.col('wr_group') + 2,
+                pl.col(ColName.EVENT_MATCH_WINS_SUM) - pl.col('up_one_wr_mod') * pl.col(ColName.EVENT_MATCHES_SUM),
+                pl.lit(f"Up {iter}").alias('representation_class')
             ]
-        ).select(good_dfs[0].columns))
 
-    final_df = pl.concat(good_dfs)
+            down_one_cols = [
+                pl.col('wr_group') - 2,
+                pl.col(ColName.EVENT_MATCH_WINS_SUM) - pl.col('down_one_wr_mod') * pl.col(ColName.EVENT_MATCHES_SUM),
+                pl.lit(f"Down {iter}").alias('representation_class')
+            ]
 
-    if card_parity:
-        num_wr_groups = len(final_df.group_by('wr_group').count())
-        keys_df = final_df.group_by(['expansion', 'name']).count().filter(
+            go_up_df = go_up_df.join(skill_control_df, on=["wr_group"]).select(select_cols + up_one_cols)
+            go_down_df = go_down_df.join(skill_control_df, on=["wr_group"]).select(select_cols + down_one_cols)
+
+            sub_dfs.append(remaining_df.join(go_up_df, on=join_keys))
+            remaining_df = remaining_df.join(go_up_df, on=join_keys, how='anti')
+
+            sub_dfs.append(remaining_df.join(go_down_df, on=join_keys))
+            remaining_df = remaining_df.join(go_down_df, on=join_keys, how='anti')
+
+        sub_dfs.append(remaining_df.join(model_dfs.fallback_df, on='wr_group').with_columns(
+            pl.lit('Fallback').alias('representation_class')
+        ).select(substitution_df.columns))
+
+        substitution_df = pl.concat([substitution_df, *sub_dfs])
+
+    else:
+        num_wr_groups = len(substitution_df.group_by('wr_group').count())
+        keys_df = substitution_df.group_by(['expansion', 'name']).count().filter(
             pl.col('count') == num_wr_groups).select(['expansion', 'name']
         )
-        final_df = final_df.join(keys_df, on=['expansion', 'name'])
+        substitution_df = substitution_df.join(keys_df, on=['expansion', 'name'])
 
-    return final_df
+    metric = model_dfs.metric
+
+    df = substitution_df.with_columns(
+        (pl.col(SEEN_IS_GREATEST.format(metric)) / pl.col(ColName.NUM_TAKEN)).alias("deriv")
+    ).with_columns([
+        (pl.col("deriv") * pl.col(ColName.EVENT_MATCHES_SUM)).alias("weight"),
+        (pl.col("deriv") * pl.col(ColName.EVENT_MATCH_WINS_SUM)).alias("win_weight"),
+        pl.when(pl.col('representation_class') == 'In Group').then(1).otherwise(0).alias("entropy_support"),
+    ]).with_columns([
+        (pl.col("entropy_support")*(-pl.col("deriv").log(base=2) * pl.col("weight"))).alias("diff_entropy"),
+        (pl.col("entropy_support")*pl.col("weight")).alias("entropy_weight")
+    ]) 
+    return df
 
 
 @functools.lru_cache(maxsize=None)
@@ -253,25 +254,24 @@ def p1_strat_analysis(
 
     mapped_df = strategy_mapped_df(model_dfs, card_parity)
 
-    base_weight = pl.col(ColName.EVENT_MATCHES_SUM)
     base_wr_df = model_dfs.wr_df.select([
         'wr_group', 
-        base_weight, 
-        (base_weight * pl.col('mean_day_picked')).alias('day_weight'),
-        (base_weight * pl.col(ColName.PICKED_MATCH_WR)).alias('wr_weight')
+        ColName.EVENT_MATCHES_SUM, 
+        ColName.EVENT_MATCH_WINS_SUM, 
     ]).group_by('wr_group').sum().select([
         'wr_group',
-        base_weight,
-        (pl.col('wr_weight') / base_weight).alias("actual_win_rate"),
-        (pl.col('day_weight') / base_weight).alias("mean_day_picked"),
+        ColName.EVENT_MATCHES_SUM,
+        pl.col(ColName.EVENT_MATCHES_SUM).log(base=2).alias('total_entropy'),
+        (pl.col(ColName.EVENT_MATCH_WINS_SUM) / pl.col(ColName.EVENT_MATCHES_SUM)).alias("actual_win_rate"),
     ]).sort('wr_group')
 
-    sim_df = get_simulated_winrates(mapped_df, metric, luck_control=luck_control)
-    ret_df = base_wr_df.join(sim_df, on=["wr_group"])
-    ret_df = ret_df.with_columns(
-        [(pl.col(f"{metric}_strategy_win_rate") - pl.col("actual_win_rate")).alias(
-            f"{metric}_strat_delta")]
-    )
+    mapped_results_df = agg_mapped_df(mapped_df, metric, luck_control=luck_control)
+    ret_df = base_wr_df.join(mapped_results_df, on=["wr_group"])
+    ret_df = ret_df.with_columns([
+        (pl.col(f"{metric}_strategy_win_rate") - pl.col("actual_win_rate")).alias(
+            f"{metric}_strat_delta"),
+        (pl.col(f"{metric}_entropy") - pl.col("total_entropy")).alias(f"{metric}_entropy_loss")
+    ])
 
     return MetricResult(
         df=ret_df, 
@@ -279,28 +279,28 @@ def p1_strat_analysis(
     )
 
 
-def get_simulated_winrates(
-    reweight_df: pl.DataFrame, 
+def agg_mapped_df(
+    mapped_df: pl.DataFrame, 
     metric: str, 
     luck_control: bool = False
 ) -> pl.DataFrame:
-    base_weight_col = (pl.col(f'seen_{metric}_is_greatest') * pl.col('matches_per_pick'))
     weight_col = (
-         base_weight_col.sum().over(['expansion', 'name']) if luck_control else base_weight_col 
+         pl.col('weight').sum().over(['expansion', 'name']) if luck_control else pl.col('weight') 
     ).alias(f'{metric}_weight')
 
-    return reweight_df.select([
+    win_weight_col = pl.col('win_weight') * weight_col / pl.col("weight") if luck_control else pl.col('win_weight')
+
+    return mapped_df.select([
         'wr_group',
         weight_col,
-        (weight_col * pl.col(ColName.PICKED_MATCH_WR)).alias('wr_weight'),
-        (weight_col * pl.col('mean_day_picked')).alias('day_weight'),
-        (weight_col * pl.col('misrep')).alias('misrep_weight'),
+        win_weight_col,
+        "diff_entropy",
+        "entropy_weight",
     ]).group_by(['wr_group']).sum().select([
         'wr_group',
         f'{metric}_weight',
-        (pl.col('wr_weight') / pl.col(f'{metric}_weight')).alias(f'{metric}_strategy_win_rate'),
-        (pl.col('day_weight') / pl.col(f'{metric}_weight')).alias(f'{metric}_strategy_mean_day'),
-        (pl.col('misrep_weight') / pl.col(f'{metric}_weight')).alias(f'{metric}_misrep'),
+        (pl.col('win_weight') / pl.col(f'{metric}_weight')).alias(f'{metric}_strategy_win_rate'),
+        ((pl.col("diff_entropy") + pl.col(f'{metric}_weight').log(base=2) * pl.col('entropy_weight')) / pl.col(f'{metric}_weight')).alias(f"{metric}_entropy"),
     ]).sort('wr_group')
 
 
@@ -309,11 +309,14 @@ def all_metrics_analysis(
     metric_filter: dict | None = None, 
     results_filter: dict | None = None,
     metrics: list[str] | None = None,
+    sets: list[str] | None = None,
 ):
+    sets = SETS if sets is None else sets
+
     if metrics is None:
         metrics = METRICS 
     metric_results = {metric: p1_strat_analysis(
-        SETS, 
+        sets, 
         metric, 
         metric_filter=metric_filter, 
         results_filter=results_filter, 
@@ -322,14 +325,16 @@ def all_metrics_analysis(
         'wr_group', 
         f"{metric}_strat_delta", 
         f"{metric}_weight",
-        f"{metric}_misrep"
+        f"{metric}_entropy",
+        f"{metric}_entropy_loss",
     ]) for metric in metrics]
 
     result_df = functools.reduce(lambda prev, curr: prev.join(curr, on="wr_group"), delta_dfs)
     base_df = metric_results[metrics[0]].df.select([
         'wr_group',
         'event_matches_sum',
-        'actual_win_rate'
+        'actual_win_rate',
+        'total_entropy',
     ])
     result_df = result_df.join(base_df, on="wr_group")
 
@@ -344,4 +349,22 @@ def all_metrics_analysis(
         agg_df=agg_df,
         metric_results=metric_results
     )
+
+def set_by_set_results(
+    metric_filter: dict | None = None,
+    results_filter: dict | None = None,
+    metrics: list[str] | None = None,
+):
+    metrics = ['deq', 'gih_wr'] if metrics is None else metrics
+    sets = ["NEO", "SNC", "DMU", "BRO", "ONE", "MOM", "LTR", "WOE", "LCI", 
+        "KTK", "MKM", "OTJ", "MH3", "BLB", "DSK", "FDN"]
+
+    results = {set_: all_metrics_analysis(
+        metric_filter=metric_filter,
+        results_filter=results_filter,
+        metrics=metrics,
+        sets=[set_]
+    ) for set_ in sets}
+
+    return results 
     
