@@ -105,6 +105,13 @@ def get_model_dfs(
         GROUP_FILTER & (pl.col(ColName.NUM_TAKEN) > 0) & (pl.col(ColName.EVENT_MATCHES_SUM) > 0)
     )
 
+    weights_df = weights_df.select(
+        ['expansion', 'name', 'wr_group', SEEN_IS_GREATEST.format(metric)]
+    ).filter(
+        (pl.col(SEEN_IS_GREATEST.format(metric))>0) & 
+        GROUP_FILTER & ~pl.col('name').is_in(BASIC_LANDS)
+    )
+
     # assume cards picked by nobody ever provide no value as a first pick
     fallback_df = summon(
         set_codes,
@@ -119,13 +126,6 @@ def get_model_dfs(
             pl.col(ColName.EVENT_MATCHES_SUM),
             pl.col(ColName.NUM_TAKEN)
         ]
-    )
-
-    weights_df = weights_df.select(
-        ['expansion', 'name', 'wr_group', SEEN_IS_GREATEST.format(metric)]
-    ).filter(
-        (pl.col(SEEN_IS_GREATEST.format(metric))>0) & 
-        GROUP_FILTER & ~pl.col('name').is_in(BASIC_LANDS)
     )
 
     return ModelDFs(

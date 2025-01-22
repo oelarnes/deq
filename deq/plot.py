@@ -27,6 +27,7 @@ METRIC_LABELS = {
     'gp_wr_bias_adj': 'GP WR Bias Adj.',
     'oh_wr': 'OH WR',
     'gns_wr': 'GNS WR',
+    'alsa': 'Inverse ALSA',
 }
 
 FIG_SIZE = (8,6)
@@ -104,7 +105,7 @@ def p1strat_line_plot(
             'y_label': 'Representative Entropy',
         },
         'entropy_loss': {
-            'title': 'Representative Entropy Loss by Skill cohort',
+            'title': 'Representative Entropy Loss by Skill Cohort',
             'value_template': "{metric}_entropy_loss",
             'y_label': 'Representative Entropy Loss',
         },
@@ -231,11 +232,15 @@ def set_by_set_plot(
     analyses: dict[str, AnalysisResult]
 ):
     x = list(analyses.keys())
+    x_num = np.arange(len(x))
 
     _, ax = plt.subplots(figsize=FIG_SIZE)
     for metric in ['deq', 'gih_wr']:
-        y = [val.agg_df[f"{metric}_strat_delta"] for val in analyses.values()]
-        ax.plot(x, y, label=METRIC_LABELS[metric])
+        y = np.array([val.agg_df[f"{metric}_strat_delta"] for val in analyses.values()])
+        m, y_0 = np.polyfit(x_num, y, deg=1)
+        fit = y_0 + x_num * m 
+        line, = ax.plot(x, y, label=METRIC_LABELS[metric])
+        ax.plot(x, fit, lw=2, ls=':', color=line.get_color())
 
     ax.yaxis.set_major_formatter(mtick.PercentFormatter(1.0, decimals=1))
     ax.set_title('Mean WR Delta by Set')
