@@ -81,7 +81,7 @@ def two_phase_line_graph(
         segments=segments,
     )
 
-def p1strat_line_plot(
+def p1_line_plot(
     analysis: AnalysisResult,
     mode: str = 'wr_delta',
     metrics: list[str] | None = None,
@@ -249,4 +249,24 @@ def set_by_set_plot(
     ax.legend()
     ax.grid(color='lightgray')
     return ax
-    
+
+def p1_delta_bar(
+    analysis: AnalysisResult,
+    metrics: list[str] | None = None,
+):
+    df = analysis.agg_df
+    if metrics is None:
+        metrics = ['deq', 'gih_wr', 'gp_wr', 'pick_equity', 'iwd']
+
+    _, ax = plt.subplots()
+
+    ax.bar(
+        [METRIC_LABELS[metric] for metric in metrics],
+        [df[f"{metric}_strat_delta"][0] for metric in metrics], 
+        color=[COLOR_LIST['pyplot'][i] for i in range(len(metrics))],
+    )
+    ax.set_title("Win Rate Delta for Taking P1P1 by Metric")
+    ax.set_ylabel('Strategy Win Rate Delta')
+    ax.yaxis.set_major_formatter(mtick.PercentFormatter(1.0, decimals=1))
+
+    return ax
