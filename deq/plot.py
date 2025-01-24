@@ -88,7 +88,7 @@ def p1_line_plot(
     quality_threshold: float = -3, # greater than this value
     colors: str = 'pyplot',
     title_extra: str | None = None,
-):
+) -> None:
     if metrics is None:
         metrics = ['deq', 'gih_wr', 'gp_wr', 'pick_equity', 'iwd']
 
@@ -159,7 +159,7 @@ def p1_line_plot(
         percent_val = 1 - 2 ** quality_threshold
         ax.text(50, quality_threshold - 0.2, f"({100 * percent_val:.2f}% information loss)", color="gray")
     ax.grid(color='lightgray')
-    return ax
+    plt.show()
 
 
 def plot_two_phase_series_pyplot(
@@ -230,7 +230,7 @@ def cohort_summary_table(
 
 def set_by_set_plot(
     analyses: dict[str, AnalysisResult]
-):
+) -> None:
     x = list(analyses.keys())
     x_num = np.arange(len(x))
 
@@ -248,12 +248,12 @@ def set_by_set_plot(
     ax.set_xlabel('Set')
     ax.legend()
     ax.grid(color='lightgray')
-    return ax
+    plt.show()
 
 def p1_delta_bar(
     analysis: AnalysisResult,
     metrics: list[str] | None = None,
-):
+) -> None:
     df = analysis.agg_df
     if metrics is None:
         metrics = ['deq', 'gih_wr', 'gp_wr', 'pick_equity', 'iwd']
@@ -269,4 +269,4 @@ def p1_delta_bar(
     ax.set_ylabel('Strategy Win Rate Delta')
     ax.yaxis.set_major_formatter(mtick.PercentFormatter(1.0, decimals=1))
 
-    return ax
+    plt.show()
