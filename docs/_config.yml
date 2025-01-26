@@ -4,11 +4,15 @@
 title: "MagicFlea on Draft: Spells and DEq"
 author: Joel Barnes
 logo: mfod-logo.png
+copyright: "2024-2025" 
 
 # Force re-execution of notebooks on each build.
 # See https://jupyterbook.org/content/execute.html
 execute:
-  execute_notebooks: 'off'
+  execute_notebooks: "off"
+
+html:
+  favicon: deq.png
 
 # Information about where the book exists on the web
 repository:
