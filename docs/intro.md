@@ -1,6 +1,6 @@
 # MagicFlea on Draft
 
-Find within my resources on the analysis of limited data! The axes of this project are the analytics 
+Find within my resources on the analysis of limited data! The pillars of this project are the analytics 
 platform [Spells](https://github.com/oelarnes/spells) and my card quality metric 
 [DEq](https://docs.google.com/spreadsheets/d/1n1pfrb5q_2ICYk-vfF3Uwo8t61DJU-5T_DFe0dwk8DY/edit?gid=1748381080#gid=1748381080).
 
