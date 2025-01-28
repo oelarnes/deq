@@ -3,6 +3,11 @@
 
 format: jb-book
 root: intro
-chapters:
-- file: deq.ipynb
-- file: bayes-cohorts.ipynb
+parts:
+  - caption: "Articles"
+    chapters:
+    - file: p1-strategy.ipynb
+  - caption: "Math"
+    chapters: 
+    - file: deq.ipynb
+    - file: bayes-cohorts.ipynb
