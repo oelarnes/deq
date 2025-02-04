@@ -51,17 +51,7 @@ ext = {
         col_type=ColType.AGG,
         expr=(pl.col(ColName.GP_WR_EXCESS) + pl.col('pick_equity')) * pl.col(ColName.PCT_GP)
     ),
-    'cohort': ColSpec(
-        col_type=ColType.GROUP_BY,
-        expr=pl.when((UNG >= 500) & (UGWR > 0.65) | (UNG >= 100) & (UGWR > 0.73)).then(pl.lit('1 Best')).otherwise(
-            pl.when((UNG >= 500) & (UGWR > 0.61) | (UNG >= 100) & (UGWR > 0.65)).then(pl.lit('2 Elite')).otherwise(
-                pl.when((UNG >= 100) & (UGWR > 0.57) | (UNG >= 50) & (UGWR > 0.61)).then(pl.lit('3 Competitive')).otherwise(
-                    pl.when((UNG >= 100) & (UGWR > 0.53) | (UGWR > 0.57)).then(pl.lit('4 Solid')).otherwise(pl.lit('5 Poor'))
-                )
-            )
-        )
-    ),
-    'wr_group': ColSpec(
+    'skill_cohort': ColSpec(
         col_type=ColType.GROUP_BY,
         expr=pl.min_horizontal([pl.max_horizontal([((pl.when(UNG == 1000).then(1200/(1200 + BAYES_GAMES)).otherwise(
             pl.when(UNG == 500).then(750/(750+BAYES_GAMES)).otherwise(

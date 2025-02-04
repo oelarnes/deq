@@ -26,7 +26,7 @@ P1P1_PICK_EQUITY = 0.025
 P1P1 = {'$and': [PICK_1_FILTER, PACK_1_FILTER]}
 PRECISION = 2 ** 20
 
-GROUP_FILTER = ~pl.col('wr_group').is_null()
+GROUP_FILTER = ~pl.col('skill_cohort').is_null()
 
 SEEN_IS_GREATEST = "seen_{0}_is_greatest"
 
@@ -42,6 +42,7 @@ class ModelDFs:
     weights_df: pl.DataFrame
     wr_df: pl.DataFrame
     fallback_df: pl.DataFrame
+    context_df: pl.DataFrame
 
 
 @dataclass
@@ -94,7 +95,7 @@ def get_model_dfs(
             ColName.EVENT_MATCHES_SUM, 
             ColName.NUM_TAKEN,
         ], 
-        group_by=['expansion', 'name', 'wr_group'], 
+        group_by=['expansion', 'name', 'skill_cohort'], 
         filter_spec=p1_results_filter, 
         extensions=[metric_cols, ext], 
         card_context=context_df,
@@ -106,7 +107,7 @@ def get_model_dfs(
     )
 
     weights_df = weights_df.select(
-        ['expansion', 'name', 'wr_group', SEEN_IS_GREATEST.format(metric)]
+        ['expansion', 'name', 'skill_cohort', SEEN_IS_GREATEST.format(metric)]
     ).filter(
         (pl.col(SEEN_IS_GREATEST.format(metric))>0) & 
         GROUP_FILTER & ~pl.col('name').is_in(BASIC_LANDS)
@@ -116,12 +117,12 @@ def get_model_dfs(
     fallback_df = summon(
         set_codes,
         columns=[ColName.EVENT_MATCH_WINS_SUM, ColName.EVENT_MATCHES_SUM, ColName.NUM_TAKEN],
-        group_by=['wr_group'],
+        group_by=['skill_cohort'],
         filter_spec=p1_results_filter,
         extensions=ext,
     ).select(
         [
-            'wr_group', 
+            'skill_cohort', 
             pl.col(ColName.EVENT_MATCH_WINS_SUM) - P1P1_PICK_EQUITY * pl.col(ColName.EVENT_MATCHES_SUM), 
             pl.col(ColName.EVENT_MATCHES_SUM),
             pl.col(ColName.NUM_TAKEN)
@@ -132,7 +133,8 @@ def get_model_dfs(
         metric=metric,
         weights_df=weights_df,
         wr_df=wr_df,
-        fallback_df=fallback_df
+        fallback_df=fallback_df,
+        context_df=context_df
     )
 
 
@@ -149,12 +151,12 @@ def strategy_mapped_df(
         ColName.NUM_TAKEN,
     ]
 
-    join_keys = ['expansion', 'name', 'wr_group']
+    join_keys = ['expansion', 'name', 'skill_cohort']
     remaining_df = model_dfs.weights_df
 
     substitution_df = remaining_df.join(
         wr_df.select(select_cols + [
-            'wr_group',
+            'skill_cohort',
             pl.col(ColName.EVENT_MATCH_WINS_SUM).cast(pl.Float64),
             pl.lit('In Group').alias('representation_class')
         ]),
@@ -172,19 +174,19 @@ def strategy_mapped_df(
         skill_control_df = p1_skill_control_df()
         for iter in range(NEIGHBORS):
             up_one_cols = [
-                pl.col('wr_group') + 2,
+                pl.col('skill_cohort') + 2,
                 pl.col(ColName.EVENT_MATCH_WINS_SUM) - pl.col('up_one_wr_mod') * pl.col(ColName.EVENT_MATCHES_SUM),
                 pl.lit(f"Up {iter}").alias('representation_class')
             ]
 
             down_one_cols = [
-                pl.col('wr_group') - 2,
+                pl.col('skill_cohort') - 2,
                 pl.col(ColName.EVENT_MATCH_WINS_SUM) - pl.col('down_one_wr_mod') * pl.col(ColName.EVENT_MATCHES_SUM),
                 pl.lit(f"Down {iter}").alias('representation_class')
             ]
 
-            go_up_df = go_up_df.join(skill_control_df, on=["wr_group"]).select(select_cols + up_one_cols)
-            go_down_df = go_down_df.join(skill_control_df, on=["wr_group"]).select(select_cols + down_one_cols)
+            go_up_df = go_up_df.join(skill_control_df, on=["skill_cohort"]).select(select_cols + up_one_cols)
+            go_down_df = go_down_df.join(skill_control_df, on=["skill_cohort"]).select(select_cols + down_one_cols)
 
             sub_dfs.append(remaining_df.join(go_up_df, on=join_keys))
             remaining_df = remaining_df.join(go_up_df, on=join_keys, how='anti')
@@ -192,16 +194,16 @@ def strategy_mapped_df(
             sub_dfs.append(remaining_df.join(go_down_df, on=join_keys))
             remaining_df = remaining_df.join(go_down_df, on=join_keys, how='anti')
 
-        sub_dfs.append(remaining_df.join(model_dfs.fallback_df, on='wr_group').with_columns(
+        sub_dfs.append(remaining_df.join(model_dfs.fallback_df, on='skill_cohort').with_columns(
             pl.lit('Fallback').alias('representation_class')
         ).select(substitution_df.columns))
 
         substitution_df = pl.concat([substitution_df, *sub_dfs])
 
     else:
-        num_wr_groups = len(substitution_df.group_by('wr_group').count())
+        num_skill_cohorts = len(substitution_df.group_by('skill_cohort').count())
         keys_df = substitution_df.group_by(['expansion', 'name']).count().filter(
-            pl.col('count') == num_wr_groups).select(['expansion', 'name']
+            pl.col('count') == num_skill_cohorts).select(['expansion', 'name']
         )
         substitution_df = substitution_df.join(keys_df, on=['expansion', 'name'])
 
@@ -217,7 +219,7 @@ def strategy_mapped_df(
         (pl.col("entropy_support")*(-pl.col("deriv").log(base=2) * pl.col("weight"))).alias("diff_entropy"),
         (pl.col("entropy_support")*pl.col("weight")).alias("entropy_weight")
     ]) 
-    return df
+    return df.join(model_dfs.context_df, ["expansion", "name"])
 
 
 @functools.lru_cache(maxsize=None)
@@ -234,7 +236,7 @@ def p1_skill_control_df():
     """
     res = p1_strat_analysis(SETS, "pick_equity", card_parity=True, luck_control=True)
     return res.df.select([
-        'wr_group', 
+        'skill_cohort', 
         pl.col('pick_equity_strategy_win_rate').diff(1).alias('down_one_wr_mod'), 
         pl.col('pick_equity_strategy_win_rate').diff(-1).alias('up_one_wr_mod')
     ])
@@ -255,18 +257,18 @@ def p1_strat_analysis(
     mapped_df = strategy_mapped_df(model_dfs, card_parity)
 
     base_wr_df = model_dfs.wr_df.select([
-        'wr_group', 
+        'skill_cohort', 
         ColName.EVENT_MATCHES_SUM, 
         ColName.EVENT_MATCH_WINS_SUM, 
-    ]).group_by('wr_group').sum().select([
-        'wr_group',
+    ]).group_by('skill_cohort').sum().select([
+        'skill_cohort',
         ColName.EVENT_MATCHES_SUM,
         pl.col(ColName.EVENT_MATCHES_SUM).log(base=2).alias('total_entropy'),
         (pl.col(ColName.EVENT_MATCH_WINS_SUM) / pl.col(ColName.EVENT_MATCHES_SUM)).alias("actual_win_rate"),
-    ]).sort('wr_group')
+    ]).sort('skill_cohort')
 
     mapped_results_df = agg_mapped_df(mapped_df, metric, luck_control=luck_control)
-    ret_df = base_wr_df.join(mapped_results_df, on=["wr_group"])
+    ret_df = base_wr_df.join(mapped_results_df, on=["skill_cohort"])
     ret_df = ret_df.with_columns([
         (pl.col(f"{metric}_strategy_win_rate") - pl.col("actual_win_rate")).alias(
             f"{metric}_strat_delta"),
@@ -291,17 +293,17 @@ def agg_mapped_df(
     win_weight_col = pl.col('win_weight') * weight_col / pl.col("weight") if luck_control else pl.col('win_weight')
 
     return mapped_df.select([
-        'wr_group',
+        'skill_cohort',
         weight_col,
         win_weight_col,
         "diff_entropy",
         "entropy_weight",
-    ]).group_by(['wr_group']).sum().select([
-        'wr_group',
+    ]).group_by(['skill_cohort']).sum().select([
+        'skill_cohort',
         f'{metric}_weight',
         (pl.col('win_weight') / pl.col(f'{metric}_weight')).alias(f'{metric}_strategy_win_rate'),
         ((pl.col("diff_entropy") + pl.col(f'{metric}_weight').log(base=2) * pl.col('entropy_weight')) / pl.col(f'{metric}_weight')).alias(f"{metric}_entropy"),
-    ]).sort('wr_group')
+    ]).sort('skill_cohort')
 
 
 @make_verbose()
@@ -322,21 +324,21 @@ def all_metrics_analysis(
         results_filter=results_filter, 
     ) for metric in metrics}
     delta_dfs = [metric_results[metric].df.select([
-        'wr_group', 
+        'skill_cohort', 
         f"{metric}_strat_delta", 
         f"{metric}_weight",
         f"{metric}_entropy",
         f"{metric}_entropy_loss",
     ]) for metric in metrics]
 
-    result_df = functools.reduce(lambda prev, curr: prev.join(curr, on="wr_group"), delta_dfs)
+    result_df = functools.reduce(lambda prev, curr: prev.join(curr, on="skill_cohort"), delta_dfs)
     base_df = metric_results[metrics[0]].df.select([
-        'wr_group',
+        'skill_cohort',
         'event_matches_sum',
         'actual_win_rate',
         'total_entropy',
     ])
-    result_df = result_df.join(base_df, on="wr_group")
+    result_df = result_df.join(base_df, on="skill_cohort")
 
     agg_df = wavg(
         result_df, 

@@ -1,3 +1,4 @@
+jupyter-book clean -a docs
 jupyter-book build docs
 
 SITE_DIR=/var/www/html/on-draft 
