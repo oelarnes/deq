@@ -1,9 +1,11 @@
 from dataclasses import dataclass
+import datetime
+import json
 import functools
 
 import polars as pl
 
-from spells import summon, view_select, ColName 
+from spells import summon, view_select, ColName, get_names
 from spells.enums import View
 
 from deq.deq import ext
@@ -18,18 +20,34 @@ class DraftCard:
 class DraftPack:
     set_code: str
     event_type: str
-    seed: int
     draft_id: str
-    filter_spec: dict | None
-    draft_date: str
+    pick_num: int
+    pack_num: int
+    draft_date: datetime.date
     user_n_games_bucket: int
     user_game_win_rate_bucket: float
     skill_cohort: int
     match_wins: int
     match_losses: int
-    pick: DraftCard
+    pick: str
     pack: list[DraftCard]
     pool: list[DraftCard]
+
+    def to_html(self):
+        pick_index = [p.name for p in self.pack].index(self.pick)
+        pick_class = '"draft-pack-pick"'
+        card_class = '"draft-pack-card"'
+        card_list = '\n        '.join([f"<img src=\"{c.image_url}\" class={pick_class if i == pick_index else card_class}>" for i, c in enumerate(self.pack)])
+        return f"""
+<div class="draft-pack">
+    <div class="draft-pack-info-top">
+        <a href="https://17lands.com/draft/{self.draft_id}" class="draft-pack-17l-link">{self.draft_id}</a>
+        Record: {self.match_wins} - {self.match_losses}
+    </div>
+    <div class="draft-pack-cards">
+        {card_list}
+    </div>
+</div>"""
 
 _seed = 0
 def reset_seed():
@@ -39,27 +57,9 @@ def reset_seed():
 @functools.lru_cache(maxsize=None)
 def get_picks_df(
     set_code: str,
-    skill_cohort: int | None = None, # e.g. 56
-    pick_nums: int | tuple[int, ...] | None = None,
-    pack_nums: int | tuple[int, ...] | None = None,
-    format_day_min: int = 0,
-    format_day_max: int = 100,
+    filter_json: str,
 ) -> pl.DataFrame:
-    filter_list = [
-        {'lhs': 'format_day', 'op': '>=', 'rhs': format_day_min},
-        {'lhs': 'format_day', 'op': '<=', 'rhs': format_day_max},
-    ]
-    if skill_cohort is not None:
-        filter_list.append({'skill_cohort': skill_cohort})
-    if isinstance(pick_nums, int):
-        filter_list.append({'pick_num': pick_nums})
-    elif isinstance(pick_nums, tuple):
-        filter_list.append({'lhs': ColName.PICK_NUM, 'op': 'in', 'rhs': pick_nums})
-    if isinstance(pack_nums, int):
-        filter_list.append({'pack_num': pack_nums})
-    elif isinstance(pack_nums, tuple):
-        filter_list.append({'lhs': ColName.PICK_NUM, 'op': 'in', 'rhs': pack_nums})
-    filter_spec = {'$and': filter_list}
+    filter_spec = json.loads(filter_json)
 
     return view_select(
         set_code, 
@@ -77,6 +77,8 @@ def get_picks_df(
             ColName.EVENT_MATCH_LOSSES,
             ColName.PACK_CARD,
             ColName.POOL,
+            ColName.PICK_NUM,
+            ColName.PACK_NUM,
         ],
         filter_spec=filter_spec, 
         extensions=ext
@@ -84,11 +86,7 @@ def get_picks_df(
 
 def get_sample_pack(
     set_code: str,
-    skill_cohort: str | None = None,
-    pick_nums: int | tuple[int, ...] | None = None,
-    pack_nums: int | tuple[int, ...] | None = None,
-    format_day_min: int = 0,
-    format_day_max: int = 100,
+    filter_spec: dict | None = None,
     attribute_columns: list[str] | None = None,
     card_context: pl.DataFrame | dict | None = None,
     seed: int | None = None,
@@ -97,7 +95,10 @@ def get_sample_pack(
         global _seed
         _seed += 1
         seed = _seed
-    df = get_picks_df(set_code, skill_cohort, pick_nums, pack_nums, format_day_min, format_day_max)
+    else:
+        _seed = seed
+
+    df = get_picks_df(set_code, json.dumps(filter_spec))
     row = df.sample(seed=seed)
 
     row = row.to_dicts()[0]
@@ -113,32 +114,40 @@ def get_sample_pack(
             row[ColName.NAME]: row for row in card_context.to_dicts()
         }
 
+    card_names = get_names(set_code)
+
     draft_cards = {
         name: DraftCard(
             name=name,
-            image_url=card_context[ColName.NAME][ColName.IMAGE_URL],
-            attributes={attr: card_context[ColName.NAME][attr] for attr in attribute_columns}
-        ) for name in card_context.keys()
+            image_url=card_context[name][ColName.IMAGE_URL],
+            attributes={attr: card_context[name][attr] for attr in attribute_columns}
+        ) for name in card_names
     }
 
-    pack_cards = 
+    pack = []
+    pool = []
+    for i in range(1,5):
+        for name in card_names:
+            if row[f"pack_card_{name}"] >= i:
+                pack.append(draft_cards[name])
+            if row[f"pool_{name}"]>= i:
+                pool.append(draft_cards[name])
 
 
     return DraftPack(
         set_code = row['expansion'],
-        seed = seed,
+        event_type = row['event_type'],
         draft_id = row['draft_id'],
-        filter_spec = filter_spec,
+        draft_date = row['draft_date'],
         user_n_games_bucket = row['user_n_games_bucket'],
         user_game_win_rate_bucket = row['user_game_win_rate_bucket'],
         skill_cohort = row['skill_cohort'],
+        pick_num = row['pick_num'],
+        pack_num = row['pack_num'],
         match_wins = row[ColName.EVENT_MATCH_WINS],
         match_losses = row[ColName.EVENT_MATCH_LOSSES],
+        pick = row['pick'],
         pack = pack,
         pool = pool
     )
-
-
-
-
 
