@@ -10,11 +10,30 @@ from spells.enums import View
 
 from deq.deq import ext
 
+
 @dataclass
 class DraftCard:
     name: str
     image_url: str
     attributes: dict
+
+    def to_html(
+        self, 
+        is_pick: bool, 
+        metric_1: str | None = 'deq', 
+        metric_2: str | None = 'gih_wr'
+    ):
+        metric_span = ""
+        if metric_1 is not None:
+            metric_span += """<span class="metric-1">{metric_1}: {self.attributes[metric_1]}</span>"""
+        if metric_2 is not None:
+            metric_span += """
+            <span class="metric-2">{metric_2}: {self.attributes[metric_2]}</span>"""
+        return f"""<span class="draft-card">
+            <img src="{self.image_url}" alt="{self.name}" class="draft-pack-card{" pick" if is_pick else ""}">
+            {metric_span}
+        </span>"""
+
 
 @dataclass
 class DraftPack:
@@ -33,21 +52,37 @@ class DraftPack:
     pack: list[DraftCard]
     pool: list[DraftCard]
 
-    def to_html(self):
-        pick_index = [p.name for p in self.pack].index(self.pick)
-        pick_class = '"draft-pack-pick"'
-        card_class = '"draft-pack-card"'
-        card_list = '\n        '.join([f"<img src=\"{c.image_url}\" class={pick_class if i == pick_index else card_class}>" for i, c in enumerate(self.pack)])
+    def pick_index(self) -> int:
+        return [c.name for c in self.pack].index(self.pick)
+
+    def record_str(self) -> str:
+        return f"Record: {self.match_wins} - {self.match_losses}"
+
+    def draft_link(self) -> str:
+        return f"https://17lands.com/draft/{self.draft_id}"
+
+    def to_html(self, metric_1: str | None = 'deq', metric_2: str | None = 'gih_wr'):
+        card_list = ''.join(
+            [c.to_html(i == self.pick_index(), metric_1=metric_1, metric_2=metric_2) for i, c in enumerate(self.pack)]
+        )
+        pool_cards = ''.join(
+            [c.to_html(False, metric_1=None, metric_2=None) for c in self.pool]
+        )
+
         return f"""
 <div class="draft-pack">
     <div class="draft-pack-info-top">
-        <a href="https://17lands.com/draft/{self.draft_id}" class="draft-pack-17l-link">{self.draft_id}</a>
-        Record: {self.match_wins} - {self.match_losses}
+        {self.draft_link}
+        {self.record_str()}
     </div>
     <div class="draft-pack-cards">
         {card_list}
     </div>
+    <div class="draft-pool">
+        {pool_cards}
+    </div>
 </div>"""
+
 
 _seed = 0
 def reset_seed():
