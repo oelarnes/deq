@@ -28,12 +28,10 @@ PRECISION = 2 ** 20
 
 GROUP_FILTER = ~pl.col('skill_cohort').is_null()
 
-SEEN_IS_GREATEST = "seen_{0}_is_greatest"
-
-METRICS = ['pick_equity', 'gp_wr', 'deq_base', 'deq', 'gp_wr_bias_adj', 'gih_wr', 'iwd']
+METRICS = ['pick_equity', 'gp_wr_b', 'deq', 'gih_wr_b', 'iwd']
 LOG_TO_CONSOLE = logging.INFO
 
-SETS = list(set(all_sets) - {'PIO', 'SIR'})
+SETS = list(set(all_sets))
 NEIGHBORS = 4 # 66 looks at 60 - (N-1)*2
 
 @dataclass
@@ -57,6 +55,29 @@ class AnalysisResult:
     agg_df: pl.DataFrame
     metric_results: dict[str, MetricResult]
 
+def seen_is_greatest(
+    metric: str
+) -> str:
+    return f"seen_{metric}_is_greatest"
+
+def get_metric_context(
+    set_codes: list[str],
+    metrics: list[str],
+    filter_spec: dict,
+) -> pl.DataFrame:
+    set_context = deq_bias_set_context(set_codes, filter_spec)
+
+    metrics_select = [(pl.col(metric) * PRECISION).round() / PRECISION for metric in metrics]
+    context_df = summon(
+        set_codes, 
+        columns=metrics, 
+        filter_spec=filter_spec, 
+        group_by=['expansion', 'name'],
+        extensions=ext, 
+        set_context=set_context,
+    ).select(["expansion", "name", *metrics_select])
+    return context_df
+
 
 def get_model_dfs(
     set_codes: list[str], 
@@ -69,20 +90,7 @@ def get_model_dfs(
     p1_results_filter = {'$and': [P1P1, results_filter]} if results_filter else P1P1
     metric_filter = TOP_FILTER if metric_filter is None else metric_filter
 
-    if metric in ['deq', 'gp_wr_bias_adj']:
-        set_context = deq_bias_set_context(set_codes, metric_filter)
-    else:
-        set_context = None
-
-    logging.info(f"Calculating metric {metric} value for context")
-    context_df = summon(
-        set_codes, 
-        columns=[metric], 
-        filter_spec=metric_filter, 
-        group_by=['expansion', 'name'],
-        extensions=ext, 
-        set_context=set_context,
-    ).select(["expansion", "name", (pl.col(metric) * PRECISION).round() / PRECISION])
+    context_df = get_metric_context(set_codes, [metric], metric_filter)
 
     metric_cols = context_cols(metric, silent=True)
 
@@ -90,7 +98,7 @@ def get_model_dfs(
     weights_df = summon(
         set_codes, 
         columns=[
-            SEEN_IS_GREATEST.format(metric), 
+            seen_is_greatest(metric), 
             ColName.EVENT_MATCH_WINS_SUM, 
             ColName.EVENT_MATCHES_SUM, 
             ColName.NUM_TAKEN,
@@ -102,14 +110,14 @@ def get_model_dfs(
         use_streaming=True,
     )
 
-    wr_df = weights_df.drop(SEEN_IS_GREATEST.format(metric)).filter(
+    wr_df = weights_df.drop(seen_is_greatest(metric)).filter(
         GROUP_FILTER & (pl.col(ColName.NUM_TAKEN) > 0) & (pl.col(ColName.EVENT_MATCHES_SUM) > 0)
     )
 
     weights_df = weights_df.select(
-        ['expansion', 'name', 'skill_cohort', SEEN_IS_GREATEST.format(metric)]
+        ['expansion', 'name', 'skill_cohort', seen_is_greatest(metric)]
     ).filter(
-        (pl.col(SEEN_IS_GREATEST.format(metric))>0) & 
+        (pl.col(seen_is_greatest(metric))>0) & 
         GROUP_FILTER & ~pl.col('name').is_in(BASIC_LANDS)
     )
 
@@ -210,7 +218,7 @@ def strategy_mapped_df(
     metric = model_dfs.metric
 
     df = substitution_df.with_columns(
-        (pl.col(SEEN_IS_GREATEST.format(metric)) / pl.col(ColName.NUM_TAKEN)).alias("deriv")
+        (pl.col(seen_is_greatest(metric)) / pl.col(ColName.NUM_TAKEN)).alias("deriv")
     ).with_columns([
         (pl.col("deriv") * pl.col(ColName.EVENT_MATCHES_SUM)).alias("weight"),
         (pl.col("deriv") * pl.col(ColName.EVENT_MATCH_WINS_SUM)).alias("win_weight"),
@@ -357,9 +365,9 @@ def set_by_set_results(
     results_filter: dict | None = None,
     metrics: list[str] | None = None,
 ):
-    metrics = ['deq', 'gih_wr'] if metrics is None else metrics
-    sets = ["NEO", "SNC", "DMU", "BRO", "ONE", "MOM", "LTR", "WOE", "LCI", 
-        "KTK", "MKM", "OTJ", "MH3", "BLB", "DSK", "FDN"]
+    metrics = ['deq', 'gih_wr_b'] if metrics is None else metrics
+    sets = ["NEO", "SNC", "DMU", "BRO", "ONE", "SIR", "MOM", "LTR", "WOE", "LCI", 
+        "KTK", "MKM", "OTJ", "MH3", "BLB", "DSK", "FDN", "PIO"]
 
     results = {set_: all_metrics_analysis(
         metric_filter=metric_filter,

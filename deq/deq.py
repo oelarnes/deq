@@ -10,14 +10,11 @@ PRECISION = 2 ** 20
 BAYES_GAMES = 150
 BAYES_MU = 0.54
 
+METRIC_BAYES_GAMES = 50
 UNG = pl.col(ColName.USER_N_GAMES_BUCKET)
 UGWR = pl.col(ColName.USER_GAME_WIN_RATE_BUCKET)
 
 ext = {
-    ColName.GNS_WR: ColSpec(
-        col_type=ColType.AGG,
-        expr=(BAYES_MU * BAYES_GAMES + pl.col(ColName.WON_NUM_GNS))/ (pl.col(ColName.NUM_GNS) + BAYES_GAMES)
-    ),
     ColName.NUM_GNS: ColSpec(
         col_type=ColType.NAME_SUM,
         expr=lambda name: pl.max_horizontal(
@@ -49,7 +46,7 @@ ext = {
     ),
     'deq_base': ColSpec(
         col_type=ColType.AGG,
-        expr=(pl.col(ColName.GP_WR_EXCESS) + pl.col('pick_equity')) * pl.col(ColName.PCT_GP)
+        expr=(pl.col('gp_wr_b') - pl.col(ColName.GP_WR_MEAN) + pl.col('pick_equity')) * pl.col(ColName.PCT_GP)
     ),
     'skill_cohort': ColSpec(
         col_type=ColType.GROUP_BY,
@@ -68,17 +65,41 @@ ext = {
         col_type=ColType.AGG,
         expr=pl.col(ColName.WON_DECK).sum().over([pl.col(ColName.EXPANSION), pl.col(ColName.COLOR)]),
     ),
+    'deck_over_rarity': ColSpec(
+        col_type=ColType.AGG,
+        expr=pl.col(ColName.DECK).sum().over([pl.col(ColName.EXPANSION), pl.col(ColName.RARITY)]),
+    ),
+    'won_deck_over_rarity': ColSpec(
+        col_type=ColType.AGG,
+        expr=pl.col(ColName.WON_DECK).sum().over([pl.col(ColName.EXPANSION), pl.col(ColName.RARITY)]),
+    ),
+    'gih_over_rarity': ColSpec(
+        col_type=ColType.AGG,
+        expr=pl.col(ColName.NUM_GIH).sum().over([pl.col(ColName.EXPANSION), pl.col(ColName.RARITY)]),
+    ),
+    'won_gih_over_rarity': ColSpec(
+        col_type=ColType.AGG,
+        expr=pl.col(ColName.NUM_GIH_WON).sum().over([pl.col(ColName.EXPANSION), pl.col(ColName.RARITY)]),
+    ),
     'gp_wr_excess_over_colors': ColSpec(
         col_type=ColType.AGG,
         expr=((pl.col('won_deck_over_colors') / pl.col('deck_over_colors') - pl.col('gp_wr_mean')) * PRECISION).round() / PRECISION
     ),
-    'gih_wr': ColSpec(
+    'gih_wr_mean_over_rarity': ColSpec(
         col_type=ColType.AGG,
-        expr=(BAYES_MU * BAYES_GAMES + pl.col(ColName.NUM_GIH_WON))/ (pl.col(ColName.NUM_GIH) + BAYES_GAMES)
+        expr=(pl.col('won_gih_over_rarity') / pl.col('gih_over_rarity') * PRECISION).round() / PRECISION
     ),
-    'gp_wr': ColSpec(
+    'gp_wr_mean_over_rarity': ColSpec(
         col_type=ColType.AGG,
-        expr=(BAYES_MU * BAYES_GAMES + pl.col(ColName.WON_DECK)) / (pl.col(ColName.DECK) + BAYES_GAMES),
+        expr=(pl.col('won_deck_over_rarity') / pl.col('deck_over_rarity') * PRECISION).round() / PRECISION
+    ),
+    'gih_wr_b': ColSpec(
+        col_type=ColType.AGG,
+        expr=(pl.col('gih_wr_mean_over_rarity') * METRIC_BAYES_GAMES + pl.col(ColName.NUM_GIH_WON))/ (pl.col(ColName.NUM_GIH) + METRIC_BAYES_GAMES)
+    ),
+    'gp_wr_b': ColSpec(
+        col_type=ColType.AGG,
+        expr=(pl.col('gp_wr_mean_over_rarity') * METRIC_BAYES_GAMES + pl.col(ColName.WON_DECK)) / (pl.col(ColName.DECK) + METRIC_BAYES_GAMES),
     ),
     'deq_bias_adj': ColSpec(
         col_type=ColType.AGG,
@@ -90,7 +111,7 @@ ext = {
     ),
     'gp_wr_bias_adj': ColSpec(
         col_type=ColType.AGG,
-        expr=pl.col('gp_wr') + pl.col('deq_bias_adj')
+        expr=pl.col('gp_wr_b') + pl.col('deq_bias_adj')
     ),
     'format_day_sum': ColSpec(
         col_type=ColType.PICK_SUM,

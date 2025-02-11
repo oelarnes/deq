@@ -1,36 +1,65 @@
+from typing import Sequence
+from collections.abc import Set
 from dataclasses import dataclass
 import datetime
 import json
 import functools
 
+import numpy as np
 import polars as pl
 
 from spells import summon, view_select, ColName, get_names
 from spells.enums import View
 
 from deq.deq import ext
+from deq.plot import METRIC_LABELS
+from deq.p1_strategy import get_metric_context, LATE_TOP
 
-
+METRIC_FORMAT_STR = {
+    'deq': '+.2%',
+    'gih_wr_b': '.2%',
+}
 @dataclass
 class DraftCard:
     name: str
     image_url: str
     attributes: dict
 
+    def metric_label(self, metric: str) -> str:
+        return f"{METRIC_LABELS[metric]}: {self.attributes[metric]:{METRIC_FORMAT_STR[metric]}}"
+
+    def to_text(
+        self,
+        is_pick: bool,
+        metrics: Sequence[str] = (),
+        star_metrics:  Set[str] = frozenset(),
+    ):
+        pick_text = "*" if is_pick else ""
+        metric_text = ""
+        for metric in metrics:
+            metric_text += f"{self.metric_label(metric)}" + ("*" if metric in star_metrics else "")
+        return f"{pick_text}{self.name}{metric_text}"
+
+        
     def to_html(
         self, 
         is_pick: bool, 
-        metric_1: str | None = 'deq', 
-        metric_2: str | None = 'gih_wr'
+        metrics: Sequence[str] = (),
+        star_metrics:  Set[str] = frozenset(),
     ):
+        classes = ["draft_pack_card"]
+        if is_pick:
+            classes.append("pick")
+
         metric_span = ""
-        if metric_1 is not None:
-            metric_span += """<span class="metric-1">{metric_1}: {self.attributes[metric_1]}</span>"""
-        if metric_2 is not None:
-            metric_span += """
-            <span class="metric-2">{metric_2}: {self.attributes[metric_2]}</span>"""
+        for i, metric in enumerate(metrics):
+            metric_span += f"""<span class="metric-{i}">{metric}: {self.attributes[metric]}</span>
+            """
+            if metric in star_metrics:
+                classes.append(f"m{i}_star")
+        alt = self.to_text(is_pick, metrics, star_metrics)
         return f"""<span class="draft-card">
-            <img src="{self.image_url}" alt="{self.name}" class="draft-pack-card{" pick" if is_pick else ""}">
+            <img src="{self.image_url}" alt="{alt}" class="{" ".join(classes)}">
             {metric_span}
         </span>"""
 
@@ -55,19 +84,51 @@ class DraftPack:
     def pick_index(self) -> int:
         return [c.name for c in self.pack].index(self.pick)
 
+    def metric_max_index(self, metric) -> int:
+        if metric is None:
+            return -1
+        return int(np.argmax([c.attributes[metric] for c in self.pack]))
+
     def record_str(self) -> str:
         return f"Record: {self.match_wins} - {self.match_losses}"
 
     def draft_link(self) -> str:
         return f"https://17lands.com/draft/{self.draft_id}"
 
+    def pack_pick_str(self) -> str:
+        return f"Pack {self.pack_num} Pick {self.pick_num}"
+
+    def to_text(self, metrics: Sequence[str] = ()):
+        card_lines = ''
+        for i, c in enumerate(self.pack):
+            star_metrics = set()
+            for metric in metrics:
+                if i == self.metric_max_index(metric):
+                    star_metrics.add(metric)
+            card_lines += c.to_text(
+                i == self.pick_index(),
+                metrics,
+                star_metrics
+            ) + "\n"
+
+        pool_lines = '\n'.join([c.to_text(False) for c in self.pool])
+        return f"""============
+    {self.set_code} Sample Pack: {self.draft_link()}
+{self.record_str()}, {self.pack_pick_str()}
+============
+| Pack     |
+============
+{card_lines}
+============
+| Pool     |
+============
+{pool_lines}
+"""
+
     def to_html(self, metric_1: str | None = 'deq', metric_2: str | None = 'gih_wr'):
-        card_list = ''.join(
-            [c.to_html(i == self.pick_index(), metric_1=metric_1, metric_2=metric_2) for i, c in enumerate(self.pack)]
-        )
-        pool_cards = ''.join(
-            [c.to_html(False, metric_1=None, metric_2=None) for c in self.pool]
-        )
+        # todo
+        card_list = ""
+        pool_cards = ""
 
         return f"""
 <div class="draft-pack">
@@ -142,7 +203,8 @@ def get_sample_pack(
         attribute_columns = [ColName.SET_CODE, ColName.COLOR, ColName.RARITY]
 
     if card_context is None:
-        card_context = summon(set_code, columns=[*attribute_columns, ColName.IMAGE_URL], extensions=ext)
+        deq_context = get_metric_context([set_code], attribute_columns, LATE_TOP)
+        card_context = summon(set_code, columns=[*attribute_columns, ColName.IMAGE_URL], group_by=['expansion', 'name'], extensions=ext)
     
     if isinstance(card_context, pl.DataFrame):
         card_context = {
