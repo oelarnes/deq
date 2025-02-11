@@ -101,6 +101,14 @@ ext = {
         col_type=ColType.AGG,
         expr=(pl.col('gp_wr_mean_over_rarity') * METRIC_BAYES_GAMES + pl.col(ColName.WON_DECK)) / (pl.col(ColName.DECK) + METRIC_BAYES_GAMES),
     ),
+    'gih_wr_17l': ColSpec(
+        col_type=ColType.AGG,
+        expr=pl.when(pl.col(ColName.NUM_GIH) < 500).then(None).otherwise(pl.col(ColName.NUM_GIH_WON))/ (pl.col(ColName.NUM_GIH))
+    ),
+    'gp_wr_17l': ColSpec(
+        col_type=ColType.AGG,
+        expr=pl.when(pl.col(ColName.DECK) < 500).then(None).otherwise(pl.col(ColName.WON_DECK))/ (pl.col(ColName.DECK))
+    ),
     'deq_bias_adj': ColSpec(
         col_type=ColType.AGG,
         expr=(pl.col('pick_equity') / P1_PICK_EQUITY - 1) * pl.col('gp_wr_bias_in'),

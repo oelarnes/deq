@@ -28,7 +28,7 @@ PRECISION = 2 ** 20
 
 GROUP_FILTER = ~pl.col('skill_cohort').is_null()
 
-METRICS = ['pick_equity', 'gp_wr_b', 'deq', 'gih_wr_b', 'iwd']
+METRICS = ['pick_equity', 'gp_wr_17l', 'deq', 'gih_wr_17l', 'iwd']
 LOG_TO_CONSOLE = logging.INFO
 
 SETS = list(set(all_sets))
@@ -365,7 +365,7 @@ def set_by_set_results(
     results_filter: dict | None = None,
     metrics: list[str] | None = None,
 ):
-    metrics = ['deq', 'gih_wr_b'] if metrics is None else metrics
+    metrics = ['deq', 'gih_wr_17l'] if metrics is None else metrics
     sets = ["NEO", "SNC", "DMU", "BRO", "ONE", "SIR", "MOM", "LTR", "WOE", "LCI", 
         "KTK", "MKM", "OTJ", "MH3", "BLB", "DSK", "FDN", "PIO"]
 

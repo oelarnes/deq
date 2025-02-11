@@ -19,8 +19,8 @@ COLOR_LIST = {
 
 METRIC_LABELS = {
     'deq': 'DEq',
-    'gih_wr': 'GIH WR',
-    'gp_wr': 'GP WR',
+    'gih_wr_17l': 'GIH WR',
+    'gp_wr_17l': 'GP WR',
     'pick_equity': 'ATA',
     'iwd': 'IWD',
     'deq_base': 'DEq Base',
@@ -51,7 +51,7 @@ def style_xticks(
     analysis: AnalysisResult,
     ax: Axes,
 ) -> None:
-    ax.set_xticks(analysis.df['wr_group'].to_numpy())
+    ax.set_xticks(analysis.df['skill_cohort'].to_numpy())
     ax.xaxis.set_major_formatter(mtick.PercentFormatter(100, decimals=0))
     ax.set_xlabel("Skill Cohort")
 
@@ -90,7 +90,7 @@ def p1_line_plot(
     title_extra: str | None = None,
 ) -> None:
     if metrics is None:
-        metrics = ['deq', 'gih_wr', 'gp_wr', 'pick_equity', 'iwd']
+        metrics = ['deq', 'gih_wr_17l', 'gp_wr_17l', 'pick_equity', 'iwd']
 
     config = {
         'wr_delta': {
@@ -114,7 +114,7 @@ def p1_line_plot(
     title = config['title'] + ('' if title_extra is None else ' - ' + title_extra)
 
     def graph_fn(i: int, metric: str):
-        x = analysis.df['wr_group'].to_numpy()
+        x = analysis.df['skill_cohort'].to_numpy()
         y = analysis.df[config["value_template"].format(metric=metric)].to_numpy()
         q = analysis.df[f"{metric}_entropy_loss"].to_numpy() > quality_threshold
         return two_phase_line_graph(METRIC_LABELS[metric], COLOR_LIST[colors][i], x, y, q)
@@ -132,7 +132,7 @@ def p1_line_plot(
     style_xticks(analysis, ax)
 
     if mode=="entropy":
-        x = analysis.df["wr_group"]
+        x = analysis.df["skill_cohort"]
         line, = ax.plot(x, analysis.df['total_entropy'], color='black', label='Total Entropy')
         h = ax.get_legend().legend_handles
         ax.legend(handles=[line, *h])
@@ -154,7 +154,7 @@ def p1_line_plot(
         ax.legend(handles=handles, loc=1)
         ax.add_artist(leg)
     elif mode=="entropy_loss":
-        x = analysis.df["wr_group"]
+        x = analysis.df["skill_cohort"]
         ax.plot(x, [quality_threshold] * len(x), linestyle="dotted", color="gray")
         percent_val = 1 - 2 ** quality_threshold
         ax.text(50, quality_threshold - 0.2, f"({100 * percent_val:.2f}% information loss)", color="gray")
@@ -198,10 +198,10 @@ def metric_weight_bar_plot(
     _, ax = plt.subplots(figsize=FIG_SIZE)
     width = 2 / (num_bars + 1)
     offset = -1 + width 
-    ax.bar(df['wr_group'] + offset, df['event_matches_sum'], width=width, label='Actual')
+    ax.bar(df['skill_cohort'] + offset, df['event_matches_sum'], width=width, label='Actual')
     for i, metric in enumerate(metrics):
         ax.bar(
-            df['wr_group'] + offset + (i + 1) * width, 
+            df['skill_cohort'] + offset + (i + 1) * width, 
             df[f'{metric}_weight'], 
             width=width, 
             label=METRIC_LABELS[metric]
@@ -217,13 +217,13 @@ def cohort_summary_table(
     analysis: AnalysisResult
 ) -> GT:
     return GT(analysis.df.select(
-        ['wr_group', 'actual_win_rate', 'event_matches_sum']
+        ['skill_cohort', 'actual_win_rate', 'event_matches_sum']
     )).fmt_percent(
         'actual_win_rate', decimals=1
     ).fmt_percent(
-        'wr_group', scale_values=False, decimals=0
+        'skill_cohort', scale_values=False, decimals=0
     ).cols_label({
-        'wr_group': 'Skill Cohort',
+        'skill_cohort': 'Skill Cohort',
         'actual_win_rate': 'Match Win Rate',
         'event_matches_sum': 'Num Matches'
     })
@@ -235,7 +235,7 @@ def set_by_set_plot(
     x_num = np.arange(len(x))
 
     _, ax = plt.subplots(figsize=FIG_SIZE)
-    for metric in ['deq', 'gih_wr']:
+    for metric in ['deq', 'gih_wr_17l']:
         y = np.array([val.agg_df[f"{metric}_strat_delta"] for val in analyses.values()])
         m, y_0 = np.polyfit(x_num, y, deg=1)
         fit = y_0 + x_num * m 
@@ -256,7 +256,7 @@ def p1_delta_bar(
 ) -> None:
     df = analysis.agg_df
     if metrics is None:
-        metrics = ['deq', 'gih_wr', 'gp_wr', 'pick_equity', 'iwd']
+        metrics = ['deq', 'gih_wr_17l', 'gp_wr_17l', 'pick_equity', 'iwd']
 
     _, ax = plt.subplots()
 
