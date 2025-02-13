@@ -15,9 +15,12 @@ from deq.deq import ext
 from deq.plot import METRIC_LABELS
 from deq.p1_strategy import get_metric_context, LATE_TOP
 
+METRIC_CELL_WIDTH = 16
+NAME_CELL_WIDTH = 32
+
 METRIC_FORMAT_STR = {
     'deq': '+.2%',
-    'gih_wr_b': '.2%',
+    'gih_wr_17l': '.2%',
 }
 @dataclass
 class DraftCard:
@@ -26,19 +29,23 @@ class DraftCard:
     attributes: dict
 
     def metric_label(self, metric: str) -> str:
-        return f"{METRIC_LABELS[metric]}: {self.attributes[metric]:{METRIC_FORMAT_STR[metric]}}"
+        label = f"{METRIC_LABELS[metric]}: "
+        value = self.attributes[metric]
+        metric_text = "NA" if value is None else f"{value:{METRIC_FORMAT_STR[metric]}}"
+        metric_text_padded = metric_text + " " * (METRIC_CELL_WIDTH - len(metric_text) - len(label))
+        return label + metric_text_padded
 
     def to_text(
         self,
         is_pick: bool,
-        metrics: Sequence[str] = (),
+        metrics: Sequence[str] = ('gih_wr_17l', 'deq'),
         star_metrics:  Set[str] = frozenset(),
     ):
-        pick_text = "*" if is_pick else ""
-        metric_text = ""
+        pick_text = "*" if is_pick else " "
+        metric_text = "|"
         for metric in metrics:
-            metric_text += f"{self.metric_label(metric)}" + ("*" if metric in star_metrics else "")
-        return f"{pick_text}{self.name}{metric_text}"
+            metric_text += f"{('*' if metric in star_metrics else ' ')}{self.metric_label(metric)}" + "|"
+        return f"{pick_text}{self.name + ' ' * (NAME_CELL_WIDTH - len(self.name))}{metric_text}"
 
         
     def to_html(
@@ -87,7 +94,7 @@ class DraftPack:
     def metric_max_index(self, metric) -> int:
         if metric is None:
             return -1
-        return int(np.argmax([c.attributes[metric] for c in self.pack]))
+        return int(np.argmax([c.attributes[metric] or 0 for c in self.pack]))
 
     def record_str(self) -> str:
         return f"Record: {self.match_wins} - {self.match_losses}"
@@ -98,7 +105,8 @@ class DraftPack:
     def pack_pick_str(self) -> str:
         return f"Pack {self.pack_num} Pick {self.pick_num}"
 
-    def to_text(self, metrics: Sequence[str] = ()):
+    def to_text(self, metrics: Sequence[str] = ('gih_wr_17l', 'deq')):
+        line_length = NAME_CELL_WIDTH + 2 + len(metrics) * (METRIC_CELL_WIDTH + 2)
         card_lines = ''
         for i, c in enumerate(self.pack):
             star_metrics = set()
@@ -112,16 +120,17 @@ class DraftPack:
             ) + "\n"
 
         pool_lines = '\n'.join([c.to_text(False) for c in self.pool])
-        return f"""============
-    {self.set_code} Sample Pack: {self.draft_link()}
+        return "=" * line_length + f"""
+{self.set_code} Sample Pack 
+{self.draft_link()}
 {self.record_str()}, {self.pack_pick_str()}
-============
-| Pack     |
-============
+""" + "=" * line_length + """
+Pack
+""" + "=" * line_length + f"""
 {card_lines}
-============
-| Pool     |
-============
+""" + "=" * line_length + """
+Pool     
+""" + "=" * line_length + f"""
 {pool_lines}
 """
 
@@ -183,8 +192,11 @@ def get_picks_df(
 def get_sample_pack(
     set_code: str,
     filter_spec: dict | None = None,
-    attribute_columns: list[str] | None = None,
-    card_context: pl.DataFrame | dict | None = None,
+    metrics: Sequence[str] = (
+        "gih_wr_17l",
+        "deq"
+    ),
+    metric_filter: dict | None = None,
     seed: int | None = None,
 ) -> DraftPack: 
     if seed is None:
@@ -199,12 +211,10 @@ def get_sample_pack(
 
     row = row.to_dicts()[0]
 
-    if attribute_columns is None:
-        attribute_columns = [ColName.SET_CODE, ColName.COLOR, ColName.RARITY]
+    card_attributes = summon([set_code], columns=[ColName.IMAGE_URL, ColName.COLOR, ColName.RARITY, ColName.MANA_VALUE, ColName.CARD_TYPE])
+    metric_filter = LATE_TOP if metric_filter is None else metric_filter
 
-    if card_context is None:
-        deq_context = get_metric_context([set_code], attribute_columns, LATE_TOP)
-        card_context = summon(set_code, columns=[*attribute_columns, ColName.IMAGE_URL], group_by=['expansion', 'name'], extensions=ext)
+    card_context = get_metric_context([set_code], list(metrics), LATE_TOP).join(card_attributes, on=['name'])
     
     if isinstance(card_context, pl.DataFrame):
         card_context = {
@@ -217,7 +227,7 @@ def get_sample_pack(
         name: DraftCard(
             name=name,
             image_url=card_context[name][ColName.IMAGE_URL],
-            attributes={attr: card_context[name][attr] for attr in attribute_columns}
+            attributes={attr: card_context[name][attr] for attr in metrics}
         ) for name in card_names
     }
 
