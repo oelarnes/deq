@@ -11,8 +11,8 @@ SAMPLE_THRESHOLD = 500
 BAYES_GAMES = 150
 BAYES_MU = 0.54
 
-METRIC_BAYES_GAMES = 500
-WR_BETA_TO_ATA = -0.0034
+METRIC_BAYES_GAMES = 200
+WR_BETA_TO_ATA = -0.0033
 UNG = pl.col(ColName.USER_N_GAMES_BUCKET)
 UGWR = pl.col(ColName.USER_GAME_WIN_RATE_BUCKET)
 
@@ -50,10 +50,6 @@ ext = {
         col_type=ColType.AGG,
         expr=(pl.col('gp_wr_b') - pl.col(ColName.GP_WR_MEAN) + pl.col('pick_equity')) * pl.col(ColName.PCT_GP)
     ),
-    'deq_base_old': ColSpec(
-        col_type=ColType.AGG,
-        expr=(pl.col('gp_wr_b_old') - pl.col(ColName.GP_WR_MEAN) + pl.col('pick_equity')) * pl.col(ColName.PCT_GP)
-    ),
     'skill_cohort': ColSpec(
         col_type=ColType.GROUP_BY,
         expr=pl.min_horizontal([pl.max_horizontal([((pl.when(UNG == 1000).then(1200/(1200 + BAYES_GAMES)).otherwise(
@@ -89,10 +85,6 @@ ext = {
             pl.col('gp_wr_bayes_mu') * METRIC_BAYES_GAMES + pl.col(ColName.WON_DECK)
         ) / (pl.col(ColName.DECK) + METRIC_BAYES_GAMES)
     ),
-    'gp_wr_b_old': ColSpec(
-        col_type=ColType.AGG,
-        expr=(pl.col('gp_wr_mean') * 50 + pl.col(ColName.WON_DECK)) / (pl.col(ColName.DECK) + 50),
-    ),
     'gih_wr_17l': ColSpec(
         col_type=ColType.AGG,
         expr=pl.when(pl.col(ColName.NAME).is_in(BASIC_LANDS) | (pl.col(ColName.NUM_GIH) < SAMPLE_THRESHOLD)).then(None).otherwise(pl.col(ColName.NUM_GIH_WON))/ (pl.col(ColName.NUM_GIH))
@@ -108,10 +100,6 @@ ext = {
     'deq': ColSpec(
         col_type=ColType.AGG,
         expr=pl.col('deq_base') + pl.col('deq_bias_adj') * pl.col('pct_gp')
-    ),
-    'deq_old': ColSpec(
-        col_type=ColType.AGG,
-        expr=pl.col('deq_base_old') + pl.col('deq_bias_adj') * pl.col('pct_gp')
     ),
     'gp_wr_bias_adj': ColSpec(
         col_type=ColType.AGG,
