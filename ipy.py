@@ -31,6 +31,3 @@ SAMPLE_FILTER = {'$and': [
     SKILL_56,
 ]}
 
-# p = get_sample_pack('FDN', SAMPLE_FILTER, ['deq', 'gih_wr'])
-
-x = summon("OTJ", ["gp_wr", "gp_wr_mean_over_rarity", "gp_wr_b"], group_by= ["expansion", "name"], extensions=ext)

@@ -12,11 +12,11 @@ from spells.utils import wavg
 
 from deq.deq import deq_bias_set_context, BASIC_LANDS, ext
 
-TOP_FILTER = {ColName.PLAYER_COHORT: 'Top'}
+TOP_PLAYER = {ColName.PLAYER_COHORT: 'Top'}
 LATE_FORMAT = {'lhs': ColName.FORMAT_DAY, 'op': '>=', 'rhs': 13}
 EARLY_FORMAT = {'$not': LATE_FORMAT}
-LATE_TOP = {'$and': [TOP_FILTER, LATE_FORMAT]}
-EARLY_TOP = {'$and': [TOP_FILTER, EARLY_FORMAT]}
+LATE_TOP = {'$and': [TOP_PLAYER, LATE_FORMAT]}
+EARLY_TOP = {'$and': [TOP_PLAYER, EARLY_FORMAT]}
 
 PACK_1_FILTER = {'pack_num': 1}
 PICK_1_FILTER = {'pick_num': 1}
@@ -88,7 +88,7 @@ def get_model_dfs(
     assert isinstance(set_codes, list), "Pass a list of set_codes!"
 
     p1_results_filter = {'$and': [P1P1, results_filter]} if results_filter else P1P1
-    metric_filter = TOP_FILTER if metric_filter is None else metric_filter
+    metric_filter = TOP_PLAYER if metric_filter is None else metric_filter
 
     context_df = get_metric_context(set_codes, [metric], metric_filter)
 

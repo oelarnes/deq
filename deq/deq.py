@@ -11,7 +11,8 @@ SAMPLE_THRESHOLD = 500
 BAYES_GAMES = 150
 BAYES_MU = 0.54
 
-METRIC_BAYES_GAMES = 50
+METRIC_BAYES_GAMES = 500
+WR_BETA_TO_ATA = -0.0034
 UNG = pl.col(ColName.USER_N_GAMES_BUCKET)
 UGWR = pl.col(ColName.USER_GAME_WIN_RATE_BUCKET)
 
@@ -49,6 +50,10 @@ ext = {
         col_type=ColType.AGG,
         expr=(pl.col('gp_wr_b') - pl.col(ColName.GP_WR_MEAN) + pl.col('pick_equity')) * pl.col(ColName.PCT_GP)
     ),
+    'deq_base_old': ColSpec(
+        col_type=ColType.AGG,
+        expr=(pl.col('gp_wr_b_old') - pl.col(ColName.GP_WR_MEAN) + pl.col('pick_equity')) * pl.col(ColName.PCT_GP)
+    ),
     'skill_cohort': ColSpec(
         col_type=ColType.GROUP_BY,
         expr=pl.min_horizontal([pl.max_horizontal([((pl.when(UNG == 1000).then(1200/(1200 + BAYES_GAMES)).otherwise(
@@ -66,49 +71,35 @@ ext = {
         col_type=ColType.AGG,
         expr=pl.col(ColName.WON_DECK).sum().over([pl.col(ColName.EXPANSION), pl.col(ColName.COLOR)]),
     ),
-    'deck_over_rarity': ColSpec(
-        col_type=ColType.AGG,
-        expr=pl.col(ColName.DECK).sum().over([pl.col(ColName.EXPANSION), pl.col(ColName.RARITY)]),
-    ),
-    'won_deck_over_rarity': ColSpec(
-        col_type=ColType.AGG,
-        expr=pl.col(ColName.WON_DECK).sum().over([pl.col(ColName.EXPANSION), pl.col(ColName.RARITY)]),
-    ),
-    'gih_over_rarity': ColSpec(
-        col_type=ColType.AGG,
-        expr=pl.col(ColName.NUM_GIH).sum().over([pl.col(ColName.EXPANSION), pl.col(ColName.RARITY)]),
-    ),
-    'won_gih_over_rarity': ColSpec(
-        col_type=ColType.AGG,
-        expr=pl.col(ColName.NUM_GIH_WON).sum().over([pl.col(ColName.EXPANSION), pl.col(ColName.RARITY)]),
-    ),
     'gp_wr_excess_over_colors': ColSpec(
         col_type=ColType.AGG,
         expr=((pl.col('won_deck_over_colors') / pl.col('deck_over_colors') - pl.col('gp_wr_mean')) * PRECISION).round() / PRECISION
     ),
-    'gih_wr_mean_over_rarity': ColSpec(
+    'deck_small_sample': ColSpec(
         col_type=ColType.AGG,
-        expr=(pl.col('won_gih_over_rarity') / pl.col('gih_over_rarity') * PRECISION).round() / PRECISION
+        expr=pl.when(pl.col(ColName.NAME).is_in(BASIC_LANDS) | (pl.col(ColName.DECK) < SAMPLE_THRESHOLD)).then(None).otherwise(1.0)
     ),
-    'gp_wr_mean_over_rarity': ColSpec(
+    'gp_wr_bayes_mu': ColSpec(
         col_type=ColType.AGG,
-        expr=(pl.col('won_deck_over_rarity') / pl.col('deck_over_rarity') * PRECISION).round() / PRECISION
-    ),
-    'gih_wr_b': ColSpec(
-        col_type=ColType.AGG,
-        expr=(pl.col('gih_wr_mean_over_rarity') * METRIC_BAYES_GAMES + pl.col(ColName.NUM_GIH_WON))/ (pl.col(ColName.NUM_GIH) + METRIC_BAYES_GAMES)
+        expr =pl.col('gp_wr_mean') + WR_BETA_TO_ATA * (pl.col('ata') - 7)
     ),
     'gp_wr_b': ColSpec(
         col_type=ColType.AGG,
-        expr=(pl.col('gp_wr_mean_over_rarity') * METRIC_BAYES_GAMES + pl.col(ColName.WON_DECK)) / (pl.col(ColName.DECK) + METRIC_BAYES_GAMES),
+        expr = pl.col('deck_small_sample') * (
+            pl.col('gp_wr_bayes_mu') * METRIC_BAYES_GAMES + pl.col(ColName.WON_DECK)
+        ) / (pl.col(ColName.DECK) + METRIC_BAYES_GAMES)
+    ),
+    'gp_wr_b_old': ColSpec(
+        col_type=ColType.AGG,
+        expr=(pl.col('gp_wr_mean') * 50 + pl.col(ColName.WON_DECK)) / (pl.col(ColName.DECK) + 50),
     ),
     'gih_wr_17l': ColSpec(
         col_type=ColType.AGG,
-        expr=pl.when(pl.col(ColName.NAME).is_in(BASIC_LANDS) | (pl.col(ColName.NUM_GIH) < 500)).then(None).otherwise(pl.col(ColName.NUM_GIH_WON))/ (pl.col(ColName.NUM_GIH))
+        expr=pl.when(pl.col(ColName.NAME).is_in(BASIC_LANDS) | (pl.col(ColName.NUM_GIH) < SAMPLE_THRESHOLD)).then(None).otherwise(pl.col(ColName.NUM_GIH_WON))/ (pl.col(ColName.NUM_GIH))
     ),
     'gp_wr_17l': ColSpec(
         col_type=ColType.AGG,
-        expr=pl.when(pl.col(ColName.NAME).is_in(BASIC_LANDS) | (pl.col(ColName.DECK) < 500)).then(None).otherwise(pl.col(ColName.WON_DECK))/ (pl.col(ColName.DECK))
+        expr=pl.col('deck_small_sample') * pl.col(ColName.WON_DECK) / (pl.col(ColName.DECK))
     ),
     'deq_bias_adj': ColSpec(
         col_type=ColType.AGG,
@@ -117,6 +108,10 @@ ext = {
     'deq': ColSpec(
         col_type=ColType.AGG,
         expr=pl.col('deq_base') + pl.col('deq_bias_adj') * pl.col('pct_gp')
+    ),
+    'deq_old': ColSpec(
+        col_type=ColType.AGG,
+        expr=pl.col('deq_base_old') + pl.col('deq_bias_adj') * pl.col('pct_gp')
     ),
     'gp_wr_bias_adj': ColSpec(
         col_type=ColType.AGG,
