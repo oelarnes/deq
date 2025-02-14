@@ -7,6 +7,7 @@ ATA_DENOM = 13
 
 PRECISION = 2 ** 20
 
+SAMPLE_THRESHOLD = 500
 BAYES_GAMES = 150
 BAYES_MU = 0.54
 
@@ -103,11 +104,11 @@ ext = {
     ),
     'gih_wr_17l': ColSpec(
         col_type=ColType.AGG,
-        expr=pl.when(pl.col(ColName.NUM_GIH) < 500).then(None).otherwise(pl.col(ColName.NUM_GIH_WON))/ (pl.col(ColName.NUM_GIH))
+        expr=pl.when(pl.col(ColName.NAME).is_in(BASIC_LANDS) | (pl.col(ColName.NUM_GIH) < 500)).then(None).otherwise(pl.col(ColName.NUM_GIH_WON))/ (pl.col(ColName.NUM_GIH))
     ),
     'gp_wr_17l': ColSpec(
         col_type=ColType.AGG,
-        expr=pl.when(pl.col(ColName.DECK) < 500).then(None).otherwise(pl.col(ColName.WON_DECK))/ (pl.col(ColName.DECK))
+        expr=pl.when(pl.col(ColName.NAME).is_in(BASIC_LANDS) | (pl.col(ColName.DECK) < 500)).then(None).otherwise(pl.col(ColName.WON_DECK))/ (pl.col(ColName.DECK))
     ),
     'deq_bias_adj': ColSpec(
         col_type=ColType.AGG,
