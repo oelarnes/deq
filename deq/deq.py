@@ -5,7 +5,12 @@ BASIC_LANDS = ['Plains', 'Island', 'Swamp', 'Mountain', 'Forest']
 P1_PICK_EQUITY = 0.03
 ATA_DENOM = 13
 
-PRECISION = 2 ** 20
+PRECISION = 2 ** 16
+
+# parameters for deq metagame decay 
+DEQ_LOSS_FACTOR = 0.6
+SAMPLE_DECAY = 0.95
+META_DECAY = 0.95
 
 SAMPLE_THRESHOLD = 500
 BAYES_GAMES = 150
@@ -15,6 +20,15 @@ METRIC_BAYES_GAMES = 200
 WR_BETA_TO_ATA = -0.0033
 UNG = pl.col(ColName.USER_N_GAMES_BUCKET)
 UGWR = pl.col(ColName.USER_GAME_WIN_RATE_BUCKET)
+
+def meta_decay_factor(set_context: dict):
+    t = set_context.get('observed_days')
+    ft = set_context.get('projection_days')
+
+    if t is None:
+        return pl.lit(0)
+    return pl.lit(DEQ_LOSS_FACTOR * (META_DECAY ** (t + ft) * (1 - SAMPLE_DECAY ** t) * (1 - SAMPLE_DECAY * META_DECAY) 
+                  / (1 - (SAMPLE_DECAY * META_DECAY) ** t) / (1 - SAMPLE_DECAY) - 1))
 
 ext = {
     ColName.NUM_GNS: ColSpec(
@@ -99,7 +113,7 @@ ext = {
     ),
     'deq': ColSpec(
         col_type=ColType.AGG,
-        expr=pl.col('deq_base') + pl.col('deq_bias_adj') * pl.col('pct_gp')
+        expr=pl.col('deq_base') + (pl.col('deq_bias_adj') + pl.col('deq_meta_adj')) * pl.col('pct_gp')
     ),
     'gp_wr_bias_adj': ColSpec(
         col_type=ColType.AGG,
@@ -172,9 +186,17 @@ ext = {
                 set_context.get('gp_wr_excess_over_colors_G', 0)
             ).otherwise(0))))))))))))))))
     ),
+    'meta_regression_factor': ColSpec(
+        col_type=ColType.CARD_ATTR,
+        expr=meta_decay_factor
+    ),
+    'deq_meta_adj': ColSpec(
+        col_type=ColType.AGG,
+        expr=(pl.col('gp_wr_bias_in') + pl.col('deq_bias_adj')) * pl.col('meta_regression_factor')
+    )
 }
 
-def deq_bias_set_context(set_codes: list[str], metric_filter: dict):
+def deq_bias_set_context(set_codes: list[str], metric_filter: dict, observed_days: int | None = None, projection_days: int = 1):
     gpwr_oc = summon(
         set_codes, 
         columns=['gp_wr_excess_over_colors'], 
@@ -189,8 +211,9 @@ def deq_bias_set_context(set_codes: list[str], metric_filter: dict):
         set_code: {
             key:value[0] for key, value in gpwr_oc.filter(pl.col('expansion') == set_code).select(
                 select).rows_by_key('literal', unique=True).items()
-        } for set_code in set_codes
+            } | {'observed_days': observed_days, 'projection_days': projection_days} for set_code in set_codes
     }
+
 
     return set_context
 
