@@ -13,7 +13,7 @@ from spells.enums import View
 
 from deq.deq import ext
 from deq.plot import METRIC_LABELS
-from deq.p1_strategy import get_metric_context, LATE_TOP
+from deq.p1_strategy import get_metric_context, TOP_PLAYER
 
 METRIC_CELL_WIDTH = 16
 NAME_CELL_WIDTH = 32
@@ -60,7 +60,7 @@ class DraftCard:
 
         metric_span = ""
         for i, metric in enumerate(metrics):
-            metric_span += f"""<span class="metric-{i}">{metric}: {self.attributes[metric]}</span>
+            metric_span += f"""<span class="metric-{i}">{self.metric_label(metric)}</span>
             """
             if metric in star_metrics:
                 classes.append(f"m{i}_star")
@@ -88,13 +88,13 @@ class DraftPack:
     pack: list[DraftCard]
     pool: list[DraftCard]
 
-    def pick_index(self) -> int:
-        return [c.name for c in self.pack].index(self.pick)
+    def get_pack_list(self, order_by: str='deq', desc: bool=True):
+        return sorted(self.pack, key=lambda c: c.attributes[order_by] if c.attributes[order_by] is not None else -100, reverse=desc)
 
-    def metric_max_index(self, metric) -> int:
+    def metric_max_value(self, metric) -> int:
         if metric is None:
             return -1
-        return int(np.argmax([c.attributes[metric] or 0 for c in self.pack]))
+        return max([c.attributes[metric] or -100 for c in self.pack])
 
     def record_str(self) -> str:
         return f"Record: {self.match_wins} - {self.match_losses}"
@@ -108,13 +108,19 @@ class DraftPack:
     def to_text(self, metrics: Sequence[str] = ('gih_wr_17l', 'deq')):
         line_length = NAME_CELL_WIDTH + 2 + len(metrics) * (METRIC_CELL_WIDTH + 2)
         card_lines = ''
-        for i, c in enumerate(self.pack):
+        marked_pick = False
+        for c in self.get_pack_list():
+            if c.name == self.pick and not marked_pick:
+                is_pick = True
+                marked_pick = True
+            else:
+                is_pick = False
             star_metrics = set()
             for metric in metrics:
-                if i == self.metric_max_index(metric):
+                if c.attributes[metric] == self.metric_max_value(metric):
                     star_metrics.add(metric)
             card_lines += c.to_text(
-                i == self.pick_index(),
+                is_pick,
                 metrics,
                 star_metrics
             ) + "\n"
@@ -123,35 +129,66 @@ class DraftPack:
         return "=" * line_length + f"""
 {self.set_code} Sample Pack 
 {self.draft_link()}
-{self.record_str()}, {self.pack_pick_str()}
+{self.draft_date.isoformat()} - {self.record_str()} - {self.pack_pick_str()} - Skill Cohort: {int(self.skill_cohort)}%
 """ + "=" * line_length + """
 Pack
 """ + "=" * line_length + f"""
 {card_lines}
 """ + "=" * line_length + """
 Pool     
-""" + "=" * line_length + f"""
+""" + ("=" * line_length + f"""
 {pool_lines}
-"""
+""") if pool_lines else ""
 
-    def to_html(self, metric_1: str | None = 'deq', metric_2: str | None = 'gih_wr'):
-        # todo
-        card_list = ""
-        pool_cards = ""
+    
+    def log(self, metrics: Sequence[str] = ('gih_wr_17l', 'deq')):
+        print(self.to_text(metrics))
 
-        return f"""
+    def to_html(self, metrics: Sequence[str] = ('gih_wr_17l', 'deq'), as_page=False):
+        card_elements = ""
+        marked_pick = False
+        for c in self.get_pack_list():
+            if c.name == self.pick and not marked_pick:
+                is_pick = True
+                marked_pick = True
+            else:
+                is_pick = False
+            star_metrics = set()
+            for metric in metrics:
+                if c.attributes[metric] == self.metric_max_value(metric):
+                    star_metrics.add(metric)
+            card_elements += c.to_html(
+                is_pick,
+                metrics,
+                star_metrics
+            ) + "\n"
+
+        pool_elements = '\n'.join([c.to_html(False) for c in self.pool])
+
+        frame = """<html lang="en-US">
+    <head>
+        <meta charset="utf-8">
+        <title>Sample Pack</title>
+    </head>
+    <body>
+    {content}
+    </body>
+</html>
+""" if as_page else "{content}"
+
+        return frame.format(content=f"""
 <div class="draft-pack">
+    <a href="{self.draft_link()}">17Lands.com</a>
     <div class="draft-pack-info-top">
-        {self.draft_link}
-        {self.record_str()}
+{self.draft_date.isoformat()} - {self.record_str()} - {self.pack_pick_str()} - Skill Cohort: {int(self.skill_cohort)}%
     </div>
     <div class="draft-pack-cards">
-        {card_list}
+        {card_elements}
     </div>
     <div class="draft-pool">
-        {pool_cards}
+        {pool_elements}
     </div>
-</div>"""
+</div>""")
 
 
 _seed = 0
@@ -197,10 +234,12 @@ def get_sample_pack(
         "deq"
     ),
     metric_filter: dict | None = None,
+    deq_days: int | None = None,
     seed: int | None = None,
 ) -> DraftPack: 
+    global _seed
+
     if seed is None:
-        global _seed
         _seed += 1
         seed = _seed
     else:
@@ -212,9 +251,9 @@ def get_sample_pack(
     row = row.to_dicts()[0]
 
     card_attributes = summon([set_code], columns=[ColName.IMAGE_URL, ColName.COLOR, ColName.RARITY, ColName.MANA_VALUE, ColName.CARD_TYPE])
-    metric_filter = LATE_TOP if metric_filter is None else metric_filter
+    metric_filter = TOP_PLAYER if metric_filter is None else metric_filter
 
-    card_context = get_metric_context([set_code], list(metrics), LATE_TOP).join(card_attributes, on=['name'])
+    card_context = get_metric_context([set_code], list(metrics), metric_filter, deq_days).join(card_attributes, on=['name'])
     
     if isinstance(card_context, pl.DataFrame):
         card_context = {

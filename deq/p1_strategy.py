@@ -18,20 +18,21 @@ EARLY_FORMAT = {'$not': LATE_FORMAT}
 LATE_TOP = {'$and': [TOP_PLAYER, LATE_FORMAT]}
 EARLY_TOP = {'$and': [TOP_PLAYER, EARLY_FORMAT]}
 
+TWO_DAYS = {'lhs': 'format_day', 'op': '<', 'rhs': 3}
 PACK_1_FILTER = {'pack_num': 1}
 PICK_1_FILTER = {'pick_num': 1}
 
 P1P1_PICK_EQUITY = 0.025
 
 P1P1 = {'$and': [PICK_1_FILTER, PACK_1_FILTER]}
-PRECISION = 2 ** 20
+PRECISION = 2 ** 16
 
 GROUP_FILTER = ~pl.col('skill_cohort').is_null()
 
-METRICS = ['pick_equity', 'gp_wr_17l', 'deq', 'gih_wr_17l', 'iwd']
+METRICS = ['pick_equity', 'gp_wr_17l', 'deq', 'gih_wr_17l', 'iwd_17l']
 LOG_TO_CONSOLE = logging.INFO
 
-SETS = list(set(all_sets))
+SETS = list(set(all_sets) - {'SIR', 'KTK', 'PIO'})
 NEIGHBORS = 4 # 66 looks at 60 - (N-1)*2
 
 @dataclass
@@ -64,8 +65,9 @@ def get_metric_context(
     set_codes: list[str],
     metrics: list[str],
     filter_spec: dict,
+    deq_days: int | None,
 ) -> pl.DataFrame:
-    set_context = deq_bias_set_context(set_codes, filter_spec)
+    set_context = deq_bias_set_context(set_codes, filter_spec, observed_days=deq_days)
 
     metrics_select = [(pl.col(metric) * PRECISION).round() / PRECISION for metric in metrics]
     context_df = summon(
@@ -84,13 +86,14 @@ def get_model_dfs(
     metric: str, 
     results_filter: dict | None, 
     metric_filter: dict | None,
+    deq_days: int | None,
 ) -> ModelDFs:
     assert isinstance(set_codes, list), "Pass a list of set_codes!"
 
     p1_results_filter = {'$and': [P1P1, results_filter]} if results_filter else P1P1
     metric_filter = TOP_PLAYER if metric_filter is None else metric_filter
 
-    context_df = get_metric_context(set_codes, [metric], metric_filter)
+    context_df = get_metric_context(set_codes, [metric], metric_filter, deq_days)
 
     metric_cols = context_cols(metric, silent=True)
 
@@ -258,9 +261,10 @@ def p1_strat_analysis(
     results_filter: dict | None = None,
     card_parity: bool = False,
     luck_control: bool = False,
+    deq_days: int | None = None,
 ):
     logging.info(f"Running p1 strategy analysis for metric {metric}")
-    model_dfs = get_model_dfs(set_codes, metric, results_filter, metric_filter)
+    model_dfs = get_model_dfs(set_codes, metric, results_filter, metric_filter, deq_days)
 
     mapped_df = strategy_mapped_df(model_dfs, card_parity)
 
@@ -320,6 +324,7 @@ def all_metrics_analysis(
     results_filter: dict | None = None,
     metrics: list[str] | None = None,
     sets: list[str] | None = None,
+    deq_days: int | None = None,
 ):
     sets = SETS if sets is None else sets
 
@@ -330,6 +335,7 @@ def all_metrics_analysis(
         metric, 
         metric_filter=metric_filter, 
         results_filter=results_filter, 
+        deq_days=deq_days
     ) for metric in metrics}
     delta_dfs = [metric_results[metric].df.select([
         'skill_cohort', 
@@ -364,16 +370,18 @@ def set_by_set_results(
     metric_filter: dict | None = None,
     results_filter: dict | None = None,
     metrics: list[str] | None = None,
+    deq_days: int | None = None,
 ):
     metrics = ['deq', 'gih_wr_17l'] if metrics is None else metrics
-    sets = ["NEO", "SNC", "DMU", "BRO", "ONE", "SIR", "MOM", "LTR", "WOE", "LCI", 
-        "KTK", "MKM", "OTJ", "MH3", "BLB", "DSK", "FDN", "PIO"]
+    sets = ["NEO", "SNC", "DMU", "BRO", "ONE", "MOM", "LTR", "WOE", "LCI", 
+        "MKM", "OTJ", "MH3", "BLB", "DSK", "FDN"]
 
     results = {set_: all_metrics_analysis(
         metric_filter=metric_filter,
         results_filter=results_filter,
         metrics=metrics,
-        sets=[set_]
+        sets=[set_],
+        deq_days=deq_days
     ) for set_ in sets}
 
     return results 

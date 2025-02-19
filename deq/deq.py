@@ -107,6 +107,14 @@ ext = {
         col_type=ColType.AGG,
         expr=pl.col('deck_small_sample') * pl.col(ColName.WON_DECK) / (pl.col(ColName.DECK))
     ),
+    'gns_wr_17l': ColSpec(
+        col_type=ColType.AGG,
+        expr=pl.when(pl.col(ColName.NAME).is_in(BASIC_LANDS) | (pl.col(ColName.NUM_GNS) < SAMPLE_THRESHOLD)).then(None).otherwise(pl.col(ColName.WON_NUM_GNS))/ (pl.col(ColName.NUM_GNS))
+    ),
+    'iwd_17l': ColSpec(
+        col_type=ColType.AGG,
+        expr = pl.col('gih_wr_17l') - pl.col('gns_wr_17l')
+    ),
     'deq_bias_adj': ColSpec(
         col_type=ColType.AGG,
         expr=(pl.col('pick_equity') / P1_PICK_EQUITY - 1) * pl.col('gp_wr_bias_in'),

@@ -22,7 +22,7 @@ METRIC_LABELS = {
     'gih_wr_17l': 'GIH WR',
     'gp_wr_17l': 'GP WR',
     'pick_equity': 'ATA',
-    'iwd': 'IWD',
+    'iwd_17l': 'IWD',
     'deq_base': 'DEq Base',
     'gp_wr_bias_adj': 'GP WR Bias Adj.',
     'oh_wr': 'OH WR',
@@ -90,7 +90,7 @@ def p1_line_plot(
     title_extra: str | None = None,
 ) -> None:
     if metrics is None:
-        metrics = ['deq', 'gih_wr_17l', 'gp_wr_17l', 'pick_equity', 'iwd']
+        metrics = ['deq', 'gih_wr_17l', 'gp_wr_17l', 'pick_equity', 'iwd_17l']
 
     config = {
         'wr_delta': {
@@ -188,30 +188,6 @@ def plot_two_phase_series_pyplot(
 
     return ax
 
-def metric_weight_bar_plot(
-    analysis: AnalysisResult,
-    metrics: list[str] = ["iwd", "deq"],
-) -> Axes:
-    num_bars = len(metrics) + 1
-    df = analysis.df
-
-    _, ax = plt.subplots(figsize=FIG_SIZE)
-    width = 2 / (num_bars + 1)
-    offset = -1 + width 
-    ax.bar(df['skill_cohort'] + offset, df['event_matches_sum'], width=width, label='Actual')
-    for i, metric in enumerate(metrics):
-        ax.bar(
-            df['skill_cohort'] + offset + (i + 1) * width, 
-            df[f'{metric}_weight'], 
-            width=width, 
-            label=METRIC_LABELS[metric]
-        )
-    style_xticks(analysis, ax)
-    ax.set_ylabel('Millions of Matches')
-    ax.set_title("Actual and simulated matches for some strategies")
-    ax.legend()
-
-    return ax
 
 def cohort_summary_table(
     analysis: AnalysisResult
@@ -256,7 +232,7 @@ def p1_delta_bar(
 ) -> None:
     df = analysis.agg_df
     if metrics is None:
-        metrics = ['deq', 'gih_wr_17l', 'gp_wr_17l', 'pick_equity', 'iwd']
+        metrics = ['deq', 'gih_wr_17l', 'gp_wr_17l', 'pick_equity', 'iwd_17l']
 
     _, ax = plt.subplots()
 
