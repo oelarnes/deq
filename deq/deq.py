@@ -1,13 +1,13 @@
 import polars as pl
 from spells import summon, ColName, ColType, ColSpec
 
-BASIC_LANDS = ['Plains', 'Island', 'Swamp', 'Mountain', 'Forest']
+BASIC_LANDS = ["Plains", "Island", "Swamp", "Mountain", "Forest"]
 P1_PICK_EQUITY = 0.03
 ATA_DENOM = 13
 
-PRECISION = 2 ** 16
+PRECISION = 2**16
 
-# parameters for deq metagame decay 
+# parameters for deq metagame decay
 DEQ_LOSS_FACTOR = 0.6
 SAMPLE_DECAY = 0.95
 META_DECAY = 0.95
@@ -21,15 +21,27 @@ WR_BETA_TO_ATA = -0.0033
 UNG = pl.col(ColName.USER_N_GAMES_BUCKET)
 UGWR = pl.col(ColName.USER_GAME_WIN_RATE_BUCKET)
 
+
 def meta_decay_factor(set_context: dict):
-    t = set_context.get('observed_days')
-    ft = set_context.get('projection_days')
+    t = set_context.get("observed_days")
+    ft = set_context.get("projection_days")
 
     if t is None:
         return pl.lit(0)
-    return pl.lit(DEQ_LOSS_FACTOR * (META_DECAY ** (t + ft) * (1 - SAMPLE_DECAY ** t) * (1 - SAMPLE_DECAY * META_DECAY) 
-                  / (1 - (SAMPLE_DECAY * META_DECAY) ** t) / (1 - SAMPLE_DECAY) - 1))
+    return pl.lit(
+        DEQ_LOSS_FACTOR
+        * (
+            META_DECAY ** (t + ft)
+            * (1 - SAMPLE_DECAY**t)
+            * (1 - SAMPLE_DECAY * META_DECAY)
+            / (1 - (SAMPLE_DECAY * META_DECAY) ** t)
+            / (1 - SAMPLE_DECAY)
+            - 1
+        )
+    )
 
+
+# fmt: off
 ext = {
     ColName.NUM_GNS: ColSpec(
         col_type=ColType.NAME_SUM,
@@ -66,7 +78,8 @@ ext = {
     ),
     'skill_cohort': ColSpec(
         col_type=ColType.GROUP_BY,
-        expr=pl.min_horizontal([pl.max_horizontal([((pl.when(UNG == 1000).then(1200/(1200 + BAYES_GAMES)).otherwise(
+        expr=pl.min_horizontal([pl.max_horizontal(
+            [((pl.when(UNG == 1000).then(1200/(1200 + BAYES_GAMES)).otherwise(
             pl.when(UNG == 500).then(750/(750+BAYES_GAMES)).otherwise(
             pl.when(UNG == 100).then(300/(300+BAYES_GAMES)).otherwise(
             pl.when(UNG == 50).then(75/(75+BAYES_GAMES)).otherwise(
@@ -83,11 +96,13 @@ ext = {
     ),
     'gp_wr_excess_over_colors': ColSpec(
         col_type=ColType.AGG,
-        expr=((pl.col('won_deck_over_colors') / pl.col('deck_over_colors') - pl.col('gp_wr_mean')) * PRECISION).round() / PRECISION
+        expr=((pl.col('won_deck_over_colors') / pl.col('deck_over_colors') - pl.col('gp_wr_mean')
+               ) * PRECISION).round() / PRECISION
     ),
     'deck_small_sample': ColSpec(
         col_type=ColType.AGG,
-        expr=pl.when(pl.col(ColName.NAME).is_in(BASIC_LANDS) | (pl.col(ColName.DECK) < SAMPLE_THRESHOLD)).then(None).otherwise(1.0)
+        expr=pl.when(pl.col(ColName.NAME).is_in(BASIC_LANDS) | (pl.col(ColName.DECK) < SAMPLE_THRESHOLD)
+                     ).then(None).otherwise(1.0)
     ),
     'gp_wr_bayes_mu': ColSpec(
         col_type=ColType.AGG,
@@ -101,7 +116,8 @@ ext = {
     ),
     'gih_wr_17l': ColSpec(
         col_type=ColType.AGG,
-        expr=pl.when(pl.col(ColName.NAME).is_in(BASIC_LANDS) | (pl.col(ColName.NUM_GIH) < SAMPLE_THRESHOLD)).then(None).otherwise(pl.col(ColName.NUM_GIH_WON))/ (pl.col(ColName.NUM_GIH))
+        expr=pl.when(pl.col(ColName.NAME).is_in(BASIC_LANDS) | (pl.col(ColName.NUM_GIH) < SAMPLE_THRESHOLD)
+                     ).then(None).otherwise(pl.col(ColName.NUM_GIH_WON))/ (pl.col(ColName.NUM_GIH))
     ),
     'gp_wr_17l': ColSpec(
         col_type=ColType.AGG,
@@ -109,7 +125,8 @@ ext = {
     ),
     'gns_wr_17l': ColSpec(
         col_type=ColType.AGG,
-        expr=pl.when(pl.col(ColName.NAME).is_in(BASIC_LANDS) | (pl.col(ColName.NUM_GNS) < SAMPLE_THRESHOLD)).then(None).otherwise(pl.col(ColName.WON_NUM_GNS))/ (pl.col(ColName.NUM_GNS))
+        expr=pl.when(pl.col(ColName.NAME).is_in(BASIC_LANDS) | (pl.col(ColName.NUM_GNS) < SAMPLE_THRESHOLD)
+                     ).then(None).otherwise(pl.col(ColName.WON_NUM_GNS))/ (pl.col(ColName.NUM_GNS))
     ),
     'iwd_17l': ColSpec(
         col_type=ColType.AGG,
@@ -137,7 +154,8 @@ ext = {
     ),
     'gp_wr_bias_in': ColSpec(
         col_type=ColType.CARD_ATTR,
-        expr=lambda set_context: pl.lit(None) if 'gp_wr_excess_over_colors_W' not in set_context else pl.when(
+        expr=lambda set_context: pl.lit(None) if 'gp_wr_excess_over_colors_W' 
+        not in set_context else pl.when(
             pl.col(ColName.COLOR) == "UW").then(
                 0.5 * set_context.get('gp_wr_excess_over_colors_UW', 0) 
                 + 0.25 * set_context.get('gp_wr_excess_over_colors_W', 0)
@@ -201,27 +219,65 @@ ext = {
     'deq_meta_adj': ColSpec(
         col_type=ColType.AGG,
         expr=(pl.col('gp_wr_bias_in') + pl.col('deq_bias_adj')) * pl.col('meta_regression_factor')
+    ),
+    'color_group': ColSpec(
+        col_type=ColType.CARD_ATTR,
+        expr=(
+            pl.when(pl.col("color") == "")
+            .then(pl.lit("Colorless"))
+            .otherwise(
+                pl.when(pl.col("color") == "W")
+                .then(pl.lit("White"))
+                .otherwise(
+                    pl.when(pl.col("color") == "U")
+                    .then(pl.lit("Blue"))
+                    .otherwise(
+                        pl.when(pl.col("color") == "B")
+                        .then(pl.lit("Black"))
+                        .otherwise(
+                            pl.when(pl.col("color") == "R")
+                            .then(pl.lit("Red"))
+                            .otherwise(
+                                pl.when(pl.col("color") == "G")
+                                .then(pl.lit("Green"))
+                                .otherwise(pl.lit("Gold"))
+                            )
+                        )
+                    )
+                )
+            )
+        )
     )
 }
+# fmt: on
 
-def deq_bias_set_context(set_codes: list[str], metric_filter: dict, observed_days: int | None = None, projection_days: int = 1):
+
+def deq_bias_set_context(
+    set_codes: list[str],
+    metric_filter: dict,
+    observed_days: int | None = None,
+    projection_days: int = 1,
+):
     gpwr_oc = summon(
-        set_codes, 
-        columns=['gp_wr_excess_over_colors'], 
-        group_by=['expansion', 'color'], 
-        filter_spec=metric_filter, 
-        extensions=ext
+        set_codes,
+        columns=["gp_wr_excess_over_colors"],
+        group_by=["expansion", "color"],
+        filter_spec=metric_filter,
+        extensions=ext,
     )
 
-    select = ['gp_wr_excess_over_colors_' + pl.col('color'), 'gp_wr_excess_over_colors']
+    select = ["gp_wr_excess_over_colors_" + pl.col("color"), "gp_wr_excess_over_colors"]
 
     set_context = {
         set_code: {
-            key:value[0] for key, value in gpwr_oc.filter(pl.col('expansion') == set_code).select(
-                select).rows_by_key('literal', unique=True).items()
-            } | {'observed_days': observed_days, 'projection_days': projection_days} for set_code in set_codes
+            key: value[0]
+            for key, value in gpwr_oc.filter(pl.col("expansion") == set_code)
+            .select(select)
+            .rows_by_key("literal", unique=True)
+            .items()
+        }
+        | {"observed_days": observed_days, "projection_days": projection_days}
+        for set_code in set_codes
     }
 
-
     return set_context
-

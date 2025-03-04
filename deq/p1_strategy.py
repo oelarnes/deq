@@ -68,7 +68,10 @@ def get_metric_context(
     filter_spec: dict,
     deq_days: int | None,
 ) -> pl.DataFrame:
-    set_context = deq_bias_set_context(set_codes, filter_spec, observed_days=deq_days)
+    if 'deq' in metrics or 'gp_wr_bias_adj' in metrics:
+        set_context = deq_bias_set_context(set_codes, filter_spec, observed_days=deq_days)
+    else:
+        set_context = None
 
     metrics_select = [
         (pl.col(metric) * PRECISION).round() / PRECISION for metric in metrics

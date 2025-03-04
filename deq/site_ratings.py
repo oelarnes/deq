@@ -53,6 +53,7 @@ def ratings_df(
         start_date = START_DATE_MAP[set_code]
     if end_date is None:
         end_date = dt.date.today() - dt.timedelta(days=1)
+
     df = pl.read_json(
         rating_file_path(
             set_code, format, player_cohort, deck_color, start_date, end_date

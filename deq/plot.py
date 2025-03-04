@@ -2,12 +2,14 @@ from dataclasses import dataclass
 
 import numpy as np
 from numpy.typing import NDArray
+import polars as pl
 
 from great_tables import GT
 
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
 import matplotlib.ticker as mtick
+from matplotlib.patches import Rectangle
 from matplotlib.axes import Axes
 
 from deq.p1_strategy import AnalysisResult
@@ -41,6 +43,7 @@ COLOR_LIST = {
 
 METRIC_LABELS = {
     "deq": "DEq",
+    "gih_wr": "GIH WR",
     "gih_wr_17l": "GIH WR",
     "gp_wr_17l": "GP WR",
     "pick_equity": "ATA",
@@ -50,6 +53,7 @@ METRIC_LABELS = {
     "oh_wr": "OH WR",
     "gns_wr": "GNS WR",
     "alsa": "Inverse ALSA",
+    "actual": "Actual",
 }
 
 FIG_SIZE = (8, 6)
@@ -267,4 +271,133 @@ def p1_delta_bar(
     ax.set_ylabel("Strategy Win Rate Delta")
     ax.yaxis.set_major_formatter(mtick.PercentFormatter(1.0, decimals=1))
 
+    plt.show()
+
+
+def grouped_bars(
+    df: pl.DataFrame,
+    title: str | None = None,
+    y_label: str = "Counts",
+    x_label: str | None = None,
+    palette: dict | None = None,
+    is_pct: bool = False,
+    legend_width: int = 7,
+    figsize: tuple[int, int] = (14, 8),
+) -> None:
+    def text_fmt(value: float) -> str:
+        if is_pct:
+            return f"{value*100:.1f}%"
+        else:
+            return f"{value}"
+
+    _, ax = plt.subplots(figsize=figsize)
+    plt.tight_layout()
+    category = df.columns[0]
+    headers = df.columns[1:]
+
+    if palette is None:
+        colors = COLOR_LIST["pyplot"]
+        lim = min(len(colors), len(df[category]))
+        palette = {df[category][i]: colors[i] for i in range(lim)}
+
+    num_bars = len(palette.keys())
+    space_coef = 0.6
+
+    min_value = df.min().select(headers).min_horizontal()[0]
+    max_value = df.max().select(headers).max_horizontal()[0]
+
+    for i, header in enumerate(headers):
+        group_position = i * ((1 + space_coef) * num_bars)
+
+        for j, (color_name, color_code) in enumerate(palette.items()):
+            value = df.filter(pl.col(category) == color_name)[header][0]
+            bar_position = group_position + j
+
+            ax.bar(
+                bar_position,
+                value,
+                width=1,
+                color=color_code,
+                edgecolor="black",
+                linewidth=0.5,
+                label=color_name if i == 0 else "",  # Only add to legend once
+            )
+
+            # Add data label on top of the bar
+            ax.text(
+                bar_position,
+                value + (max_value - min_value) / 100,
+                text_fmt(value),
+                ha="center",
+                va="bottom",
+                fontsize=8,
+            )
+
+    # Customize the plot
+    if x_label is not None:
+        ax.set_xlabel(x_label, fontweight="bold")
+    ax.set_ylabel(y_label, fontweight="bold")
+    ax.set_ylim(
+        bottom=max(0, min_value - (max_value - min_value) * 0.2),
+        top=max_value + (max_value - min_value) * 0.2,
+    )
+    if title is not None:
+        ax.set_title(
+            title,
+            fontweight="bold",
+            fontsize=14,
+        )
+
+    # Set x-ticks in the middle of each group
+    group_centers = [
+        i * ((1 + space_coef) * num_bars) + (num_bars / 2) - 1 / 2
+        for i in range(len(headers))
+    ]
+    ax.set_xticks(group_centers)
+    ax.set_xticklabels(headers, fontsize=12, fontweight="bold")
+
+    # Add a grid for readability
+    ax.grid(axis="y", linestyle="--", alpha=0.7)
+
+    # Add a line at y=0
+    ax.axhline(y=0, color="black", linestyle="-", alpha=0.3)
+
+    # Create a custom legend for color groups
+    handles = [
+        Rectangle((0, 0), 1, 1, facecolor=color, edgecolor="black", linewidth=0.5)
+        for color in palette.values()
+    ]
+    ax.legend(handles, palette.keys(), loc="upper right", ncol=legend_width)
+    if is_pct:
+        ax.yaxis.set_major_formatter(mtick.PercentFormatter(1.0, decimals=1))
+    plt.show()
+
+
+def line_plot(
+    df: pl.DataFrame,
+    title: str | None = None,
+    y_label: str | None = None,
+    palette: dict | None = None,
+    is_pct: bool = False,
+):
+    x_label = df.columns[0]
+    x_vals = df[x_label]
+
+    headers = df.columns[1:]
+    if palette is None:
+        colors = COLOR_LIST["pyplot"]
+        lim = min(len(colors), len(headers))
+        palette = {headers[i]: colors[i] for i in range(lim)}
+
+    _, ax = plt.subplots()
+    for header in palette.keys():
+        ax.plot(x_vals, df[header], label=header, color=palette[header])
+    ax.legend()
+    ax.set_xlabel(x_label)
+    if title is not None:
+        ax.set_title(title)
+    if y_label is not None:
+        ax.set_ylabel(y_label)
+    if is_pct:
+        ax.yaxis.set_major_formatter(mtick.PercentFormatter(1.0, decimals=1))
     plt.show()
