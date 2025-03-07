@@ -282,7 +282,7 @@ def grouped_bars(
     palette: dict | None = None,
     is_pct: bool = False,
     legend_width: int = 7,
-    figsize: tuple[int, int] = (14, 8),
+    figsize: tuple[int, int] = (10, 6),
 ) -> None:
     def text_fmt(value: float) -> str:
         if is_pct:
@@ -330,7 +330,7 @@ def grouped_bars(
                 text_fmt(value),
                 ha="center",
                 va="bottom",
-                fontsize=8,
+                fontsize=6,
             )
 
     # Customize the plot
@@ -367,7 +367,7 @@ def grouped_bars(
         Rectangle((0, 0), 1, 1, facecolor=color, edgecolor="black", linewidth=0.5)
         for color in palette.values()
     ]
-    ax.legend(handles, palette.keys(), loc="upper right", ncol=legend_width)
+    ax.legend(handles, palette.keys(), fontsize=9, loc="upper right", ncol=legend_width)
     if is_pct:
         ax.yaxis.set_major_formatter(mtick.PercentFormatter(1.0, decimals=1))
     plt.show()
@@ -379,6 +379,7 @@ def line_plot(
     y_label: str | None = None,
     palette: dict | None = None,
     is_pct: bool = False,
+    figsize: tuple[int, int] = (10, 6),
 ):
     x_label = df.columns[0]
     x_vals = df[x_label]
@@ -389,7 +390,7 @@ def line_plot(
         lim = min(len(colors), len(headers))
         palette = {headers[i]: colors[i] for i in range(lim)}
 
-    _, ax = plt.subplots()
+    _, ax = plt.subplots(figsize=figsize)
     for header in palette.keys():
         ax.plot(x_vals, df[header], label=header, color=palette[header])
     ax.legend()

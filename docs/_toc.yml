@@ -7,6 +7,9 @@ parts:
   - caption: "Articles"
     chapters:
     - file: p1-strategy.ipynb
+  - caption: "Aetherdrift"
+    chapters:
+    - file: dft-early.ipynb
   - caption: "Math"
     chapters: 
     - file: deq.ipynb

@@ -2,10 +2,7 @@ import datetime as dt
 import os
 
 from great_tables import GT
-import matplotlib.pyplot as plt
-from matplotlib import ticker as mtick
 import polars as pl
-import numpy as np
 
 from spells import summon
 from spells.extension import context_cols
@@ -107,6 +104,8 @@ actual_win_rate = (pl.col("event_match_wins_sum") / pl.col("event_matches_sum"))
     "actual_win_rate"
 )
 
+# 3. Color Summaries
+
 color_totals = (
     summary_results.group_by(["color_group"])
     .sum()
@@ -161,7 +160,6 @@ total_win_rates = (
     )
 )
 
-# 3. Color Plots
 
 
 def counts_bars():
@@ -276,7 +274,6 @@ def common_results_bar():
         palette=results_palette,
         x_label="Pick Strategy",
     )
-
 
 by_day_df = summon(
     "DFT",
