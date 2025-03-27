@@ -380,7 +380,10 @@ def line_plot(
     palette: dict | None = None,
     is_pct: bool = False,
     figsize: tuple[int, int] = (10, 6),
-):
+    x_ticks: NDArray | None = None,
+    x_labels: NDArray | None = None,
+    return_ax: bool = False,
+) -> None | Axes:
     x_label = df.columns[0]
     x_vals = df[x_label]
 
@@ -395,10 +398,19 @@ def line_plot(
         ax.plot(x_vals, df[header], label=header, color=palette[header])
     ax.legend()
     ax.set_xlabel(x_label)
+    if x_ticks is None:
+        ax.set_xticks(x_vals, x_labels)
+    else:
+        ax.set_xticks(x_ticks, x_labels)
+
     if title is not None:
         ax.set_title(title)
     if y_label is not None:
         ax.set_ylabel(y_label)
     if is_pct:
         ax.yaxis.set_major_formatter(mtick.PercentFormatter(1.0, decimals=1))
+    # Add a grid for readability
+    ax.grid(axis="y", linestyle="--", alpha=0.7)
+    if return_ax:
+        return ax
     plt.show()
