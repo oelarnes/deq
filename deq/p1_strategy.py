@@ -68,7 +68,7 @@ def get_metric_context(
     filter_spec: dict,
     deq_days: int | None,
 ) -> pl.DataFrame:
-    if 'deq' in metrics or 'gp_wr_bias_adj' in metrics:
+    if 'deq' in metrics or 'gp_wr_bias_adj' in metrics or 'deq_new' in metrics:
         set_context = deq_bias_set_context(set_codes, filter_spec, observed_days=deq_days)
     else:
         set_context = None
@@ -494,6 +494,7 @@ def set_by_set_results(
         "BLB",
         "DSK",
         "FDN",
+        "DFT"
     ]
 
     results = {

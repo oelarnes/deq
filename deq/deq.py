@@ -1,4 +1,6 @@
 import polars as pl
+import numpy as np
+
 from spells import summon, ColName, ColType, ColSpec
 
 BASIC_LANDS = ["Plains", "Island", "Swamp", "Mountain", "Forest"]
@@ -20,6 +22,37 @@ METRIC_BAYES_GAMES = 200
 WR_BETA_TO_ATA = -0.0033
 UNG = pl.col(ColName.USER_N_GAMES_BUCKET)
 UGWR = pl.col(ColName.USER_GAME_WIN_RATE_BUCKET)
+
+# Pick equity fit derived from mle draft_equity analysis
+PICK_EQUITY_ARR = [
+    0.022, # pick one pick equity
+    0.016,
+    0.012,
+    0.01,
+    0.0086,
+    0.0073,
+    0.0061,
+    0.005,
+    0.004,
+    0.0031,
+    0.0023,
+    0.0016,
+    0.001,
+    0.0005,
+]
+
+x = np.arange(1, 15)
+PE_INDEX = 3
+PE_COEF_1_0, PE_COEF_1_1, PE_COEF_1_2 = np.polyfit(x[0:PE_INDEX], PICK_EQUITY_ARR[0:PE_INDEX], 2)
+PE_COEF_2_0, PE_COEF_2_1, PE_COEF_2_2 = np.polyfit(x[PE_INDEX:], PICK_EQUITY_ARR[PE_INDEX:], 2)
+
+ADJ_FACTOR = 1.2
+PE_COEF_1_0 = ADJ_FACTOR * float(PE_COEF_1_0)
+PE_COEF_1_1 = ADJ_FACTOR * float(PE_COEF_1_1)
+PE_COEF_1_2 = ADJ_FACTOR * float(PE_COEF_1_2)
+PE_COEF_2_0 = ADJ_FACTOR * float(PE_COEF_2_0)
+PE_COEF_2_1 = ADJ_FACTOR * float(PE_COEF_2_1)
+PE_COEF_2_2 = ADJ_FACTOR * float(PE_COEF_2_2)
 
 
 def meta_decay_factor(set_context: dict):
@@ -72,9 +105,27 @@ ext = {
         col_type=ColType.AGG,
         expr=P1_PICK_EQUITY * (1 - (pl.col(ColName.ATA)-1) / ATA_DENOM).pow(2),
     ),
+    'pick_equity_new': ColSpec(
+        col_type=ColType.AGG,
+        expr=pl.when(pl.col(ColName.ATA) < PE_INDEX + 1).then(
+            PE_COEF_1_0 * pl.col(ColName.ATA).pow(2) + 
+            PE_COEF_1_1 * pl.col(ColName.ATA) + 
+            PE_COEF_1_2
+        ).otherwise(
+            PE_COEF_2_0 * pl.col(ColName.ATA).pow(2) + 
+            PE_COEF_2_1 * pl.col(ColName.ATA) + 
+            PE_COEF_2_2
+        )
+    ),
     'deq_base': ColSpec(
         col_type=ColType.AGG,
-        expr=(pl.col('gp_wr_b') - pl.col(ColName.GP_WR_MEAN) + pl.col('pick_equity')) * pl.col(ColName.PCT_GP)
+        expr=(pl.col('gp_wr_b') - pl.col(ColName.GP_WR_MEAN) + 
+              pl.col('pick_equity')) * pl.col(ColName.PCT_GP)
+    ),
+    'deq_base_new': ColSpec(
+        col_type=ColType.AGG,
+        expr=(pl.col('gp_wr_b') - pl.col(ColName.GP_WR_MEAN) + 
+              pl.col('pick_equity_new')) * pl.col(ColName.PCT_GP)
     ),
     'skill_cohort': ColSpec(
         col_type=ColType.GROUP_BY,
@@ -139,6 +190,10 @@ ext = {
     'deq': ColSpec(
         col_type=ColType.AGG,
         expr=pl.col('deq_base') + (pl.col('deq_bias_adj') + pl.col('deq_meta_adj')) * pl.col('pct_gp')
+    ),
+    'deq_new': ColSpec(
+        col_type=ColType.AGG,
+        expr=pl.col('deq_base_new') + (pl.col('deq_bias_adj') + pl.col('deq_meta_adj')) * pl.col('pct_gp')
     ),
     'gp_wr_bias_adj': ColSpec(
         col_type=ColType.AGG,

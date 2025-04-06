@@ -6,14 +6,26 @@ from numpy.typing import NDArray
 import polars as pl
 
 from spells import summon, ColSpec, ColType, view_select, get_names, ColName
+from spells.cache import save_ad_hoc_dataset, read_ad_hoc_dataset
 from spells.draft_data import _get_set_context
 from spells.enums import View
 
 from deq import ext, deq_bias_set_context
-from deq.deq import BASIC_LANDS
+from deq.deq import BASIC_LANDS, PICK_EQUITY_ARR
 from deq.p1_strategy import TOP_PLAYER
 
+TOL = 1e-5
+LAMBDA = 1
 set_code = "OTJ"
+
+
+def pack_pick_filter(draft_filter: dict, pack_num: int, pick_num: int) -> dict:
+    return {"$and": [{"pack_num": pack_num}, {"pick_num": pick_num}, draft_filter]}
+
+
+def pick_equity_init_alpha(set_code: str):
+    picks_per_pack = _get_set_context(set_code, None)["picks_per_pack"]
+
 
 def deq_init_alpha(set_code: str, metric_filter: dict | None = None):
     if metric_filter is None:
@@ -35,11 +47,15 @@ def deq_init_alpha(set_code: str, metric_filter: dict | None = None):
 
 def mle_ext(picks_per_pack):
     return {
-        "pool_plus_pick": ColSpec(
+        "is_pick": ColSpec(
             col_type=ColType.NAME_SUM,
             expr=lambda name: pl.when(pl.col(ColName.PICK) == name)
-            .then(pl.col(f"pool_{name}") + 1)
-            .otherwise(f"pool_{name}"),
+            .then(1)
+            .otherwise(0),
+        ),
+        "pool_plus_pick": ColSpec(
+            col_type=ColType.NAME_SUM,
+            expr=lambda name: pl.col(f"is_pick_{name}") + pl.col(f"pool_{name}"),
         ),
         **{
             f"is_pick_{n}": ColSpec(
@@ -68,11 +84,11 @@ def entropy(alpha, x, wl):
     )
 
 
-def grad(alpha, x, wl):
+def grad(alpha, x, wl, l_probs):
     return (
-        -np.sum(x * (wl.sum(axis=1) * h(alpha, x) - wl[:, 1])[:, None], axis=0)
-        / wl.sum()
-    )
+        -np.sum(x * (wl.sum(axis=1) * l_probs - wl[:, 1])[:, None], axis=0)
+        + LAMBDA * alpha
+    ) / wl.sum()
 
 
 def hess(x, wl, l_probs):
@@ -101,6 +117,8 @@ def hess(x, wl, l_probs):
             * (1 - l_probs[num_chunks * chunk_size :])
         )[:, None, None]
     ).sum(axis=0)
+
+    accum += LAMBDA * np.eye(x.shape[1])
     return accum / wl.sum()
 
 
@@ -115,72 +133,219 @@ def find_weighted_mle(
     x: NDArray[np.float64],
     alpha: NDArray[np.float64],
     train: NDArray[np.bool],
-    tol: float,
 ) -> NDArray:
-    diff = 2 * tol
+    diff = 2 * TOL
 
-    score_old = entropy(alpha, x, wl)
-    print(f"Starting unit entropy {score_old:.7f}")
-    while diff > tol:
+    alpha_old = np.array(alpha)
+    print(f"Starting unit entropy {entropy(alpha, x, wl):.7f}")
+    while diff > TOL:
         l_probs = h(alpha, x)
 
-        alpha_train = alpha[train]
-
         select = np.broadcast_to(train[None, :], x.shape)
+        alpha_train = alpha[train]
         x_train = x[select].reshape((x.shape[0], train.sum()))
 
         H = hess(x_train, wl, l_probs)
-        delta = -(np.linalg.inv(H) @ grad(alpha_train, x_train, wl))
+        delta = -(np.linalg.inv(H) @ grad(alpha_train, x_train, wl, l_probs))
         alpha[train] += delta
 
-        score_new = entropy(alpha, x, wl)
-        print(f"New unit entropy {score_new:.7f}")
-        diff = score_old - score_new
-        score_old = score_new
+        print(f"New unit entropy {entropy(alpha, x, wl):.7f}")
+        diff = np.abs(alpha_old - alpha).max()
+        alpha_old = np.array(alpha)
     return alpha
+
+
+def test():
+    set_code = "OTJ"
+    pack_num = 1
+    pick_num = 1
+    pool_strength = np.zeros(34181)
+    remaining_pick_q = p0_q(set_code) - 0.088
+    draft_filter = None
+    df_2 = marginal_pick_q(set_code, 1, 1, remaining_pick_q)
+    df_2.filter(pl.col('weight') > 100)
+    np.exp(1.42) / (np.exp(1.42) + 1)
+
+
+
+def marginal_q_by_pick(set_code: str, draft_filter: dict | None = None):
+    pack_num = 1
+
+    remaining_equity = p0_q(set_code, draft_filter=draft_filter)
+
+    dfs = []
+    picks_per_pack = _get_set_context(set_code, None)["picks_per_pack"]
+    for pick_num in range(picks_per_pack):
+        remaining_equity = remaining_equity - PICK_EQUITY_ARR[pick_num - 1]
+        df = marginal_pick_q(set_code, pick_num, pack_num)
 
 
 def marginal_pick_q(
     set_code: str,
     pack_num: int,
     pick_num: int,
-    pool_alpha: NDArray,
-    threshold_pct_gp: float = 0.05,
-    tol: float = 1e-6,
-) -> QOutput: ...
+    remaining_pick_q: float,  # exclusive of pick
+    pool_strength: NDArray[np.float64] | None = None,  # n x 1
+    draft_filter: dict | None = None,
+) -> pl.DataFrame:
+    if draft_filter is None:
+        draft_filter = TOP_PLAYER
+
+    picks_per_pack = _get_set_context(set_code, None)["picks_per_pack"]
+    wl_x = (
+        view_select(
+            set_code,
+            View.DRAFT,
+            [
+                "event_match_wins_sum",
+                "event_match_losses_sum",
+                "is_pick",
+            ],
+            filter_spec=pack_pick_filter(draft_filter, pack_num, pick_num),
+            extensions=mle_ext(picks_per_pack),
+        )
+        .collect(streaming=True)
+        .filter(pl.col("event_match_wins_sum") + pl.col("event_match_losses_sum") > 0)
+        .to_numpy()
+    )
+
+    if pool_strength is None:
+        pool_strength = np.zeros(wl_x.shape[0])
+    assert wl_x.shape[0] == pool_strength.shape[0], "Dimension mismatch"
+
+    wl = wl_x[:, 0:2]
+    x = np.concat(
+        [wl_x[:, 2:], (pool_strength + remaining_pick_q)[:, None]],
+        axis=1,
+        dtype=np.float64,
+    )
+
+    weight = (wl.sum(axis=1)[:, None] * x).sum(axis=0)
+
+    alpha = np.zeros(x.shape[1], dtype=np.float64)
+    alpha[-1] = 1.0
+    train = x.max(axis=0) > 0
+    train[-1] = False
+
+    alpha = find_weighted_mle(wl, x, alpha, train)
+
+    names = get_names(set_code)
+    df = pl.DataFrame(
+        {
+            "name": names,
+            "q": alpha[: len(names)],
+            "weight": weight[: len(names)],
+        }
+    ).sort("q", descending=True)
+
+    return df
+
+
+def p0_q(
+    set_code: str,
+    draft_filter: dict | None = None,
+):
+    """total remaining pick equity at pick 0,
+    i.e. the marginal win rate of the whole cohort"""
+
+    if draft_filter is None:
+        draft_filter = TOP_PLAYER
+
+    wl_x = (
+        view_select(
+            set_code,
+            View.DRAFT,
+            [
+                "event_match_wins_sum",
+                "event_match_losses_sum",
+            ],
+            filter_spec=pack_pick_filter(draft_filter, 1, 1),
+        )
+        .with_columns(pl.lit(1))
+        .filter(pl.col("event_match_wins_sum") + pl.col("event_match_losses_sum") > 0)
+        .collect(streaming=True)
+        .to_numpy()
+    )
+
+    wl = wl_x[:, 0:2]
+    x = wl_x[:, 2:]
+    alpha = np.zeros(x.shape[1])
+    train = np.ones(x.shape[1], dtype=np.bool)
+
+    q = find_weighted_mle(wl, x, alpha, train)
+
+    wr = summon(
+        set_code,
+        ["picked_match_wr"],
+        group_by=[],
+        filter_spec={"$and": [{"pack_num": 1}, {"pick_num": 1}, draft_filter]},
+    )
+
+    # the MLE should give the mean win rate
+    assert np.abs((np.exp(q) / (1 + np.exp(q)))[0] - wr["picked_match_wr"][0]) < TOL
+
+    return float(q[0])
 
 
 def draft_equity(
-    set_code: str, pack_num: int, threshold_pct_gp: float = 0.05, tol: float = 1e-8
+    set_code: str,
+    pack_num: int,
+    threshold_pct_gp: float = 0.05,
+    draft_filter: dict | None = None,
+    read_cache: bool = True,
+    write_cache: bool = True,
+    null_cards: list | None = None,
 ) -> QOutput:
-    # 1. Determine cards for zero draft equity
-    null_card_df = summon(set_code, ["pct_gp"], filter_spec=TOP_PLAYER).filter(
-        (pl.col("pct_gp") < threshold_pct_gp) | pl.col("name").is_in(BASIC_LANDS)
-    )
+    null_cards_text = "_null_cards" if null_cards is not None else ""
+    cache_keys = {
+        "draft_equity": f"draft_equity_{set_code}_pack{pack_num}_tresholdpctgp{int(100 * threshold_pct_gp)}{null_cards_text}",
+        "pick_equity": f"pick_equity_{set_code}_pack{pack_num}_tresholdpctgp{int(100 * threshold_pct_gp)}{null_cards_text}",
+    }
 
-    null_cards = null_card_df["name"].to_list()
+    if draft_filter is None:
+        default_filter = True
+        draft_filter = TOP_PLAYER
+    else:
+        default_filter = False
+
+    if default_filter and read_cache:
+        df = read_ad_hoc_dataset(cache_keys["draft_equity"])
+        pick_equity_df = read_ad_hoc_dataset(cache_keys["pick_equity"])
+
+        if df is not None and pick_equity_df is not None:
+            return QOutput(df=df, pick_equity_df=pick_equity_df)
+
+    if null_cards is None:
+        # 1. Determine cards for zero draft equity
+        null_card_df = summon(set_code, ["pct_gp"], filter_spec=draft_filter).filter(
+            (pl.col("pct_gp") < threshold_pct_gp) | pl.col("name").is_in(BASIC_LANDS)
+        )
+
+        null_cards = null_card_df["name"].to_list()
+        bad_drafts = (
+            (
+                view_select(set_code, View.GAME, ["draft_id", "deck"], draft_filter)
+                .filter(
+                    pl.sum_horizontal(
+                        [
+                            pl.col(f"deck_{name}")
+                            for name in set(null_cards) - set(BASIC_LANDS)
+                        ]
+                    )
+                    > 0
+                )
+                .collect(streaming=True)
+            )["draft_id"]
+            .unique()
+            .to_list()
+        )
+        print(f"Throwing out {len(bad_drafts)} drafts due to playing null cards")
+    else:
+        bad_drafts = []
+
     assert len(
         null_cards
     ), f"No cards found with GP% below threshold {threshold_pct_gp}!"
-
-    bad_drafts = (
-        (
-            view_select(set_code, View.GAME, ["draft_id", "deck"], TOP_PLAYER)
-            .filter(
-                pl.sum_horizontal(
-                    [
-                        pl.col(f"deck_{name}")
-                        for name in set(null_cards) - set(BASIC_LANDS)
-                    ]
-                )
-                > 0
-            )
-            .collect(streaming=True)
-        )["draft_id"]
-        .unique()
-        .to_list()
-    )
-    print(f"Throwing out {len(bad_drafts)} drafts due to drafting null cards")
 
     # 2. Get training data
     picks_per_pack = _get_set_context(set_code, None)["picks_per_pack"]
@@ -197,10 +362,14 @@ def draft_equity(
                         "pool",
                     ],
                     filter_spec={
-                        "$and": [{"pack_num": pack_num}, {"pick_num": 1}, TOP_PLAYER]
+                        "$and": [{"pack_num": pack_num}, {"pick_num": 1}, draft_filter]
                     },
                 )
                 .filter(~pl.col("draft_id").is_in(bad_drafts))
+                .filter(
+                    pl.col("event_match_wins_sum") + pl.col("event_match_losses_sum")
+                    > 0
+                )
                 .drop("draft_id")
                 .collect(streaming=True)
                 .with_columns(
@@ -225,9 +394,13 @@ def draft_equity(
                         *[f"is_pick_{n}" for n in range(picks_per_pack + 1)],
                     ],
                     extensions=mle_ext(picks_per_pack),
-                    filter_spec={"$and": [{"pack_num": pack_num}, TOP_PLAYER]},
+                    filter_spec={"$and": [{"pack_num": pack_num}, draft_filter]},
                 )
                 .filter(~pl.col("draft_id").is_in(bad_drafts))
+                .filter(
+                    pl.col("event_match_wins_sum") + pl.col("event_match_losses_sum")
+                    > 0
+                )
                 .drop("draft_id")
                 .collect(streaming=True)
                 .to_numpy()
@@ -235,6 +408,7 @@ def draft_equity(
         ],
         axis=0,
     )
+    print(f"Training on {wl_x.shape[0]} picks.")
 
     wl = wl_x[:, 0:2]
     x = wl_x[:, 2:]
@@ -250,22 +424,21 @@ def draft_equity(
     ).astype(np.bool)
     assert train.shape == alpha.shape, "train mask or alpha wrong shape"
 
-    alpha = find_weighted_mle(wl=wl, x=x, alpha=alpha, train=train, tol=tol)
+    alpha = find_weighted_mle(wl=wl, x=x, alpha=alpha, train=train)
 
-    names_df = pl.DataFrame({"name": names, "q": alpha[: len(names)] / 4}).sort(
+    df = pl.DataFrame({"name": names, "q": alpha[: len(names)]}).sort(
         "q", descending=True
     )
 
-    pick_equity = pl.DataFrame(
+    pick_equity_df = pl.DataFrame(
         {
-            "pick_num": np.arange(1, picks_per_pack + 2),
-            "pick_equity": alpha[-picks_per_pack - 1 :] / 4,
+            "pick_num": np.arange(0, picks_per_pack + 1),
+            "remaining_pick_equity": alpha[-picks_per_pack - 1 :],
         }
     )
 
-    return QOutput(df=names_df, pick_equity_df=pick_equity)
+    if default_filter and write_cache:
+        save_ad_hoc_dataset(df, cache_keys["draft_equity"])
+        save_ad_hoc_dataset(pick_equity_df, cache_keys["pick_equity"])
 
-
-o1 = draft_equity("OTJ", 1)
-o2 = draft_equity("OTJ", 2)
-o3 = draft_equity("OTJ", 3)
+    return QOutput(df=df, pick_equity_df=pick_equity_df)
