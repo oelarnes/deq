@@ -15,7 +15,7 @@ from deq.deq import BASIC_LANDS, PICK_EQUITY_ARR
 from deq.p1_strategy import TOP_PLAYER
 
 TOL = 1e-5
-LAMBDA = 1
+LAMBDA = 100
 set_code = "OTJ"
 
 
@@ -91,6 +91,13 @@ def grad(alpha, x, wl, l_probs):
     ) / wl.sum()
 
 
+def hess_diag(x, wl, l_probs):
+    return (
+        ((wl.sum(axis=1) * l_probs * (1 - l_probs))[:, None] * x**2).sum(axis=0)
+        + LAMBDA * np.ones(x.shape[1])
+    ) / wl.sum()
+
+
 def hess(x, wl, l_probs):
     accum = np.zeros([x.shape[1], x.shape[1]])
     chunk_size = int(2e8 / x.shape[1] ** 2)
@@ -128,12 +135,19 @@ class QOutput:
     pick_equity_df: pl.DataFrame
 
 
+@dataclass
+class MarginalQOutput:
+    df: pl.DataFrame
+    pool_strength: NDArray[np.float64]
+
+
 def find_weighted_mle(
     wl: NDArray[np.float64],
     x: NDArray[np.float64],
     alpha: NDArray[np.float64],
     train: NDArray[np.bool],
-) -> NDArray:
+    diag: bool = False,
+) -> NDArray[np.float64]:
     diff = 2 * TOL
 
     alpha_old = np.array(alpha)
@@ -145,8 +159,14 @@ def find_weighted_mle(
         alpha_train = alpha[train]
         x_train = x[select].reshape((x.shape[0], train.sum()))
 
-        H = hess(x_train, wl, l_probs)
-        delta = -(np.linalg.inv(H) @ grad(alpha_train, x_train, wl, l_probs))
+        if diag:
+            H = hess_diag(x_train, wl, l_probs)
+            delta = -1 / H * grad(alpha_train, x_train, wl, l_probs)
+
+        else:
+            H = hess(x_train, wl, l_probs)
+            delta = -np.linalg.inv(H) @ grad(alpha_train, x_train, wl, l_probs)
+
         alpha[train] += delta
 
         print(f"New unit entropy {entropy(alpha, x, wl):.7f}")
@@ -155,63 +175,46 @@ def find_weighted_mle(
     return alpha
 
 
-def test():
-    set_code = "OTJ"
-    pack_num = 1
-    pick_num = 1
-    pool_strength = np.zeros(34181)
-    remaining_pick_q = p0_q(set_code) - 0.088
-    draft_filter = None
-    df_2 = marginal_pick_q(set_code, 1, 1, remaining_pick_q)
-    df_2.filter(pl.col('weight') > 100)
-    np.exp(1.42) / (np.exp(1.42) + 1)
-
-
-
-def marginal_q_by_pick(set_code: str, draft_filter: dict | None = None):
-    pack_num = 1
-
-    remaining_equity = p0_q(set_code, draft_filter=draft_filter)
-
-    dfs = []
-    picks_per_pack = _get_set_context(set_code, None)["picks_per_pack"]
-    for pick_num in range(picks_per_pack):
-        remaining_equity = remaining_equity - PICK_EQUITY_ARR[pick_num - 1]
-        df = marginal_pick_q(set_code, pick_num, pack_num)
-
-
 def marginal_pick_q(
     set_code: str,
     pack_num: int,
     pick_num: int,
     remaining_pick_q: float,  # exclusive of pick
-    pool_strength: NDArray[np.float64] | None = None,  # n x 1
-    draft_filter: dict | None = None,
-) -> pl.DataFrame:
-    if draft_filter is None:
-        draft_filter = TOP_PLAYER
-
+    pool_strength: NDArray[np.float64],  # n x 1
+    draft_id_df: pl.DataFrame,
+) -> MarginalQOutput:
+    print(
+        f"set_code: {set_code}, pack_num: {pack_num}, pick_num: {pick_num}, draft_ids: {draft_id_df.shape}"
+    )
     picks_per_pack = _get_set_context(set_code, None)["picks_per_pack"]
+    pick_num = 4
     wl_x = (
-        view_select(
-            set_code,
-            View.DRAFT,
-            [
-                "event_match_wins_sum",
-                "event_match_losses_sum",
-                "is_pick",
-            ],
-            filter_spec=pack_pick_filter(draft_filter, pack_num, pick_num),
-            extensions=mle_ext(picks_per_pack),
+        draft_id_df.join(
+            view_select(
+                set_code,
+                View.DRAFT,
+                [
+                    "draft_id",
+                    "event_match_wins_sum",
+                    "event_match_losses_sum",
+                    "is_pick",
+                ],
+                filter_spec={"$and": [{"pick_num": pick_num}, {"pack_num": pack_num}]},
+                extensions=mle_ext(picks_per_pack),
+            )
+            .collect(streaming=True)
+            .filter(
+                pl.col("event_match_wins_sum") + pl.col("event_match_losses_sum") > 0
+            ),
+            ["draft_id"],
         )
-        .collect(streaming=True)
-        .filter(pl.col("event_match_wins_sum") + pl.col("event_match_losses_sum") > 0)
+        .drop("draft_id")
         .to_numpy()
     )
 
-    if pool_strength is None:
-        pool_strength = np.zeros(wl_x.shape[0])
-    assert wl_x.shape[0] == pool_strength.shape[0], "Dimension mismatch"
+    assert (
+        draft_id_df.shape[0] == wl_x.shape[0]
+    ), f"lost supposedly good drafts, found {wl_x.shape[0]} drafts out of {draft_id_df.shape[0]}"
 
     wl = wl_x[:, 0:2]
     x = np.concat(
@@ -227,7 +230,8 @@ def marginal_pick_q(
     train = x.max(axis=0) > 0
     train[-1] = False
 
-    alpha = find_weighted_mle(wl, x, alpha, train)
+    alpha = find_weighted_mle(wl, x, alpha, train, diag=True)
+    pick_strength = np.dot(x[:, :-1], alpha[:-1])
 
     names = get_names(set_code)
     df = pl.DataFrame(
@@ -238,7 +242,7 @@ def marginal_pick_q(
         }
     ).sort("q", descending=True)
 
-    return df
+    return MarginalQOutput(df=df, pool_strength=pool_strength + pick_strength)
 
 
 def p0_q(
@@ -272,19 +276,59 @@ def p0_q(
     alpha = np.zeros(x.shape[1])
     train = np.ones(x.shape[1], dtype=np.bool)
 
-    q = find_weighted_mle(wl, x, alpha, train)
+    q = find_weighted_mle(wl, x, alpha, train, diag=True)
+    return float(q[0])
 
-    wr = summon(
-        set_code,
-        ["picked_match_wr"],
-        group_by=[],
-        filter_spec={"$and": [{"pack_num": 1}, {"pick_num": 1}, draft_filter]},
+
+df = marginal_q_by_pick("OTJ")
+
+
+def marginal_q_by_pick(set_code: str, draft_filter: dict | None = None):
+    if draft_filter is None:
+        draft_filter = TOP_PLAYER
+
+    pack_num = 1
+
+    picks_per_pack = _get_set_context(set_code, None)["picks_per_pack"]
+
+    draft_id_df = (
+        view_select(
+            set_code,
+            View.DRAFT,
+            ["draft_id"],
+            filter_spec={
+                "$and": [draft_filter, {"lhs": "event_matches", "op": ">", "rhs": 0}]
+            },
+        )
+        .group_by("draft_id")
+        .len()
+        .filter(pl.col("len") == 3 * picks_per_pack)
+        .select("draft_id")
+        .collect(streaming=True)
     )
 
-    # the MLE should give the mean win rate
-    assert np.abs((np.exp(q) / (1 + np.exp(q)))[0] - wr["picked_match_wr"][0]) < TOL
+    pool_strength = np.zeros(len(draft_id_df))
+    remaining_equity = p0_q(set_code, draft_filter=draft_filter)
 
-    return float(q[0])
+    result_df = None
+    for pick_num in range(1, picks_per_pack + 1):
+        remaining_equity = remaining_equity - PICK_EQUITY_ARR[pick_num - 1]
+        result = marginal_pick_q(
+            set_code, pack_num, pick_num, remaining_equity, pool_strength, draft_id_df
+        )
+        if result_df is None:
+            result_df = result.df.rename(
+                {"q": f"pick_{pick_num}", "weight": f"pick_{pick_num}_weight"}
+            )
+        else:
+            result_df = result_df.join(
+                result.df.rename(
+                    {"q": f"pick_{pick_num}", "weight": f"pick_{pick_num}_weight"}
+                ),
+                "name",
+            )
+        pool_strength = result.pool_strength
+    return result_df
 
 
 def draft_equity(
