@@ -4,7 +4,7 @@ import numpy as np
 from spells import summon, ColName, ColType, ColSpec
 
 BASIC_LANDS = ["Plains", "Island", "Swamp", "Mountain", "Forest"]
-P1_PICK_EQUITY = 0.03
+P1_PICK_EQUITY = 0.025
 ATA_DENOM = 13
 
 PRECISION = 2**16
@@ -24,6 +24,7 @@ UNG = pl.col(ColName.USER_N_GAMES_BUCKET)
 UGWR = pl.col(ColName.USER_GAME_WIN_RATE_BUCKET)
 
 # Pick equity fit derived from mle draft_equity analysis
+# based on "top_player" cohort which has wr about 63%
 PICK_EQUITY_ARR = [
     0.022, # pick one pick equity
     0.016,
@@ -46,7 +47,7 @@ PE_INDEX = 3
 PE_COEF_1_0, PE_COEF_1_1, PE_COEF_1_2 = np.polyfit(x[0:PE_INDEX], PICK_EQUITY_ARR[0:PE_INDEX], 2)
 PE_COEF_2_0, PE_COEF_2_1, PE_COEF_2_2 = np.polyfit(x[PE_INDEX:], PICK_EQUITY_ARR[PE_INDEX:], 2)
 
-ADJ_FACTOR = 1.2
+ADJ_FACTOR = 0.8 
 PE_COEF_1_0 = ADJ_FACTOR * float(PE_COEF_1_0)
 PE_COEF_1_1 = ADJ_FACTOR * float(PE_COEF_1_1)
 PE_COEF_1_2 = ADJ_FACTOR * float(PE_COEF_1_2)
@@ -136,6 +137,13 @@ ext = {
             pl.when(UNG == 50).then(75/(75+BAYES_GAMES)).otherwise(
             pl.when(UNG == 10).then(30/(30+BAYES_GAMES)).otherwise(0)))))
                 * (UGWR - BAYES_MU) + BAYES_MU) * 50).round() * 2, 42]), 66]),
+    ),
+    'skill_cohort_rough': ColSpec(
+        col_type=ColType.GROUP_BY,
+        expr=pl.when(pl.col('skill_cohort') > 59.0).then(pl.lit('4_Elite')).otherwise(
+            pl.when(pl.col('skill_cohort') > 55.0).then(pl.lit('3_Strong')).otherwise(
+                pl.when(pl.col('skill_cohort') > 51.0).then(pl.lit('2_Average')).otherwise(
+                    pl.lit('1_Weak'))))
     ),
     'deck_over_colors': ColSpec(
         col_type=ColType.AGG,
@@ -302,7 +310,27 @@ ext = {
                 )
             )
         )
-    )
+    ),
+    'deck_commons': ColSpec(
+        col_type=ColType.NAME_SUM,
+        expr=lambda name, card_context: pl.col(f'deck_{name}') * (
+            1 if card_context[name]['rarity'] == 'common' else 0
+        )
+    ),
+    'deck_rares': ColSpec(
+        col_type=ColType.NAME_SUM,
+        expr=lambda name, card_context: pl.col(f'deck_{name}') * (
+            1 if card_context[name]['rarity'] == 'rare' else 0
+        )
+    ),
+    'deck_commons_mean': ColSpec(
+        col_type=ColType.AGG,
+        expr=pl.col('deck_commons') / pl.col('deck')
+    ),
+    'deck_rares_mean': ColSpec(
+        col_type=ColType.AGG,
+        expr=pl.col('deck_rares') / pl.col('deck')
+    ),
 }
 # fmt: on
 

@@ -23,10 +23,6 @@ def pack_pick_filter(draft_filter: dict, pack_num: int, pick_num: int) -> dict:
     return {"$and": [{"pack_num": pack_num}, {"pick_num": pick_num}, draft_filter]}
 
 
-def pick_equity_init_alpha(set_code: str):
-    picks_per_pack = _get_set_context(set_code, None)["picks_per_pack"]
-
-
 def deq_init_alpha(set_code: str, metric_filter: dict | None = None):
     if metric_filter is None:
         metric_filter = TOP_PLAYER
@@ -187,7 +183,6 @@ def marginal_pick_q(
         f"set_code: {set_code}, pack_num: {pack_num}, pick_num: {pick_num}, draft_ids: {draft_id_df.shape}"
     )
     picks_per_pack = _get_set_context(set_code, None)["picks_per_pack"]
-    pick_num = 4
     wl_x = (
         draft_id_df.join(
             view_select(
@@ -278,10 +273,6 @@ def p0_q(
 
     q = find_weighted_mle(wl, x, alpha, train, diag=True)
     return float(q[0])
-
-
-df = marginal_q_by_pick("OTJ")
-
 
 def marginal_q_by_pick(set_code: str, draft_filter: dict | None = None):
     if draft_filter is None:

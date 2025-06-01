@@ -12,7 +12,14 @@ import matplotlib.ticker as mtick
 from matplotlib.patches import Rectangle
 from matplotlib.axes import Axes
 
-from deq.p1_strategy import AnalysisResult
+from deq.p1_strategy import AnalysisResult, SKILL_COHORT
+
+COORDINATE_MAP = {
+    '1_Weak': 48,
+    '2_Average': 52,
+    '3_Strong': 56,
+    '4_Elite': 60,
+}
 
 COLOR_LIST = {
     "plotly": [
@@ -55,6 +62,8 @@ METRIC_LABELS = {
     "gns_wr": "GNS WR",
     "alsa": "Inverse ALSA",
     "actual": "Actual",
+    "deq_mardu": "Mardu",
+    "deq_dragons": "Dragons",
 }
 
 FIG_SIZE = (8, 6)
@@ -80,8 +89,11 @@ def style_xticks(
     analysis: AnalysisResult,
     ax: Axes,
 ) -> None:
-    ax.set_xticks(analysis.df["skill_cohort"].to_numpy())
-    ax.xaxis.set_major_formatter(mtick.PercentFormatter(100, decimals=0))
+    ax.set_xticks(analysis.df[SKILL_COHORT].replace(COORDINATE_MAP).cast(pl.Int64).to_numpy())
+    if SKILL_COHORT == "skill_cohort_rough":
+        ax.set_xticklabels(['Weak', 'Average', 'Strong', 'Elite'])
+    else:
+        ax.xaxis.set_major_formatter(mtick.PercentFormatter(100, decimals=0))
     ax.set_xlabel("Skill Cohort")
 
 
@@ -137,8 +149,9 @@ def p1_line_plot(
 
     title = config["title"] + ("" if title_extra is None else " - " + title_extra)
 
+    x = analysis.df[SKILL_COHORT].replace(COORDINATE_MAP).cast(pl.Int64).to_numpy()
+
     def graph_fn(i: int, metric: str):
-        x = analysis.df["skill_cohort"].to_numpy()
         y = analysis.df[config["value_template"].format(metric=metric)].to_numpy()
         q = analysis.df[f"{metric}_entropy_loss"].to_numpy() > quality_threshold
         return two_phase_line_graph(
@@ -158,7 +171,6 @@ def p1_line_plot(
     style_xticks(analysis, ax)
 
     if mode == "entropy":
-        x = analysis.df["skill_cohort"]
         (line,) = ax.plot(
             x, analysis.df["total_entropy"], color="black", label="Total Entropy"
         )
@@ -182,7 +194,6 @@ def p1_line_plot(
         ax.legend(handles=handles, loc=1)
         ax.add_artist(leg)
     elif mode == "entropy_loss":
-        x = analysis.df["skill_cohort"]
         ax.plot(x, [quality_threshold] * len(x), linestyle="dotted", color="gray")
         percent_val = 1 - 2**quality_threshold
         ax.text(
@@ -219,12 +230,12 @@ def plot_two_phase_series_pyplot(
 
 def cohort_summary_table(analysis: AnalysisResult) -> GT:
     return (
-        GT(analysis.df.select(["skill_cohort", "actual_win_rate", "event_matches_sum"]))
+        GT(analysis.df.select([SKILL_COHORT, "actual_win_rate", "event_matches_sum"]))
         .fmt_percent("actual_win_rate", decimals=1)
-        .fmt_percent("skill_cohort", scale_values=False, decimals=0)
+        .fmt_percent(SKILL_COHORT, scale_values=False, decimals=0)
         .cols_label(
             {
-                "skill_cohort": "Skill Cohort",
+                SKILL_COHORT: "Skill Cohort",
                 "actual_win_rate": "Match Win Rate",
                 "event_matches_sum": "Num Matches",
             }

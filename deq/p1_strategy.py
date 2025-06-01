@@ -1,6 +1,7 @@
 import logging
 from dataclasses import dataclass
 import functools
+from typing import Any
 
 import polars as pl
 
@@ -27,13 +28,41 @@ P1P1_PICK_EQUITY = 0.025
 P1P1 = {"$and": [PICK_1_FILTER, PACK_1_FILTER]}
 PRECISION = 2**16
 
-GROUP_FILTER = ~pl.col("skill_cohort").is_null()
+SKILL_COHORT = "skill_cohort_rough"
+GROUP_FILTER = ~pl.col(SKILL_COHORT).is_null()
 
 METRICS = ["pick_equity", "gp_wr_17l", "deq", "gih_wr_17l", "iwd_17l"]
 LOG_TO_CONSOLE = logging.INFO
 
 SETS = list(set(all_sets) - {"SIR", "KTK", "PIO"})
-NEIGHBORS = 4  # 66 looks at 60 - (N-1)*2
+NEIGHBORS = 1  # 66 looks at 60 - (N-1)*2
+
+# UP_ONE_MAP = {
+#    40.0: 42.0,
+#    42.0: 44.0,
+#    44.0: 46.0,
+#    46.0: 48.0,
+#    48.0: 50.0,
+#    50.0: 52.0,
+#    52.0: 54.0,
+#    54.0: 56.0,
+#    56.0: 58.0,
+#    58.0: 60.0,
+#    60.0: 62.0,
+#    62.0: 64.0,
+#    64.0: 66.0,
+#    66.0: 68.0
+# }
+
+UP_ONE_MAP = {
+    "0_Rubbish": "1_Weak",
+    "1_Weak": "2_Average",
+    "2_Average": "3_Strong",
+    "3_Strong": "4_Elite",
+    "4_Elite": "5_SuperElite",
+}
+
+DOWN_ONE_MAP = {v: k for k, v in UP_ONE_MAP.items()}
 
 
 @dataclass
@@ -68,8 +97,10 @@ def get_metric_context(
     filter_spec: dict,
     deq_days: int | None,
 ) -> pl.DataFrame:
-    if 'deq' in metrics or 'gp_wr_bias_adj' in metrics or 'deq_new' in metrics:
-        set_context = deq_bias_set_context(set_codes, filter_spec, observed_days=deq_days)
+    if "deq" in metrics or "gp_wr_bias_adj" in metrics or "deq_new" in metrics:
+        set_context = deq_bias_set_context(
+            set_codes, filter_spec, observed_days=deq_days
+        )
     else:
         set_context = None
 
@@ -117,7 +148,7 @@ def get_model_dfs(
             ColName.EVENT_MATCHES_SUM,
             ColName.NUM_TAKEN,
         ],
-        group_by=["expansion", "name", "skill_cohort"],
+        group_by=["expansion", "name", SKILL_COHORT],
         filter_spec=p1_results_filter,
         extensions=[metric_cols, ext],
         card_context=context_df,
@@ -131,7 +162,7 @@ def get_model_dfs(
     )
 
     weights_df = weights_df.select(
-        ["expansion", "name", "skill_cohort", seen_is_greatest(metric)]
+        ["expansion", "name", SKILL_COHORT, seen_is_greatest(metric)]
     ).filter(
         (pl.col(seen_is_greatest(metric)) > 0)
         & GROUP_FILTER
@@ -146,12 +177,12 @@ def get_model_dfs(
             ColName.EVENT_MATCHES_SUM,
             ColName.NUM_TAKEN,
         ],
-        group_by=["skill_cohort"],
+        group_by=[SKILL_COHORT],
         filter_spec=p1_results_filter,
         extensions=ext,
     ).select(
         [
-            "skill_cohort",
+            SKILL_COHORT,
             pl.col(ColName.EVENT_MATCH_WINS_SUM)
             - P1P1_PICK_EQUITY * pl.col(ColName.EVENT_MATCHES_SUM),
             pl.col(ColName.EVENT_MATCHES_SUM),
@@ -181,14 +212,14 @@ def strategy_mapped_df(
         ColName.NUM_TAKEN,
     ]
 
-    join_keys = ["expansion", "name", "skill_cohort"]
+    join_keys = ["expansion", "name", SKILL_COHORT]
     remaining_df = model_dfs.weights_df
 
     substitution_df = remaining_df.join(
         wr_df.select(
             select_cols
             + [
-                "skill_cohort",
+                SKILL_COHORT,
                 pl.col(ColName.EVENT_MATCH_WINS_SUM).cast(pl.Float64),
                 pl.lit("In Group").alias("representation_class"),
             ]
@@ -207,23 +238,23 @@ def strategy_mapped_df(
         skill_control_df = p1_skill_control_df()
         for iter in range(NEIGHBORS):
             up_one_cols = [
-                pl.col("skill_cohort") + 2,
+                pl.col(SKILL_COHORT).replace(UP_ONE_MAP),
                 pl.col(ColName.EVENT_MATCH_WINS_SUM)
                 - pl.col("up_one_wr_mod") * pl.col(ColName.EVENT_MATCHES_SUM),
                 pl.lit(f"Up {iter}").alias("representation_class"),
             ]
 
             down_one_cols = [
-                pl.col("skill_cohort") - 2,
+                pl.col(SKILL_COHORT).replace(DOWN_ONE_MAP),
                 pl.col(ColName.EVENT_MATCH_WINS_SUM)
                 - pl.col("down_one_wr_mod") * pl.col(ColName.EVENT_MATCHES_SUM),
                 pl.lit(f"Down {iter}").alias("representation_class"),
             ]
 
-            go_up_df = go_up_df.join(skill_control_df, on=["skill_cohort"]).select(
+            go_up_df = go_up_df.join(skill_control_df, on=[SKILL_COHORT]).select(
                 select_cols + up_one_cols
             )
-            go_down_df = go_down_df.join(skill_control_df, on=["skill_cohort"]).select(
+            go_down_df = go_down_df.join(skill_control_df, on=[SKILL_COHORT]).select(
                 select_cols + down_one_cols
             )
 
@@ -234,7 +265,7 @@ def strategy_mapped_df(
             remaining_df = remaining_df.join(go_down_df, on=join_keys, how="anti")
 
         sub_dfs.append(
-            remaining_df.join(model_dfs.fallback_df, on="skill_cohort")
+            remaining_df.join(model_dfs.fallback_df, on=SKILL_COHORT)
             .with_columns(pl.lit("Fallback").alias("representation_class"))
             .select(substitution_df.columns)
         )
@@ -242,7 +273,7 @@ def strategy_mapped_df(
         substitution_df = pl.concat([substitution_df, *sub_dfs])
 
     else:
-        num_skill_cohorts = len(substitution_df.group_by("skill_cohort").count())
+        num_skill_cohorts = len(substitution_df.group_by(SKILL_COHORT).count())
         keys_df = (
             substitution_df.group_by(["expansion", "name"])
             .count()
@@ -299,7 +330,7 @@ def p1_skill_control_df():
     res = p1_strat_analysis(SETS, "pick_equity", card_parity=True, luck_control=True)
     return res.df.select(
         [
-            "skill_cohort",
+            SKILL_COHORT,
             pl.col("pick_equity_strategy_win_rate").diff(1).alias("down_one_wr_mod"),
             pl.col("pick_equity_strategy_win_rate").diff(-1).alias("up_one_wr_mod"),
         ]
@@ -327,16 +358,16 @@ def p1_strat_analysis(
     base_wr_df = (
         model_dfs.wr_df.select(
             [
-                "skill_cohort",
+                SKILL_COHORT,
                 ColName.EVENT_MATCHES_SUM,
                 ColName.EVENT_MATCH_WINS_SUM,
             ]
         )
-        .group_by("skill_cohort")
+        .group_by(SKILL_COHORT)
         .sum()
         .select(
             [
-                "skill_cohort",
+                SKILL_COHORT,
                 ColName.EVENT_MATCHES_SUM,
                 pl.col(ColName.EVENT_MATCHES_SUM).log(base=2).alias("total_entropy"),
                 (
@@ -345,11 +376,11 @@ def p1_strat_analysis(
                 ).alias("actual_win_rate"),
             ]
         )
-        .sort("skill_cohort")
+        .sort(SKILL_COHORT)
     )
 
     mapped_results_df = agg_mapped_df(mapped_df, metric, luck_control=luck_control)
-    ret_df = base_wr_df.join(mapped_results_df, on=["skill_cohort"])
+    ret_df = base_wr_df.join(mapped_results_df, on=[SKILL_COHORT])
     ret_df = ret_df.with_columns(
         [
             (pl.col(f"{metric}_strategy_win_rate") - pl.col("actual_win_rate")).alias(
@@ -382,18 +413,18 @@ def agg_mapped_df(
     return (
         mapped_df.select(
             [
-                "skill_cohort",
+                SKILL_COHORT,
                 weight_col,
                 win_weight_col,
                 "diff_entropy",
                 "entropy_weight",
             ]
         )
-        .group_by(["skill_cohort"])
+        .group_by([SKILL_COHORT])
         .sum()
         .select(
             [
-                "skill_cohort",
+                SKILL_COHORT,
                 f"{metric}_weight",
                 (pl.col("win_weight") / pl.col(f"{metric}_weight")).alias(
                     f"{metric}_strategy_win_rate"
@@ -408,7 +439,7 @@ def agg_mapped_df(
                 ).alias(f"{metric}_entropy"),
             ]
         )
-        .sort("skill_cohort")
+        .sort(SKILL_COHORT)
     )
 
 
@@ -439,7 +470,7 @@ def all_metrics_analysis(
     delta_dfs = [
         metric_results[metric].df.select(
             [
-                "skill_cohort",
+                SKILL_COHORT,
                 f"{metric}_strat_delta",
                 f"{metric}_weight",
                 f"{metric}_entropy",
@@ -450,17 +481,17 @@ def all_metrics_analysis(
     ]
 
     result_df = functools.reduce(
-        lambda prev, curr: prev.join(curr, on="skill_cohort"), delta_dfs
+        lambda prev, curr: prev.join(curr, on=SKILL_COHORT), delta_dfs
     )
     base_df = metric_results[metrics[0]].df.select(
         [
-            "skill_cohort",
+            SKILL_COHORT,
             "event_matches_sum",
             "actual_win_rate",
             "total_entropy",
         ]
     )
-    result_df = result_df.join(base_df, on="skill_cohort")
+    result_df = result_df.join(base_df, on=SKILL_COHORT)
 
     agg_df = wavg(
         result_df,
@@ -494,7 +525,8 @@ def set_by_set_results(
         "BLB",
         "DSK",
         "FDN",
-        "DFT"
+        "DFT",
+        "TDM",
     ]
 
     results = {
@@ -509,3 +541,109 @@ def set_by_set_results(
     }
 
     return results
+
+
+def metric_wr_cols(
+    metrics: list[str],
+) -> dict[str, pl.Expr]:
+    return {
+        metric: (pl.col(f"{metric}_win_weight") / pl.col(f"{metric}_weight")).alias(
+            f"{metric}_win_rate"
+        )
+        for metric in metrics
+    }
+
+
+def card_detail_df(
+    result: AnalysisResult,
+    set_code: str,
+    results_filter: dict[str, Any] | None = None,
+    metric_filter: dict[str, Any] | None = None,
+    metric_context: pl.DataFrame | None = None,
+    deq_days: int | None = None,
+) -> pl.DataFrame:
+    pick_filter = {"$and": [P1P1, results_filter]}
+
+    metrics = list(result.metric_results.keys())
+
+    metric_filter = {"player_cohort": "Top"} if metric_filter is None else metric_filter
+    df = (
+        get_metric_context([set_code], metrics, metric_filter, deq_days)
+        if metric_context is None
+        else metric_context
+    )
+
+    card_attrs = summon(set_code, columns=["color_group", "rarity"], extensions=ext)
+    df = df.join(card_attrs, on="name")
+
+    actual_results = summon(
+        set_code,
+        columns=[
+            "num_taken",
+            "event_match_wins_sum",
+            "event_matches_sum",
+            "picked_match_wr",
+        ],
+        filter_spec=pick_filter,
+    )
+    df = df.join(actual_results, on="name", how="left").with_columns(
+        pl.col('num_taken').fill_null(0),
+        pl.col('event_match_wins_sum').fill_null(0),
+        pl.col('event_matches_sum').fill_null(0)
+    )
+    wr_cols = metric_wr_cols(metrics)
+
+    for metric in metrics:
+        df = df.join(
+            (
+                result.metric_results[metric]
+                .mapped_df.group_by("name")
+                .sum()
+                .select(
+                    [
+                        "name",
+                        f"seen_{metric}_is_greatest",
+                        pl.col("win_weight").alias(f"{metric}_win_weight"),
+                        pl.col("weight").alias(f"{metric}_weight"),
+                    ]
+                )
+            ),
+            on="name",
+            how="left",
+        ).with_columns(
+            wr_cols[metric],
+            pl.col(f"seen_{metric}_is_greatest").fill_null(0),
+            pl.col(f"{metric}_win_weight").fill_null(0),
+            pl.col(f"{metric}_weight").fill_null(0),
+        )
+
+        metric_ext = {**ext, **context_cols(metric)}
+        df = df.join(
+            summon(
+                set_code,
+                columns=["num_drafts", "picked_match_wr"],
+                group_by=[f"seen_greatest_{metric}_name"],
+                extensions=metric_ext,
+                filter_spec=pick_filter,
+                card_context=metric_context,
+            )
+            .rename(
+                {
+                    "picked_match_wr": f"{metric}_actual",
+                    f"seen_greatest_{metric}_name": "name",
+                }
+            )
+            .drop("num_drafts"),
+            how="left",
+            on="name",
+        ).with_columns(
+            (
+                pl.col(f"seen_{metric}_is_greatest").cast(pl.Int64)
+                - pl.col("num_taken").cast(pl.Int64)
+            ).alias(f"{metric}_vs_actual_taken"),
+            (pl.col(f"{metric}_win_rate") - pl.col(f"{metric}_actual")).alias(
+                f"{metric}_margin"
+            ),
+        )
+
+    return df
