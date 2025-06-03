@@ -5,6 +5,7 @@ import polars as pl
 
 from spells import summon, ColSpec
 from deq import ext
+from deq.plot import line_plot
 
 
 def skill_adj_comparison(
@@ -55,6 +56,22 @@ def skill_adj_comparison(
         .select(comparison_field, plot_axis_field, "skill_adj_wr")
         .sort(plot_axis_field, comparison_field)
         .pivot(on="name", index=plot_axis_field, values="skill_adj_wr")
+    )
+
+
+def skill_adj_signal_plot(
+    set_code: str,
+    values: list[str],
+):
+    return line_plot(
+        skill_adj_comparison(set_code, values).rename(
+            {
+                "pick_num": "Pick Number",
+            }
+        ),
+        title="Skill-Adjusted Win Rates by Pick Number",
+        is_pct=True,
+        y_label="As-Picked Win Rate",
     )
 
 

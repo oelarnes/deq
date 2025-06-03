@@ -10,6 +10,9 @@ parts:
   - caption: "Aetherdrift"
     chapters:
     - file: dft-early.ipynb
+  - caption: "Tarkir: Dragonstorm"
+    chapters:
+    - file: tdm-post.ipynb
   - caption: "Math"
     chapters: 
     - file: deq.ipynb

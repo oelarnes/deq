@@ -229,9 +229,9 @@ color_win_rates = (
     .sum()
     .select(
         "color_group",
+        actual_win_rate,
         wr_cols["deq"],
         wr_cols["gih_wr_17l"],
-        actual_win_rate,
     )
     .rename(
         {
