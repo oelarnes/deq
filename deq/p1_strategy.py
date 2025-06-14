@@ -28,38 +28,23 @@ P1P1_PICK_EQUITY = 0.025
 P1P1 = {"$and": [PICK_1_FILTER, PACK_1_FILTER]}
 PRECISION = 2**16
 
-SKILL_COHORT = "skill_cohort_rough"
+SKILL_COHORT = "skill_cohort"
 GROUP_FILTER = ~pl.col(SKILL_COHORT).is_null()
 
 METRICS = ["pick_equity", "gp_wr_17l", "deq", "gih_wr_17l", "iwd_17l"]
 LOG_TO_CONSOLE = logging.INFO
 
 SETS = list(set(all_sets) - {"SIR", "KTK", "PIO"})
-NEIGHBORS = 1  # 66 looks at 60 - (N-1)*2
-
-# UP_ONE_MAP = {
-#    40.0: 42.0,
-#    42.0: 44.0,
-#    44.0: 46.0,
-#    46.0: 48.0,
-#    48.0: 50.0,
-#    50.0: 52.0,
-#    52.0: 54.0,
-#    54.0: 56.0,
-#    56.0: 58.0,
-#    58.0: 60.0,
-#    60.0: 62.0,
-#    62.0: 64.0,
-#    64.0: 66.0,
-#    66.0: 68.0
-# }
+NEIGHBORS = 2
 
 UP_ONE_MAP = {
     "0_Rubbish": "1_Weak",
     "1_Weak": "2_Average",
-    "2_Average": "3_Strong",
-    "3_Strong": "4_Elite",
-    "4_Elite": "5_SuperElite",
+    "2_Average": "3_Above Average",
+    "3_Above Average": "4_Competitive",
+    "4_Competitive": "5_Strong",
+    "5_Strong": "6_Elite",
+    "6_Elite": "7_SuperElite",
 }
 
 DOWN_ONE_MAP = {v: k for k, v in UP_ONE_MAP.items()}

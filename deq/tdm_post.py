@@ -14,6 +14,7 @@ from deq.plot import grouped_bars, line_plot
 set_code = "TDM"
 card_attrs = summon(set_code, columns=["color_group", "rarity"], extensions=ext)
 
+SKILL_COHORT = "skill_cohort"
 name_map = {
     "deq": "DEq",
     "gih_wr_17l": "GIH WR",
@@ -303,11 +304,11 @@ def skill_cohort_table():
             summon(
                 "TDM",
                 ["num_games", "game_wr"],
-                group_by=["skill_cohort_rough"],
+                group_by=[SKILL_COHORT],
                 extensions=ext,
             )
             .select(
-                pl.col("skill_cohort_rough").str.slice(2).alias("Skill Cohort"),
+                pl.col(SKILL_COHORT).str.slice(2).alias("Skill Cohort"),
                 "game_wr",
                 "num_games",
             )
@@ -329,7 +330,7 @@ def boros_v_soup_table():
             summon(
                 "TDM",
                 ["game_wr", "num_games"],
-                group_by=["boros_or_soup", "skill_cohort_rough"],
+                group_by=["boros_or_soup", SKILL_COHORT],
                 filter_spec={
                     "lhs": "boros_or_soup",
                     "op": "in",
@@ -338,7 +339,7 @@ def boros_v_soup_table():
                 extensions=ext,
             )
             .select(
-                pl.col("skill_cohort_rough").str.slice(2).alias("Skill Cohort"),
+                pl.col(SKILL_COHORT).str.slice(2).alias("Skill Cohort"),
                 "boros_or_soup",
                 "game_wr",
                 "num_games",
