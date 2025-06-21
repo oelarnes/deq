@@ -7,7 +7,6 @@ from spells import summon, ColSpec
 from deq import ext
 from deq.plot import line_plot
 
-
 def skill_adj_comparison(
     set_code: str,
     values: Sequence[Any],
@@ -116,4 +115,30 @@ def metric_summary_display_table(
             ]
         )
         .tab_header(title=f"{name_map[metric]} High Picks vs {name_map[comparison]}")
+    )
+
+
+def skill_cohort_table(set_codes: list[str] | str, skill_field: str = "skill_cohort"):
+    return (
+        GT(
+            summon(
+                set_codes,
+                ["num_games", "game_wr"],
+                group_by=[skill_field],
+                extensions=ext,
+            )
+            .select(
+                pl.col(skill_field).str.slice(2).alias("Skill Cohort"),
+                "game_wr",
+                "num_games",
+            )
+            .rename(
+                {
+                    "game_wr": "Game Win Rate",
+                    "num_games": "Num Games",
+                }
+            )
+        )
+        .fmt_percent("Game Win Rate")
+        .tab_header(title="Win Rates and Game Counts", subtitle="by Skill Cohort")
     )

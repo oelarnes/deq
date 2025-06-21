@@ -298,30 +298,6 @@ boros_or_soup = ColSpec(
 ext = {**ext, "boros_or_soup": boros_or_soup}
 
 
-def skill_cohort_table():
-    return (
-        GT(
-            summon(
-                "TDM",
-                ["num_games", "game_wr"],
-                group_by=[SKILL_COHORT],
-                extensions=ext,
-            )
-            .select(
-                pl.col(SKILL_COHORT).str.slice(2).alias("Skill Cohort"),
-                "game_wr",
-                "num_games",
-            )
-            .rename(
-                {
-                    "game_wr": "Game Win Rate",
-                    "num_games": "Num Games",
-                }
-            )
-        )
-        .fmt_percent("Game Win Rate")
-        .tab_header(title="Win Rates and Game Counts", subtitle="by Skill Cohort")
-    )
 
 
 def boros_v_soup_table():

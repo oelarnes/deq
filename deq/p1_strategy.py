@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import functools
 from typing import Any
 
+from great_tables import GT
 import polars as pl
 
 from spells import summon, ColName
@@ -34,7 +35,6 @@ GROUP_FILTER = ~pl.col(SKILL_COHORT).is_null()
 METRICS = ["pick_equity", "gp_wr_17l", "deq", "gih_wr_17l", "iwd_17l"]
 LOG_TO_CONSOLE = logging.INFO
 
-SETS = list(set(all_sets) - {"SIR", "KTK", "PIO"})
 NEIGHBORS = 2
 
 UP_ONE_MAP = {
@@ -312,7 +312,9 @@ def p1_skill_control_df():
     group from the previous. So for the "down one" modification, which will map a group's results
     to be used by the group below, we want the opposite of that. So subtract.
     """
-    res = p1_strat_analysis(SETS, "pick_equity", card_parity=True, luck_control=True)
+    res = p1_strat_analysis(
+        all_sets, "pick_equity", card_parity=True, luck_control=True
+    )
     return res.df.select(
         [
             SKILL_COHORT,
@@ -437,7 +439,7 @@ def all_metrics_analysis(
     deq_days: int | None = None,
     metric_context: pl.DataFrame | None = None,
 ):
-    sets = SETS if sets is None else sets
+    sets = all_sets if sets is None else sets
 
     if metrics is None:
         metrics = METRICS
@@ -572,9 +574,9 @@ def card_detail_df(
         filter_spec=pick_filter,
     )
     df = df.join(actual_results, on="name", how="left").with_columns(
-        pl.col('num_taken').fill_null(0),
-        pl.col('event_match_wins_sum').fill_null(0),
-        pl.col('event_matches_sum').fill_null(0)
+        pl.col("num_taken").fill_null(0),
+        pl.col("event_match_wins_sum").fill_null(0),
+        pl.col("event_matches_sum").fill_null(0),
     )
     wr_cols = metric_wr_cols(metrics)
 
@@ -632,3 +634,24 @@ def card_detail_df(
         )
 
     return df
+
+
+def skill_cohort_table(result: AnalysisResult):
+    return (
+        GT(
+            list(result.metric_results.values())[0]
+            .df.select(
+                pl.col("skill_cohort").str.slice(2).alias("Skill Cohort"),
+                "actual_win_rate",
+                "event_matches_sum",
+            )
+            .rename(
+                {
+                    "actual_win_rate": "Game Win Rate",
+                    "event_matches_sum": "Num Games",
+                }
+            )
+        )
+        .fmt_percent("Game Win Rate")
+        .tab_header(title="Win Rates and Game Counts", subtitle="by Skill Cohort")
+    )

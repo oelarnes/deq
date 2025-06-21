@@ -15,10 +15,12 @@ from matplotlib.axes import Axes
 from deq.p1_strategy import AnalysisResult, SKILL_COHORT
 
 COORDINATE_MAP = {
-    '1_Weak': 48,
-    '2_Average': 52,
-    '3_Strong': 56,
-    '4_Elite': 60,
+    '1_Weak': 49,
+    '2_Average': 51,
+    '3_Above Average': 53,
+    '4_Competitive': 55,
+    '5_Strong': 57,
+    '6_Elite': 59,
 }
 
 COLOR_LIST = {
@@ -90,10 +92,7 @@ def style_xticks(
     ax: Axes,
 ) -> None:
     ax.set_xticks(analysis.df[SKILL_COHORT].replace(COORDINATE_MAP).cast(pl.Int64).to_numpy())
-    if SKILL_COHORT == "skill_cohort_rough":
-        ax.set_xticklabels(['Weak', 'Average', 'Strong', 'Elite'])
-    else:
-        ax.xaxis.set_major_formatter(mtick.PercentFormatter(100, decimals=0))
+    ax.set_xticklabels(['Weak', 'Average', 'Above Average', 'Competitive', 'Strong', 'Elite'])
     ax.set_xlabel("Skill Cohort")
 
 
