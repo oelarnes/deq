@@ -79,6 +79,42 @@ def meta_decay_factor(set_context: dict):
     )
 
 
+color_sets = [
+    "WU",
+    "WB",
+    "WR",
+    "WG",
+    "UB",
+    "UR",
+    "UG",
+    "BR",
+    "BG",
+    "RG",
+    "WUB",
+    "WUR",
+    "WUG",
+    "WBR",
+    "WBG",
+    "WRG",
+    "UBR",
+    "UBG",
+    "URG",
+    "BRG",
+]
+
+
+def in_colors_lambda(colors):
+    return lambda name: pl.col(f"deck_{name}") * pl.when(
+        pl.col("main_colors") == colors
+    ).then(1).otherwise(0)
+
+
+def in_colors_bias_lambda(colors):
+    return lambda name, set_context: pl.col(
+        f"gp_in_colors_{colors}_{name}"
+    ) * set_context.get(f"game_wr_excess_{colors}")
+
+
 # fmt: off
 ext = {
     ColName.NUM_GNS: ColSpec(
@@ -335,6 +371,43 @@ ext = {
         col_type=ColType.AGG,
         expr=pl.col('deck_rares') / pl.col('deck')
     ),
+    **{
+        f'gp_in_colors_{colors}': ColSpec(
+            col_type=ColType.NAME_SUM,
+            expr= in_colors_lambda(colors)
+        ) for colors in color_sets
+    },
+    **{
+        f'gp_bias_weight_in_colors_{colors}': ColSpec(
+            col_type=ColType.NAME_SUM,
+            expr = in_colors_bias_lambda(colors)
+        ) for colors in color_sets
+    },
+    **{
+        f'gp_wr_bias_in_colors_{colors}': ColSpec(
+            col_type=ColType.AGG,
+            expr = pl.col(f'gp_bias_weight_in_colors_{colors}') / pl.col(ColName.DECK)
+        ) for colors in color_sets
+    },
+    'gp_in_colors_others': ColSpec(
+        col_type=ColType.NAME_SUM,
+        expr=lambda name: pl.col(f'deck_{name}') * pl.when(
+            ~pl.col('main_colors').is_in(color_sets)).then(1).otherwise(0)
+    ),
+    'gp_bias_weight_in_colors_others': ColSpec(
+        col_type=ColType.NAME_SUM,
+        expr=lambda name, set_context: pl.col(f'gp_in_colors_others_{name}') * set_context.get('game_wr_excess_other')
+    ),
+    'gp_wr_bias_in_colors_other': ColSpec(
+        col_type=ColType.AGG,
+        expr = pl.col('gp_bias_weight_in_colors_others') / pl.col(ColName.DECK)
+    ),
+    'gp_wr_bias_new': ColSpec(
+        col_type=ColType.AGG,
+        expr = pl.sum_horizontal(
+            [pl.col(f'gp_wr_bias_in_colors_{colors}') for colors in color_sets]
+        ) + pl.col('gp_wr_bias_in_colors_other')
+    )
 }
 # fmt: on
 
@@ -353,17 +426,64 @@ def deq_bias_set_context(
         extensions=ext,
     )
 
-    select = ["gp_wr_excess_over_colors_" + pl.col("color"), "gp_wr_excess_over_colors"]
+    color_select = [
+        "gp_wr_excess_over_colors_" + pl.col("color"),
+        "gp_wr_excess_over_colors",
+    ]
+
+    gpwr_by_deck = summon(
+        set_codes,
+        columns=[
+            ColName.GAME_WR,
+            ColName.NUM_GAMES,
+            ColName.NUM_WON,
+            ColName.GP_WR_MEAN,
+        ],
+        group_by=["expansion", "main_colors"],
+        filter_spec=metric_filter,
+        extensions=ext,
+    )
+
+    deck_select = [
+        "game_wr_excess_" + pl.col("main_colors"),
+        (pl.col(ColName.GAME_WR) - pl.col(ColName.GP_WR_MEAN)),
+    ]
 
     set_context = {
         set_code: {
-            key: value[0]
-            for key, value in gpwr_oc.filter(pl.col("expansion") == set_code)
-            .select(select)
-            .rows_by_key("literal", unique=True)
-            .items()
+            **{
+                key: value[0]
+                for key, value in gpwr_oc.filter(pl.col("expansion") == set_code)
+                .select(color_select)
+                .rows_by_key("literal", unique=True)
+                .items()
+            },
+            **{
+                key: value[0]
+                for key, value in gpwr_by_deck.filter(
+                    (pl.col("expansion") == set_code)
+                    & pl.col("main_colors").is_in(color_sets)
+                )
+                .select(deck_select)
+                .rows_by_key("literal", unique=True)
+                .items()
+            },
+            "game_wr_excess_other": gpwr_by_deck.filter(
+                (pl.col("expansion") == set_code)
+                & ~pl.col("main_colors").is_in(color_sets)
+            )
+            .select(
+                pl.col(ColName.NUM_WON)
+                - pl.col(ColName.GP_WR_MEAN) * pl.col(ColName.NUM_GAMES),
+                (ColName.NUM_GAMES),
+            )
+            .sum()
+            .select(
+                pl.col(ColName.NUM_WON) / pl.col(ColName.NUM_GAMES)
+            )[ColName.NUM_WON][0],
+            "observed_days": observed_days,
+            "projection_days": projection_days,
         }
-        | {"observed_days": observed_days, "projection_days": projection_days}
         for set_code in set_codes
     }
 
