@@ -103,7 +103,6 @@ color_sets = [
 ]
 
 
-# fmt: off
 ext = {
     ColName.NUM_GNS: ColSpec(
         col_type=ColType.NAME_SUM,
@@ -112,15 +111,15 @@ ext = {
             pl.col(f"deck_{name}")
             - pl.col(f"drawn_{name}")
             - pl.col(f"opening_hand_{name}"),
-        ), # lazy way to use SNC and NEO which don't have "tutored"
+        ),  # lazy way to use SNC and NEO which don't have "tutored"
     ),
     ColName.DECK_TOTAL: ColSpec(
         col_type=ColType.AGG,
-        expr=pl.col(ColName.DECK).sum().over('expansion'),
+        expr=pl.col(ColName.DECK).sum().over("expansion"),
     ),
     ColName.WON_DECK_TOTAL: ColSpec(
         col_type=ColType.AGG,
-        expr=pl.col(ColName.WON_DECK).sum().over('expansion'),
+        expr=pl.col(ColName.WON_DECK).sum().over("expansion"),
     ),
     ColName.GP_WR_MEAN: ColSpec(
         col_type=ColType.AGG,
@@ -130,188 +129,164 @@ ext = {
         col_type=ColType.AGG,
         expr=pl.col(ColName.GP_WR) - pl.col(ColName.GP_WR_MEAN),
     ),
-    'pick_equity': ColSpec(
+    "pick_equity": ColSpec(
         col_type=ColType.AGG,
-        expr=P1_PICK_EQUITY * (1 - (pl.col(ColName.ATA)-1) / ATA_DENOM).pow(2),
+        expr=P1_PICK_EQUITY * (1 - (pl.col(ColName.ATA) - 1) / ATA_DENOM).pow(2),
     ),
-    'pick_equity_new': ColSpec(
+    "pick_equity_new": ColSpec(
         col_type=ColType.AGG,
-        expr=pl.when(pl.col(ColName.ATA) < PE_INDEX + 1).then(
-            PE_COEF_1_0 * pl.col(ColName.ATA).pow(2) + 
-            PE_COEF_1_1 * pl.col(ColName.ATA) + 
-            PE_COEF_1_2
-        ).otherwise(
-            PE_COEF_2_0 * pl.col(ColName.ATA).pow(2) + 
-            PE_COEF_2_1 * pl.col(ColName.ATA) + 
-            PE_COEF_2_2
+        expr=pl.when(pl.col(ColName.ATA) < PE_INDEX + 1)
+        .then(
+            PE_COEF_1_0 * pl.col(ColName.ATA).pow(2)
+            + PE_COEF_1_1 * pl.col(ColName.ATA)
+            + PE_COEF_1_2
         )
+        .otherwise(
+            PE_COEF_2_0 * pl.col(ColName.ATA).pow(2)
+            + PE_COEF_2_1 * pl.col(ColName.ATA)
+            + PE_COEF_2_2
+        ),
     ),
-    'deq_base': ColSpec(
+    "deq_base": ColSpec(
         col_type=ColType.AGG,
-        expr=(pl.col('gp_wr_b') - pl.col(ColName.GP_WR_MEAN) + 
-              pl.col('pick_equity')) * pl.col(ColName.PCT_GP)
+        expr=(pl.col("gp_wr_b") - pl.col(ColName.GP_WR_MEAN) + pl.col("pick_equity"))
+        * pl.col(ColName.PCT_GP),
     ),
-    'deq_base_new': ColSpec(
+    "deq_base_new": ColSpec(
         col_type=ColType.AGG,
-        expr=(pl.col('gp_wr_b') - pl.col(ColName.GP_WR_MEAN) + 
-              pl.col('pick_equity_new')) * pl.col(ColName.PCT_GP)
+        expr=(
+            pl.col("gp_wr_b") - pl.col(ColName.GP_WR_MEAN) + pl.col("pick_equity_new")
+        )
+        * pl.col(ColName.PCT_GP),
     ),
-    'skill_cohort_raw': ColSpec(
+    "skill_cohort_raw": ColSpec(
         col_type=ColType.GROUP_BY,
-        expr=(pl.when(UNG == 1000).then(1200/(1200 + BAYES_GAMES)).otherwise(
-            pl.when(UNG == 500).then(750/(750+BAYES_GAMES)).otherwise(
-            pl.when(UNG == 100).then(300/(300+BAYES_GAMES)).otherwise(
-            pl.when(UNG == 50).then(75/(75+BAYES_GAMES)).otherwise(
-            pl.when(UNG == 10).then(30/(30+BAYES_GAMES)).otherwise(0)))))
-                * (UGWR - BAYES_MU) + BAYES_MU)),
-    'skill_cohort': ColSpec(
+        expr=(
+            pl.when(UNG == 1000)
+            .then(1200 / (1200 + BAYES_GAMES))
+            .otherwise(
+                pl.when(UNG == 500)
+                .then(750 / (750 + BAYES_GAMES))
+                .otherwise(
+                    pl.when(UNG == 100)
+                    .then(300 / (300 + BAYES_GAMES))
+                    .otherwise(
+                        pl.when(UNG == 50)
+                        .then(75 / (75 + BAYES_GAMES))
+                        .otherwise(
+                            pl.when(UNG == 10)
+                            .then(30 / (30 + BAYES_GAMES))
+                            .otherwise(0)
+                        )
+                    )
+                )
+            )
+            * (UGWR - BAYES_MU)
+            + BAYES_MU
+        ),
+    ),
+    "skill_cohort": ColSpec(
         col_type=ColType.GROUP_BY,
-        expr=pl.when(pl.col('skill_cohort_raw') < 0.49).then(pl.lit('1_Weak')).otherwise(
-            pl.when(pl.col('skill_cohort_raw') < 0.52).then(pl.lit('2_Average')).otherwise(
-                pl.when(pl.col('skill_cohort_raw') < 0.55).then(pl.lit('3_Above Average')).otherwise(
-                    pl.when(pl.col('skill_cohort_raw') < 0.58).then(pl.lit('4_Competitive')).otherwise(
-                        pl.when(pl.col('skill_cohort_raw') < 0.61).then(pl.lit('5_Strong')).otherwise(
-                            pl.lit('6_Elite'))))))
+        expr=pl.when(pl.col("skill_cohort_raw") < 0.49)
+        .then(pl.lit("1_Weak"))
+        .otherwise(
+            pl.when(pl.col("skill_cohort_raw") < 0.52)
+            .then(pl.lit("2_Average"))
+            .otherwise(
+                pl.when(pl.col("skill_cohort_raw") < 0.55)
+                .then(pl.lit("3_Above Average"))
+                .otherwise(
+                    pl.when(pl.col("skill_cohort_raw") < 0.58)
+                    .then(pl.lit("4_Competitive"))
+                    .otherwise(
+                        pl.when(pl.col("skill_cohort_raw") < 0.61)
+                        .then(pl.lit("5_Strong"))
+                        .otherwise(pl.lit("6_Elite"))
+                    )
+                )
+            )
+        ),
     ),
-    'deck_over_colors': ColSpec(
+    "deck_over_colors": ColSpec(
         col_type=ColType.AGG,
-        expr=pl.col(ColName.DECK).sum().over([pl.col(ColName.EXPANSION), pl.col(ColName.COLOR)]),
+        expr=pl.col(ColName.DECK)
+        .sum()
+        .over([pl.col(ColName.EXPANSION), pl.col(ColName.COLOR)]),
     ),
-    'won_deck_over_colors': ColSpec(
+    "won_deck_over_colors": ColSpec(
         col_type=ColType.AGG,
-        expr=pl.col(ColName.WON_DECK).sum().over([pl.col(ColName.EXPANSION), pl.col(ColName.COLOR)]),
+        expr=pl.col(ColName.WON_DECK)
+        .sum()
+        .over([pl.col(ColName.EXPANSION), pl.col(ColName.COLOR)]),
     ),
-    'gp_wr_excess_over_colors': ColSpec(
+    "deck_small_sample": ColSpec(
         col_type=ColType.AGG,
-        expr=((pl.col('won_deck_over_colors') / pl.col('deck_over_colors') - pl.col('gp_wr_mean')
-               ) * PRECISION).round() / PRECISION
+        expr=pl.when(
+            pl.col(ColName.NAME).is_in(BASIC_LANDS)
+            | (pl.col(ColName.DECK) < SAMPLE_THRESHOLD)
+        )
+        .then(None)
+        .otherwise(1.0),
     ),
-    'deck_small_sample': ColSpec(
+    "gp_wr_bayes_mu": ColSpec(
         col_type=ColType.AGG,
-        expr=pl.when(pl.col(ColName.NAME).is_in(BASIC_LANDS) | (pl.col(ColName.DECK) < SAMPLE_THRESHOLD)
-                     ).then(None).otherwise(1.0)
+        expr=pl.col("gp_wr_mean") + WR_BETA_TO_ATA * (pl.col("ata") - 7),
     ),
-    'gp_wr_bayes_mu': ColSpec(
+    "gp_wr_b": ColSpec(
         col_type=ColType.AGG,
-        expr =pl.col('gp_wr_mean') + WR_BETA_TO_ATA * (pl.col('ata') - 7)
+        expr=pl.col("deck_small_sample")
+        * (pl.col("gp_wr_bayes_mu") * METRIC_BAYES_GAMES + pl.col(ColName.WON_DECK))
+        / (pl.col(ColName.DECK) + METRIC_BAYES_GAMES),
     ),
-    'gp_wr_b': ColSpec(
+    "gih_wr_17l": ColSpec(
         col_type=ColType.AGG,
-        expr = pl.col('deck_small_sample') * (
-            pl.col('gp_wr_bayes_mu') * METRIC_BAYES_GAMES + pl.col(ColName.WON_DECK)
-        ) / (pl.col(ColName.DECK) + METRIC_BAYES_GAMES)
+        expr=pl.when(
+            pl.col(ColName.NAME).is_in(BASIC_LANDS)
+            | (pl.col(ColName.NUM_GIH) < SAMPLE_THRESHOLD)
+        )
+        .then(None)
+        .otherwise(pl.col(ColName.NUM_GIH_WON))
+        / (pl.col(ColName.NUM_GIH)),
     ),
-    'gih_wr_17l': ColSpec(
+    "gp_wr_17l": ColSpec(
         col_type=ColType.AGG,
-        expr=pl.when(pl.col(ColName.NAME).is_in(BASIC_LANDS) | (pl.col(ColName.NUM_GIH) < SAMPLE_THRESHOLD)
-                     ).then(None).otherwise(pl.col(ColName.NUM_GIH_WON))/ (pl.col(ColName.NUM_GIH))
+        expr=pl.col("deck_small_sample")
+        * pl.col(ColName.WON_DECK)
+        / (pl.col(ColName.DECK)),
     ),
-    'gp_wr_17l': ColSpec(
+    "gns_wr_17l": ColSpec(
         col_type=ColType.AGG,
-        expr=pl.col('deck_small_sample') * pl.col(ColName.WON_DECK) / (pl.col(ColName.DECK))
+        expr=pl.when(
+            pl.col(ColName.NAME).is_in(BASIC_LANDS)
+            | (pl.col(ColName.NUM_GNS) < SAMPLE_THRESHOLD)
+        )
+        .then(None)
+        .otherwise(pl.col(ColName.WON_NUM_GNS))
+        / (pl.col(ColName.NUM_GNS)),
     ),
-    'gns_wr_17l': ColSpec(
+    "iwd_17l": ColSpec(
+        col_type=ColType.AGG, expr=pl.col("gih_wr_17l") - pl.col("gns_wr_17l")
+    ),
+    "deq": ColSpec(
         col_type=ColType.AGG,
-        expr=pl.when(pl.col(ColName.NAME).is_in(BASIC_LANDS) | (pl.col(ColName.NUM_GNS) < SAMPLE_THRESHOLD)
-                     ).then(None).otherwise(pl.col(ColName.WON_NUM_GNS))/ (pl.col(ColName.NUM_GNS))
+        expr=pl.col("deq_base")
+        + (pl.col("deq_bias_adj") + pl.col("deq_meta_adj")) * pl.col("pct_gp"),
     ),
-    'iwd_17l': ColSpec(
+    "deq_new": ColSpec(
         col_type=ColType.AGG,
-        expr = pl.col('gih_wr_17l') - pl.col('gns_wr_17l')
+        expr=pl.col("deq_base_new")
+        + (pl.col("deq_bias_adj") + pl.col("deq_meta_adj")) * pl.col("pct_gp"),
     ),
-    'deq_bias_adj': ColSpec(
-        col_type=ColType.AGG,
-        expr=(pl.col('pick_equity') / P1_PICK_EQUITY - 1) * pl.col('gp_wr_bias_in'),
+    "format_day_sum": ColSpec(
+        col_type=ColType.PICK_SUM, expr=pl.col(ColName.FORMAT_DAY)
     ),
-    'deq': ColSpec(
-        col_type=ColType.AGG,
-        expr=pl.col('deq_base') + (pl.col('deq_bias_adj') + pl.col('deq_meta_adj')) * pl.col('pct_gp')
+    "mean_day_picked": ColSpec(
+        col_type=ColType.AGG, expr=pl.col("format_day_sum") / pl.col(ColName.NUM_TAKEN)
     ),
-    'deq_new': ColSpec(
-        col_type=ColType.AGG,
-        expr=pl.col('deq_base') + (pl.col('deq_bias_adj_new') + pl.col('deq_meta_adj_new')) * pl.col('pct_gp')
+    "meta_regression_factor": ColSpec(
+        col_type=ColType.CARD_ATTR, expr=meta_decay_factor
     ),
-    'gp_wr_bias_adj': ColSpec(
-        col_type=ColType.AGG,
-        expr=pl.col('gp_wr_b') + pl.col('deq_bias_adj')
-    ),
-    'format_day_sum': ColSpec(
-        col_type=ColType.PICK_SUM,
-        expr=pl.col(ColName.FORMAT_DAY)
-    ),
-    'mean_day_picked': ColSpec(
-        col_type=ColType.AGG,
-        expr=pl.col('format_day_sum') / pl.col(ColName.NUM_TAKEN)
-    ),
-    'gp_wr_bias_in': ColSpec(
-        col_type=ColType.CARD_ATTR,
-        expr=lambda set_context: pl.lit(None) if 'gp_wr_excess_over_colors_W' 
-        not in set_context else pl.when(
-            pl.col(ColName.COLOR) == "UW").then(
-                0.5 * set_context.get('gp_wr_excess_over_colors_UW', 0) 
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_W', 0)
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_U', 0)
-            ).otherwise(pl.when(pl.col(ColName.COLOR) == "BW").then(
-                0.5 * set_context.get('gp_wr_excess_over_colors_BW', 0) 
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_W', 0)
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_B', 0)
-            ).otherwise(pl.when(pl.col(ColName.COLOR) == "RW").then(
-                0.5 * set_context.get('gp_wr_excess_over_colors_RW', 0) 
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_W', 0)
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_R', 0)
-            ).otherwise(pl.when(pl.col(ColName.COLOR) == "GW").then(
-                0.5 * set_context.get('gp_wr_excess_over_colors_GW', 0) 
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_W', 0)
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_G', 0)
-            ).otherwise(pl.when(pl.col(ColName.COLOR) == "BW").then(
-                0.5 * set_context.get('gp_wr_excess_over_colors_BW', 0) 
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_W', 0)
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_B', 0)
-            ).otherwise(pl.when(pl.col(ColName.COLOR) == "BU").then(
-                0.5 * set_context.get('gp_wr_excess_over_colors_BU', 0) 
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_U', 0)
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_B', 0)
-            ).otherwise(pl.when(pl.col(ColName.COLOR) == "RU").then(
-                0.5 * set_context.get('gp_wr_excess_over_colors_RU', 0) 
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_U', 0)
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_R', 0)
-            ).otherwise(pl.when(pl.col(ColName.COLOR) == "GU").then(
-                0.5 * set_context.get('gp_wr_excess_over_colors_GU', 0) 
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_U', 0)
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_G', 0)
-            ).otherwise(pl.when(pl.col(ColName.COLOR) == "BR").then(
-                0.5 * set_context.get('gp_wr_excess_over_colors_BR', 0) 
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_R', 0)
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_B', 0)
-            ).otherwise(pl.when(pl.col(ColName.COLOR) == "BG").then(
-                0.5 * set_context.get('gp_wr_excess_over_colors_BG', 0) 
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_G', 0)
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_B', 0)
-            ).otherwise(pl.when(pl.col(ColName.COLOR) == "GR").then(
-                0.5 * set_context.get('gp_wr_excess_over_colors_GR', 0) 
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_G', 0)
-                + 0.25 * set_context.get('gp_wr_excess_over_colors_R', 0)
-            ).otherwise(pl.when(pl.col(ColName.COLOR) == "W").then(
-                set_context.get('gp_wr_excess_over_colors_W', 0)
-            ).otherwise(pl.when(pl.col(ColName.COLOR) == "U").then(
-                set_context.get('gp_wr_excess_over_colors_U', 0)
-            ).otherwise(pl.when(pl.col(ColName.COLOR) == "B").then(
-                set_context.get('gp_wr_excess_over_colors_B', 0)
-            ).otherwise(pl.when(pl.col(ColName.COLOR) == "R").then(
-                set_context.get('gp_wr_excess_over_colors_R', 0)
-            ).otherwise(pl.when(pl.col(ColName.COLOR) == "G").then(
-                set_context.get('gp_wr_excess_over_colors_G', 0)
-            ).otherwise(0))))))))))))))))
-    ),
-    'meta_regression_factor': ColSpec(
-        col_type=ColType.CARD_ATTR,
-        expr=meta_decay_factor
-    ),
-    'deq_meta_adj': ColSpec(
-        col_type=ColType.AGG,
-        expr=(pl.col('gp_wr_bias_in') + pl.col('deq_bias_adj')) * pl.col('meta_regression_factor')
-    ),
-    'color_group': ColSpec(
+    "color_group": ColSpec(
         col_type=ColType.CARD_ATTR,
         expr=(
             pl.when(pl.col("color") == "")
@@ -337,53 +312,51 @@ ext = {
                     )
                 )
             )
-        )
+        ),
     ),
-    'deck_commons': ColSpec(
+    "deck_commons": ColSpec(
         col_type=ColType.NAME_SUM,
-        expr=lambda name, card_context: pl.col(f'deck_{name}') * (
-            1 if card_context[name]['rarity'] == 'common' else 0
-        )
+        expr=lambda name, card_context: pl.col(f"deck_{name}")
+        * (1 if card_context[name]["rarity"] == "common" else 0),
     ),
-    'deck_rares': ColSpec(
+    "deck_rares": ColSpec(
         col_type=ColType.NAME_SUM,
-        expr=lambda name, card_context: pl.col(f'deck_{name}') * (
-            1 if card_context[name]['rarity'] == 'rare' else 0
-        )
+        expr=lambda name, card_context: pl.col(f"deck_{name}")
+        * (1 if card_context[name]["rarity"] == "rare" else 0),
     ),
-    'deck_commons_mean': ColSpec(
-        col_type=ColType.AGG,
-        expr=pl.col('deck_commons') / pl.col('deck')
+    "deck_commons_mean": ColSpec(
+        col_type=ColType.AGG, expr=pl.col("deck_commons") / pl.col("deck")
     ),
-    'deck_rares_mean': ColSpec(
-        col_type=ColType.AGG,
-        expr=pl.col('deck_rares') / pl.col('deck')
+    "deck_rares_mean": ColSpec(
+        col_type=ColType.AGG, expr=pl.col("deck_rares") / pl.col("deck")
     ),
-    'gp_bias_weight': ColSpec(
+    "gp_bias_weight": ColSpec(
         col_type=ColType.NAME_SUM,
-        expr=lambda set_context, name: 
-            pl.col(f'deck_{name}') * pl.col(ColName.MAIN_COLORS).replace({
-                colors: set_context.get(f"game_wr_excess_{colors}") for colors in color_sets
-            }, default=set_context.get("game_wr_excess_other")),
-    ), 
-    'gp_wr_bias_new': ColSpec(
-        col_type=ColType.AGG,
-        expr = pl.col('gp_bias_weight') / pl.col(ColName.DECK)
+        expr=lambda set_context, name: pl.col(f"deck_{name}")
+        * pl.col(ColName.MAIN_COLORS).replace(
+            {
+                colors: set_context.get(f"game_wr_excess_{colors}")
+                for colors in color_sets
+            },
+            default=set_context.get("game_wr_excess_other"),
+        ),
     ),
-    'deq_bias_adj_new': ColSpec(
-        col_type=ColType.AGG,
-        expr=(pl.col('pick_equity') / P1_PICK_EQUITY - 1) * pl.col('gp_wr_bias_new'),
+    "gp_wr_bias": ColSpec(
+        col_type=ColType.AGG, expr=pl.col("gp_bias_weight") / pl.col(ColName.DECK)
     ),
-    'gp_wr_bias_adj_new': ColSpec(
+    "deq_bias_adj": ColSpec(
         col_type=ColType.AGG,
-        expr=pl.col('gp_wr_b') + pl.col('deq_bias_adj_new')
+        expr=(pl.col("pick_equity") / P1_PICK_EQUITY - 1) * pl.col("gp_wr_bias"),
     ),
-    'deq_meta_adj_new': ColSpec(
+    "gp_wr_bias_adj": ColSpec(
+        col_type=ColType.AGG, expr=pl.col("gp_wr_b") + pl.col("deq_bias_adj")
+    ),
+    "deq_meta_adj": ColSpec(
         col_type=ColType.AGG,
-        expr=(pl.col('gp_wr_bias_new') + pl.col('deq_bias_adj_new')) * pl.col('meta_regression_factor')
+        expr=(pl.col("gp_wr_bias") + pl.col("deq_bias_adj"))
+        * pl.col("meta_regression_factor"),
     ),
 }
-# fmt: on
 
 
 def deq_bias_set_context(
@@ -392,19 +365,6 @@ def deq_bias_set_context(
     observed_days: int | None = None,
     projection_days: int = 1,
 ):
-    gpwr_oc = summon(
-        set_codes,
-        columns=["gp_wr_excess_over_colors"],
-        group_by=["expansion", "color"],
-        filter_spec=metric_filter,
-        extensions=ext,
-    )
-
-    color_select = [
-        "gp_wr_excess_over_colors_" + pl.col("color"),
-        "gp_wr_excess_over_colors",
-    ]
-
     gpwr_by_deck = summon(
         set_codes,
         columns=[
@@ -425,13 +385,6 @@ def deq_bias_set_context(
 
     set_context = {
         set_code: {
-            **{
-                key: value[0]
-                for key, value in gpwr_oc.filter(pl.col("expansion") == set_code)
-                .select(color_select)
-                .rows_by_key("literal", unique=True)
-                .items()
-            },
             **{
                 key: value[0]
                 for key, value in gpwr_by_deck.filter(
