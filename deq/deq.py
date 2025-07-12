@@ -103,18 +103,6 @@ color_sets = [
 ]
 
 
-def in_colors_lambda(colors):
-    return lambda name: pl.col(f"deck_{name}") * pl.when(
-        pl.col("main_colors") == colors
-    ).then(1).otherwise(0)
-
-
-def in_colors_bias_lambda(colors):
-    return lambda name, set_context: pl.col(
-        f"gp_in_colors_{colors}_{name}"
-    ) * set_context.get(f"game_wr_excess_{colors}")
-
-
 # fmt: off
 ext = {
     ColName.NUM_GNS: ColSpec(
@@ -241,7 +229,7 @@ ext = {
     ),
     'deq_new': ColSpec(
         col_type=ColType.AGG,
-        expr=pl.col('deq_base_new') + (pl.col('deq_bias_adj') + pl.col('deq_meta_adj')) * pl.col('pct_gp')
+        expr=pl.col('deq_base') + (pl.col('deq_bias_adj_new') + pl.col('deq_meta_adj_new')) * pl.col('pct_gp')
     ),
     'gp_wr_bias_adj': ColSpec(
         col_type=ColType.AGG,
@@ -371,43 +359,29 @@ ext = {
         col_type=ColType.AGG,
         expr=pl.col('deck_rares') / pl.col('deck')
     ),
-    **{
-        f'gp_in_colors_{colors}': ColSpec(
-            col_type=ColType.NAME_SUM,
-            expr= in_colors_lambda(colors)
-        ) for colors in color_sets
-    },
-    **{
-        f'gp_bias_weight_in_colors_{colors}': ColSpec(
-            col_type=ColType.NAME_SUM,
-            expr = in_colors_bias_lambda(colors)
-        ) for colors in color_sets
-    },
-    **{
-        f'gp_wr_bias_in_colors_{colors}': ColSpec(
-            col_type=ColType.AGG,
-            expr = pl.col(f'gp_bias_weight_in_colors_{colors}') / pl.col(ColName.DECK)
-        ) for colors in color_sets
-    },
-    'gp_in_colors_others': ColSpec(
+    'gp_bias_weight': ColSpec(
         col_type=ColType.NAME_SUM,
-        expr=lambda name: pl.col(f'deck_{name}') * pl.when(
-            ~pl.col('main_colors').is_in(color_sets)).then(1).otherwise(0)
-    ),
-    'gp_bias_weight_in_colors_others': ColSpec(
-        col_type=ColType.NAME_SUM,
-        expr=lambda name, set_context: pl.col(f'gp_in_colors_others_{name}') * set_context.get('game_wr_excess_other')
-    ),
-    'gp_wr_bias_in_colors_other': ColSpec(
-        col_type=ColType.AGG,
-        expr = pl.col('gp_bias_weight_in_colors_others') / pl.col(ColName.DECK)
-    ),
+        expr=lambda set_context, name: 
+            pl.col(f'deck_{name}') * pl.col(ColName.MAIN_COLORS).replace({
+                colors: set_context.get(f"game_wr_excess_{colors}") for colors in color_sets
+            }, default=set_context.get("game_wr_excess_other")),
+    ), 
     'gp_wr_bias_new': ColSpec(
         col_type=ColType.AGG,
-        expr = pl.sum_horizontal(
-            [pl.col(f'gp_wr_bias_in_colors_{colors}') for colors in color_sets]
-        ) + pl.col('gp_wr_bias_in_colors_other')
-    )
+        expr = pl.col('gp_bias_weight') / pl.col(ColName.DECK)
+    ),
+    'deq_bias_adj_new': ColSpec(
+        col_type=ColType.AGG,
+        expr=(pl.col('pick_equity') / P1_PICK_EQUITY - 1) * pl.col('gp_wr_bias_new'),
+    ),
+    'gp_wr_bias_adj_new': ColSpec(
+        col_type=ColType.AGG,
+        expr=pl.col('gp_wr_b') + pl.col('deq_bias_adj_new')
+    ),
+    'deq_meta_adj_new': ColSpec(
+        col_type=ColType.AGG,
+        expr=(pl.col('gp_wr_bias_new') + pl.col('deq_bias_adj_new')) * pl.col('meta_regression_factor')
+    ),
 }
 # fmt: on
 
@@ -478,9 +452,9 @@ def deq_bias_set_context(
                 (ColName.NUM_GAMES),
             )
             .sum()
-            .select(
-                pl.col(ColName.NUM_WON) / pl.col(ColName.NUM_GAMES)
-            )[ColName.NUM_WON][0],
+            .select(pl.col(ColName.NUM_WON) / pl.col(ColName.NUM_GAMES))[
+                ColName.NUM_WON
+            ][0],
             "observed_days": observed_days,
             "projection_days": projection_days,
         }
