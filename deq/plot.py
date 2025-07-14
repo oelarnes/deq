@@ -52,7 +52,9 @@ COLOR_LIST = {
 
 METRIC_LABELS = {
     "deq": "DEq",
-    "deq_new": "Alt DEq",
+    "deq_a": "DEq A",
+    "deq_b": "DEq B",
+    "deq_c": "DEq C",
     "gih_wr": "GIH WR",
     "gih_wr_17l": "GIH WR",
     "gp_wr_17l": "GP WR",

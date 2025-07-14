@@ -4,79 +4,16 @@ import numpy as np
 from spells import summon, ColName, ColType, ColSpec
 
 BASIC_LANDS = ["Plains", "Island", "Swamp", "Mountain", "Forest"]
-P1_PICK_EQUITY = 0.025
-ATA_DENOM = 13
 
 PRECISION = 2**16
 
 # parameters for deq metagame decay
-DEQ_LOSS_FACTOR = 0.6
-SAMPLE_DECAY = 0.95
-META_DECAY = 0.95
-
 SAMPLE_THRESHOLD = 500
 BAYES_GAMES = 150
 BAYES_MU = 0.54
 
-METRIC_BAYES_GAMES = 200
-WR_BETA_TO_ATA = -0.0033
 UNG = pl.col(ColName.USER_N_GAMES_BUCKET)
 UGWR = pl.col(ColName.USER_GAME_WIN_RATE_BUCKET)
-
-# Pick equity fit derived from mle draft_equity analysis
-# based on "top_player" cohort which has wr about 63%
-PICK_EQUITY_ARR = [
-    0.022,  # pick one pick equity
-    0.016,
-    0.012,
-    0.01,
-    0.0086,
-    0.0073,
-    0.0061,
-    0.005,
-    0.004,
-    0.0031,
-    0.0023,
-    0.0016,
-    0.001,
-    0.0005,
-]
-
-x = np.arange(1, 15)
-PE_INDEX = 3
-PE_COEF_1_0, PE_COEF_1_1, PE_COEF_1_2 = np.polyfit(
-    x[0:PE_INDEX], PICK_EQUITY_ARR[0:PE_INDEX], 2
-)
-PE_COEF_2_0, PE_COEF_2_1, PE_COEF_2_2 = np.polyfit(
-    x[PE_INDEX:], PICK_EQUITY_ARR[PE_INDEX:], 2
-)
-
-ADJ_FACTOR = 0.8
-PE_COEF_1_0 = ADJ_FACTOR * float(PE_COEF_1_0)
-PE_COEF_1_1 = ADJ_FACTOR * float(PE_COEF_1_1)
-PE_COEF_1_2 = ADJ_FACTOR * float(PE_COEF_1_2)
-PE_COEF_2_0 = ADJ_FACTOR * float(PE_COEF_2_0)
-PE_COEF_2_1 = ADJ_FACTOR * float(PE_COEF_2_1)
-PE_COEF_2_2 = ADJ_FACTOR * float(PE_COEF_2_2)
-
-
-def meta_decay_factor(set_context: dict):
-    t = set_context.get("observed_days")
-    ft = set_context.get("projection_days")
-
-    if t is None:
-        return pl.lit(0)
-    return pl.lit(
-        DEQ_LOSS_FACTOR
-        * (
-            META_DECAY ** (t + ft)
-            * (1 - SAMPLE_DECAY**t)
-            * (1 - SAMPLE_DECAY * META_DECAY)
-            / (1 - (SAMPLE_DECAY * META_DECAY) ** t)
-            / (1 - SAMPLE_DECAY)
-            - 1
-        )
-    )
 
 
 color_sets = [
@@ -103,7 +40,133 @@ color_sets = [
 ]
 
 
+def deq_col_specs(
+    suffix: str = "",
+    pick_equity_init: float = 0.0275,
+    pick_equity_mid: float = 0.0275,
+    pick_equity_mid_index: int = 1,
+    zero_equity_index: int = 14,
+    bias_adj_coef: float = 1.0,
+    deq_loss_factor: float = 0.6,
+    sample_decay: float = 0.95,
+    meta_decay: float = 0.95,
+    wr_beta_to_ata: float = -0.0033,
+    bayes_games: int = 200,
+) -> dict[str, ColSpec]:
+    def meta_decay_factor(set_context: dict):
+        t = set_context.get("observed_days")
+        ft = set_context.get("projection_days")
+
+        if t is None:
+            return pl.lit(0)
+        return pl.lit(
+            deq_loss_factor
+            * (
+                meta_decay ** (t + ft)
+                * (1 - sample_decay**t)
+                * (1 - sample_decay * meta_decay)
+                / (1 - (sample_decay * meta_decay) ** t)
+                / (1 - sample_decay)
+                - 1
+            )
+        )
+
+    return {
+        f"pick_equity{suffix}": ColSpec(
+            col_type=ColType.AGG,
+            expr=pl.when(pl.col(ColName.ATA) >= pick_equity_mid_index)
+            .then(
+                pick_equity_mid
+                * (
+                    1
+                    - (pl.col(ColName.ATA) - pick_equity_mid_index)
+                    / (zero_equity_index - pick_equity_mid_index)
+                ).pow(2)
+            )
+            .otherwise(
+                pick_equity_mid
+                + (
+                    (
+                        1
+                        - (pl.col(ColName.ATA) - pick_equity_mid_index)
+                        / (zero_equity_index - pick_equity_mid_index)
+                    ).pow(2)
+                    - 1
+                )
+                * (pick_equity_init - pick_equity_mid)
+                / (
+                    (
+                        1
+                        - (1 - pick_equity_mid_index)
+                        / (zero_equity_index - pick_equity_mid_index)
+                    )
+                    ** 2
+                    - 1
+                )
+            ),
+        ),
+        f"gp_wr_bayes_mu{suffix}": ColSpec(
+            col_type=ColType.AGG,
+            expr=pl.col(ColName.GP_WR_MEAN) + wr_beta_to_ata * (pl.col("ata") - 7),
+        ),
+        f"gp_wr_b{suffix}": ColSpec(
+            col_type=ColType.AGG,
+            expr=pl.col("deck_small_sample")
+            * (
+                pl.col(f"gp_wr_bayes_mu{suffix}") * bayes_games
+                + pl.col(ColName.WON_DECK)
+            )
+            / (pl.col(ColName.DECK) + bayes_games),
+        ),
+        f"deq_base{suffix}": ColSpec(
+            col_type=ColType.AGG,
+            expr=(
+                pl.col(f"gp_wr_b{suffix}")
+                - pl.col(ColName.GP_WR_MEAN)
+                + pl.col(f"pick_equity{suffix}")
+            )
+            * pl.col(ColName.PCT_GP),
+        ),
+        f"gp_bias_weight{suffix}": ColSpec(
+            col_type=ColType.NAME_SUM,
+            expr=lambda set_context, name: pl.col(f"deck_{name}")
+            * pl.col(ColName.MAIN_COLORS).replace_strict(
+                {
+                    colors: set_context.get(f"game_wr_excess_{colors}")
+                    for colors in color_sets
+                },
+                default=set_context.get("game_wr_excess_other"),
+            ),
+        ),
+        f"gp_wr_bias{suffix}": ColSpec(
+            col_type=ColType.AGG,
+            expr=pl.col(f"gp_bias_weight{suffix}") / pl.col(ColName.DECK),
+        ),
+        f"deq_bias_adj{suffix}": ColSpec(
+            col_type=ColType.AGG,
+            expr=bias_adj_coef
+            * (pl.col(f"pick_equity{suffix}") / pick_equity_init - 1)
+            * pl.col(f"gp_wr_bias{suffix}"),
+        ),
+        f"meta_regression_factor{suffix}": ColSpec(
+            col_type=ColType.CARD_ATTR, expr=meta_decay_factor
+        ),
+        f"deq_meta_adj{suffix}": ColSpec(
+            col_type=ColType.AGG,
+            expr=(pl.col(f"gp_wr_bias{suffix}") + pl.col(f"deq_bias_adj{suffix}"))
+            * pl.col(f"meta_regression_factor{suffix}"),
+        ),
+        f"deq{suffix}": ColSpec(
+            col_type=ColType.AGG,
+            expr=pl.col(f"deq_base{suffix}")
+            + (pl.col(f"deq_bias_adj{suffix}") + pl.col("deq_meta_adj"))
+            * pl.col("pct_gp")
+        ),
+    }
+
+
 ext = {
+    **deq_col_specs(),
     ColName.NUM_GNS: ColSpec(
         col_type=ColType.NAME_SUM,
         expr=lambda name: pl.max_horizontal(
@@ -128,36 +191,6 @@ ext = {
     ColName.GP_WR_EXCESS: ColSpec(
         col_type=ColType.AGG,
         expr=pl.col(ColName.GP_WR) - pl.col(ColName.GP_WR_MEAN),
-    ),
-    "pick_equity": ColSpec(
-        col_type=ColType.AGG,
-        expr=P1_PICK_EQUITY * (1 - (pl.col(ColName.ATA) - 1) / ATA_DENOM).pow(2),
-    ),
-    "pick_equity_new": ColSpec(
-        col_type=ColType.AGG,
-        expr=pl.when(pl.col(ColName.ATA) < PE_INDEX + 1)
-        .then(
-            PE_COEF_1_0 * pl.col(ColName.ATA).pow(2)
-            + PE_COEF_1_1 * pl.col(ColName.ATA)
-            + PE_COEF_1_2
-        )
-        .otherwise(
-            PE_COEF_2_0 * pl.col(ColName.ATA).pow(2)
-            + PE_COEF_2_1 * pl.col(ColName.ATA)
-            + PE_COEF_2_2
-        ),
-    ),
-    "deq_base": ColSpec(
-        col_type=ColType.AGG,
-        expr=(pl.col("gp_wr_b") - pl.col(ColName.GP_WR_MEAN) + pl.col("pick_equity"))
-        * pl.col(ColName.PCT_GP),
-    ),
-    "deq_base_new": ColSpec(
-        col_type=ColType.AGG,
-        expr=(
-            pl.col("gp_wr_b") - pl.col(ColName.GP_WR_MEAN) + pl.col("pick_equity_new")
-        )
-        * pl.col(ColName.PCT_GP),
     ),
     "skill_cohort_raw": ColSpec(
         col_type=ColType.GROUP_BY,
@@ -228,16 +261,6 @@ ext = {
         .then(None)
         .otherwise(1.0),
     ),
-    "gp_wr_bayes_mu": ColSpec(
-        col_type=ColType.AGG,
-        expr=pl.col("gp_wr_mean") + WR_BETA_TO_ATA * (pl.col("ata") - 7),
-    ),
-    "gp_wr_b": ColSpec(
-        col_type=ColType.AGG,
-        expr=pl.col("deck_small_sample")
-        * (pl.col("gp_wr_bayes_mu") * METRIC_BAYES_GAMES + pl.col(ColName.WON_DECK))
-        / (pl.col(ColName.DECK) + METRIC_BAYES_GAMES),
-    ),
     "gih_wr_17l": ColSpec(
         col_type=ColType.AGG,
         expr=pl.when(
@@ -267,24 +290,11 @@ ext = {
     "iwd_17l": ColSpec(
         col_type=ColType.AGG, expr=pl.col("gih_wr_17l") - pl.col("gns_wr_17l")
     ),
-    "deq": ColSpec(
-        col_type=ColType.AGG,
-        expr=pl.col("deq_base")
-        + (pl.col("deq_bias_adj") + pl.col("deq_meta_adj")) * pl.col("pct_gp"),
-    ),
-    "deq_new": ColSpec(
-        col_type=ColType.AGG,
-        expr=pl.col("deq_base_new")
-        + (pl.col("deq_bias_adj") + pl.col("deq_meta_adj")) * pl.col("pct_gp"),
-    ),
     "format_day_sum": ColSpec(
         col_type=ColType.PICK_SUM, expr=pl.col(ColName.FORMAT_DAY)
     ),
     "mean_day_picked": ColSpec(
         col_type=ColType.AGG, expr=pl.col("format_day_sum") / pl.col(ColName.NUM_TAKEN)
-    ),
-    "meta_regression_factor": ColSpec(
-        col_type=ColType.CARD_ATTR, expr=meta_decay_factor
     ),
     "color_group": ColSpec(
         col_type=ColType.CARD_ATTR,
@@ -330,32 +340,6 @@ ext = {
     "deck_rares_mean": ColSpec(
         col_type=ColType.AGG, expr=pl.col("deck_rares") / pl.col("deck")
     ),
-    "gp_bias_weight": ColSpec(
-        col_type=ColType.NAME_SUM,
-        expr=lambda set_context, name: pl.col(f"deck_{name}")
-        * pl.col(ColName.MAIN_COLORS).replace(
-            {
-                colors: set_context.get(f"game_wr_excess_{colors}")
-                for colors in color_sets
-            },
-            default=set_context.get("game_wr_excess_other"),
-        ),
-    ),
-    "gp_wr_bias": ColSpec(
-        col_type=ColType.AGG, expr=pl.col("gp_bias_weight") / pl.col(ColName.DECK)
-    ),
-    "deq_bias_adj": ColSpec(
-        col_type=ColType.AGG,
-        expr=(pl.col("pick_equity") / P1_PICK_EQUITY - 1) * pl.col("gp_wr_bias"),
-    ),
-    "gp_wr_bias_adj": ColSpec(
-        col_type=ColType.AGG, expr=pl.col("gp_wr_b") + pl.col("deq_bias_adj")
-    ),
-    "deq_meta_adj": ColSpec(
-        col_type=ColType.AGG,
-        expr=(pl.col("gp_wr_bias") + pl.col("deq_bias_adj"))
-        * pl.col("meta_regression_factor"),
-    ),
 }
 
 
@@ -363,8 +347,11 @@ def deq_bias_set_context(
     set_codes: list[str],
     metric_filter: dict,
     observed_days: int | None = None,
-    projection_days: int = 1,
+    projection_days: int = 0,
 ):
+    if isinstance(set_codes, str):
+        set_codes = [set_codes]
+
     gpwr_by_deck = summon(
         set_codes,
         columns=[

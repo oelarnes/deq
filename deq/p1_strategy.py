@@ -6,7 +6,7 @@ from typing import Any
 from great_tables import GT
 import polars as pl
 
-from spells import summon, ColName
+from spells import summon, ColName, ColSpec
 from spells.log import make_verbose
 from spells.extension import context_cols
 from spells.config import all_sets
@@ -81,6 +81,7 @@ def get_metric_context(
     metrics: list[str],
     filter_spec: dict,
     deq_days: int | None,
+    extra_ext: dict[str, ColSpec] | None,
 ) -> pl.DataFrame:
     if "deq" in metrics or "gp_wr_bias_adj" in metrics or "deq_new" in metrics:
         set_context = deq_bias_set_context(
@@ -92,12 +93,18 @@ def get_metric_context(
     metrics_select = [
         (pl.col(metric) * PRECISION).round() / PRECISION for metric in metrics
     ]
+
+    if extra_ext is not None:
+        my_ext = {**ext, **extra_ext}
+    else:
+        my_ext = ext
+
     context_df = summon(
         set_codes,
         columns=metrics,
         filter_spec=filter_spec,
         group_by=["expansion", "name"],
-        extensions=ext,
+        extensions=my_ext,
         set_context=set_context,
     ).select(["expansion", "name", *metrics_select])
     return context_df
@@ -110,6 +117,7 @@ def get_model_dfs(
     metric_filter: dict | None,
     deq_days: int | None,
     metric_context: pl.DataFrame | None = None,
+    extra_ext: dict[str, ColSpec] | None = None,
 ) -> ModelDFs:
     assert isinstance(set_codes, list), "Pass a list of set_codes!"
 
@@ -117,7 +125,7 @@ def get_model_dfs(
     metric_filter = TOP_PLAYER if metric_filter is None else metric_filter
 
     context_df = (
-        get_metric_context(set_codes, [metric], metric_filter, deq_days)
+        get_metric_context(set_codes, [metric], metric_filter, deq_days, extra_ext)
         if metric_context is None
         else metric_context
     )
@@ -334,10 +342,11 @@ def p1_strat_analysis(
     luck_control: bool = False,
     deq_days: int | None = None,
     metric_context: pl.DataFrame | None = None,
+    extra_ext: dict[str, ColSpec] | None = None,
 ):
     logging.info(f"Running p1 strategy analysis for metric {metric}")
     model_dfs = get_model_dfs(
-        set_codes, metric, results_filter, metric_filter, deq_days, metric_context
+        set_codes, metric, results_filter, metric_filter, deq_days, metric_context, extra_ext
     )
 
     mapped_df = strategy_mapped_df(model_dfs, card_parity)
@@ -438,6 +447,7 @@ def all_metrics_analysis(
     sets: list[str] | None = None,
     deq_days: int | None = None,
     metric_context: pl.DataFrame | None = None,
+    extra_ext: dict[str, ColSpec] | None = None,
 ):
     sets = all_sets if sets is None else sets
 
@@ -451,6 +461,7 @@ def all_metrics_analysis(
             results_filter=results_filter,
             deq_days=deq_days,
             metric_context=metric_context,
+            extra_ext=extra_ext,
         )
         for metric in metrics
     }
@@ -548,6 +559,7 @@ def card_detail_df(
     metric_filter: dict[str, Any] | None = None,
     metric_context: pl.DataFrame | None = None,
     deq_days: int | None = None,
+    extra_ext: dict[str, ColSpec] | None = None,
 ) -> pl.DataFrame:
     pick_filter = {"$and": [P1P1, results_filter]}
 
@@ -555,7 +567,7 @@ def card_detail_df(
 
     metric_filter = {"player_cohort": "Top"} if metric_filter is None else metric_filter
     df = (
-        get_metric_context([set_code], metrics, metric_filter, deq_days)
+        get_metric_context([set_code], metrics, metric_filter, deq_days, extra_ext)
         if metric_context is None
         else metric_context
     )
