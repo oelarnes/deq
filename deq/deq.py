@@ -1,11 +1,26 @@
+import datetime as dt
+
 import polars as pl
 import numpy as np
 
 from spells import summon, ColName, ColType, ColSpec
+from spells.draft_data import CardDataFileSpec
+from spells.card_data_files import deck_color_df
 
 BASIC_LANDS = ["Plains", "Island", "Swamp", "Mountain", "Forest"]
 
 PRECISION = 2**16
+
+PICK_EQUITY_INIT = 0.0275
+PICK_EQUITY_MID = 0.0275
+PICK_EQUITY_MID_INDEX = 1
+ZERO_EQUITY_INDEX = 14
+BIAS_ADJ_COEF = 0.5
+DEQ_LOSS_FACTOR = 0.6
+SAMPLE_DECAY = 0.95
+META_DECAY = 0.95
+WR_BETA_TO_ATA = -0.0033
+BAYES_GAMES = 200
 
 # parameters for deq metagame decay
 SAMPLE_THRESHOLD = 500
@@ -160,7 +175,7 @@ def deq_col_specs(
             col_type=ColType.AGG,
             expr=pl.col(f"deq_base{suffix}")
             + (pl.col(f"deq_bias_adj{suffix}") + pl.col("deq_meta_adj"))
-            * pl.col("pct_gp")
+            * pl.col("pct_gp"),
         ),
     }
 
@@ -402,3 +417,197 @@ def deq_bias_set_context(
     }
 
     return set_context
+
+
+def live_deq(
+    set_code: str,
+    start_date: dt.date,
+    end_date: dt.date,
+    player_cohort: str = "top",
+    suffix: str = "",
+    pick_equity_init: float = PICK_EQUITY_INIT,
+    pick_equity_mid: float = PICK_EQUITY_MID,
+    pick_equity_mid_index: int = PICK_EQUITY_MID_INDEX,
+    zero_equity_index: int = ZERO_EQUITY_INDEX,
+    bias_adj_coef: float = BIAS_ADJ_COEF,
+    deq_loss_factor: float = DEQ_LOSS_FACTOR,
+    sample_decay: float = SAMPLE_DECAY,
+    meta_decay: float = META_DECAY,
+    wr_beta_to_ata: float = WR_BETA_TO_ATA,
+    bayes_games: int = BAYES_GAMES,
+) -> pl.DataFrame:
+    dc_df = deck_color_df(
+        set_code,
+        player_cohort=player_cohort,
+        start_date=start_date,
+        end_date=end_date,
+    ).with_columns(
+        pl.col(ColName.NUM_WON).sum().alias(ColName.GP_WR_MEAN)
+        / pl.col(ColName.NUM_GAMES).sum()
+    )
+    gp_wr_mean = (
+        dc_df.select([ColName.NUM_WON, ColName.NUM_GAMES])
+        .sum()
+        .select(pl.col(ColName.NUM_WON) / pl.col(ColName.NUM_GAMES))[ColName.NUM_WON][0]
+    )
+
+    gp_wr_excess = (
+        pl.col(ColName.NUM_WON).alias(ColName.GP_WR_EXCESS) / pl.col(ColName.NUM_GAMES)
+        - gp_wr_mean
+    )
+
+    excess_wr_df = pl.concat(
+        [
+            (
+                dc_df.filter(~pl.col(ColName.MAIN_COLORS).is_in(color_sets))
+                .select(ColName.NUM_GAMES, ColName.NUM_WON)
+                .sum()
+                .select(
+                    gp_wr_excess,
+                    pl.lit("other").alias(ColName.MAIN_COLORS),
+                )
+            ),
+            (
+                dc_df.filter(pl.col(ColName.MAIN_COLORS).is_in(color_sets)).select(
+                    gp_wr_excess, ColName.MAIN_COLORS
+                )
+            ),
+        ]
+    )
+
+    card_df = summon(
+        set_code,
+        columns=[
+            ColName.ATA,
+            ColName.DECK,
+            ColName.WON_DECK,
+            ColName.PCT_GP,
+        ],
+        cdfs=CardDataFileSpec(
+            set_code=set_code,
+            player_cohort=player_cohort,
+            start_date=start_date,
+            end_date=end_date,
+        ),
+    )
+
+    if player_cohort != "all":
+        fallback_ata_df = summon(
+            set_code,
+            columns=[ColName.ATA],
+            cdfs=CardDataFileSpec(
+                set_code=set_code,
+                player_cohort="all",
+                start_date=start_date,
+                end_date=end_date,
+            ),
+        ).rename({ColName.ATA: "ata_fallback"})
+
+        card_df = card_df.join(fallback_ata_df, on=["name"]).select(
+            ColName.NAME,
+            pl.when(pl.col(ColName.ATA) < 1)
+            .then(pl.col("ata_fallback"))
+            .otherwise(pl.col(ColName.ATA))
+            .alias(ColName.ATA),
+            ColName.DECK,
+            ColName.WON_DECK,
+            ColName.PCT_GP,
+        )
+
+    deck_counts_df = summon(
+        set_code,
+        columns=[ColName.DECK],
+        group_by=[ColName.NAME, ColName.MAIN_COLORS],
+        cdfs=CardDataFileSpec(
+            set_code=set_code,
+            player_cohort=player_cohort,
+            deck_colors=color_sets,
+            start_date=start_date,
+            end_date=end_date,
+        ),
+    )
+
+    other_counts_df = (
+        deck_counts_df.group_by("name")
+        .sum()
+        .join(
+            card_df.select(ColName.NAME, pl.col(ColName.DECK).alias("num_gp_all")),
+            on=ColName.NAME,
+        )
+        .select(
+            ColName.NAME,
+            pl.lit("other").alias(ColName.MAIN_COLORS),
+            -pl.col(ColName.DECK) + pl.col("num_gp_all"),
+        )
+    )
+
+    deck_counts_df = pl.concat([deck_counts_df, other_counts_df])
+
+    bias_adj_df = (
+        deck_counts_df.join(excess_wr_df, on=ColName.MAIN_COLORS)
+        .select(
+            ColName.NAME,
+            (pl.col(ColName.DECK) * pl.col(ColName.GP_WR_EXCESS)).alias(
+                "gp_bias_weight"
+            ),
+            pl.col(ColName.DECK),
+        )
+        .group_by(ColName.NAME)
+        .sum()
+        .select(
+            ColName.NAME,
+            (pl.col("gp_bias_weight") / pl.col(ColName.DECK)).alias(
+                f"gp_wr_bias{suffix}"
+            ),
+        )
+    )
+
+    card_df = card_df.join(bias_adj_df, on="name").with_columns(
+        pl.lit(gp_wr_mean).alias(ColName.GP_WR_MEAN)
+    )
+
+    set_context = {"observed_days": (end_date - start_date).days, "projection_days": 0}
+
+    deq_ext = deq_col_specs(
+        suffix=suffix,
+        pick_equity_init=pick_equity_init,
+        pick_equity_mid=pick_equity_mid,
+        pick_equity_mid_index=pick_equity_mid_index,
+        zero_equity_index=zero_equity_index,
+        bias_adj_coef=bias_adj_coef,
+        deq_loss_factor=deq_loss_factor,
+        meta_decay=meta_decay,
+        sample_decay=sample_decay,
+        wr_beta_to_ata=wr_beta_to_ata,
+        bayes_games=bayes_games,
+    )
+
+    def deq_col(col: str) -> pl.Expr:
+        expr = deq_ext[col].expr
+
+        if isinstance(expr, pl.Expr):
+            return expr.alias(col)
+        if expr is None:
+            raise ValueError("Unexpected")
+        else:
+            return expr(set_context).alias(col)
+
+    deq_df = (
+        card_df.with_columns(
+            deq_col(f"pick_equity{suffix}"),
+            deq_col(f"gp_wr_bayes_mu{suffix}"),
+            ext["deck_small_sample"].expr.alias("deck_small_sample"),  # type: ignore
+        )
+        .with_columns(deq_col(f"gp_wr_b{suffix}"))
+        .with_columns(
+            deq_col(f"deq_base{suffix}"),
+            deq_col(f"deq_bias_adj{suffix}"),
+            deq_col(f"meta_regression_factor{suffix}"),
+        )
+        .with_columns(
+            deq_col(f"deq_meta_adj{suffix}"),
+        )
+        .with_columns(deq_col(f"deq{suffix}"))
+    )
+
+    return deq_df
