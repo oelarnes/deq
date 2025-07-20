@@ -1,18 +1,21 @@
 import datetime as dt
+import os
 
 import polars as pl
-import numpy as np
 
 from spells import summon, ColName, ColType, ColSpec
+from spells.cache import ad_hoc_dir
 from spells.draft_data import CardDataFileSpec
 from spells.card_data_files import deck_color_df
 
 BASIC_LANDS = ["Plains", "Island", "Swamp", "Mountain", "Forest"]
 
+# for ensuring consistent floating point aggregations
 PRECISION = 2**16
 
-PICK_EQUITY_INIT = 0.0275
-PICK_EQUITY_MID = 0.0275
+# deq parameters
+PICK_EQUITY_INIT = 0.03
+PICK_EQUITY_MID = 0.03
 PICK_EQUITY_MID_INDEX = 1
 ZERO_EQUITY_INDEX = 14
 BIAS_ADJ_COEF = 0.5
@@ -21,8 +24,10 @@ SAMPLE_DECAY = 0.95
 META_DECAY = 0.95
 WR_BETA_TO_ATA = -0.0033
 BAYES_GAMES = 200
+MAX_DEQ_DAYS = 25
+GRADE_C_MINUS_MAX = -0.001
+GRADE_NOTCH_INCREMENT = 0.0075
 
-# parameters for deq metagame decay
 SAMPLE_THRESHOLD = 500
 BAYES_GAMES = 150
 BAYES_MU = 0.54
@@ -54,26 +59,38 @@ color_sets = [
     "BRG",
 ]
 
+start_dates = {
+    "TDM": dt.date(2025, 4, 8),
+    "FIN": dt.date(2025, 6, 10),
+    "EOE": dt.date(2025, 7, 29),
+}
+
 
 def deq_col_specs(
     suffix: str = "",
-    pick_equity_init: float = 0.0275,
-    pick_equity_mid: float = 0.0275,
-    pick_equity_mid_index: int = 1,
-    zero_equity_index: int = 14,
-    bias_adj_coef: float = 1.0,
-    deq_loss_factor: float = 0.6,
-    sample_decay: float = 0.95,
-    meta_decay: float = 0.95,
-    wr_beta_to_ata: float = -0.0033,
-    bayes_games: int = 200,
+    pick_equity_init: float = PICK_EQUITY_INIT,
+    pick_equity_mid: float = PICK_EQUITY_MID,
+    pick_equity_mid_index: int = PICK_EQUITY_MID_INDEX,
+    zero_equity_index: int = ZERO_EQUITY_INDEX,
+    bias_adj_coef: float = BIAS_ADJ_COEF,
+    deq_loss_factor: float = DEQ_LOSS_FACTOR,
+    sample_decay: float = SAMPLE_DECAY,
+    meta_decay: float = META_DECAY,
+    wr_beta_to_ata: float = WR_BETA_TO_ATA,
+    bayes_games: int = BAYES_GAMES,
+    max_deq_days: int = MAX_DEQ_DAYS,
+    grade_c_minus_max: float = GRADE_C_MINUS_MAX,
+    grade_notch_increment: float = GRADE_NOTCH_INCREMENT,
 ) -> dict[str, ColSpec]:
     def meta_decay_factor(set_context: dict):
-        t = set_context.get("observed_days")
+        t: int | None = set_context.get("observed_days")
         ft = set_context.get("projection_days")
 
-        if t is None:
+        if not isinstance(t, int) or not isinstance(ft, int):
             return pl.lit(0)
+
+        t = min(t, max_deq_days)
+
         return pl.lit(
             deq_loss_factor
             * (
@@ -86,6 +103,7 @@ def deq_col_specs(
             )
         )
 
+    # fmt: off
     return {
         f"pick_equity{suffix}": ColSpec(
             col_type=ColType.AGG,
@@ -174,11 +192,44 @@ def deq_col_specs(
         f"deq{suffix}": ColSpec(
             col_type=ColType.AGG,
             expr=pl.col(f"deq_base{suffix}")
-            + (pl.col(f"deq_bias_adj{suffix}") + pl.col("deq_meta_adj"))
+            + (pl.col(f"deq_bias_adj{suffix}") + pl.col(f"deq_meta_adj{suffix}"))
             * pl.col("pct_gp"),
+        ),
+        f"deq_grade{suffix}": ColSpec(
+            col_type=ColType.AGG,
+            expr=pl.when(pl.col("deq").is_null())
+            .then(None)
+            .otherwise(
+                pl.when(pl.col("deq") < grade_c_minus_max - 4 * grade_notch_increment)
+                .then(pl.lit("F"))
+                .otherwise(pl.when(
+                    pl.col("deq") < grade_c_minus_max - 3 * grade_notch_increment
+                ).then(pl.lit("D-")).otherwise(pl.when(
+                    pl.col("deq") < grade_c_minus_max - 2 * grade_notch_increment
+                ).then(pl.lit("D")).otherwise(pl.when(
+                    pl.col("deq") < grade_c_minus_max - 1 * grade_notch_increment
+                ).then(pl.lit("D+")).otherwise(pl.when(
+                    pl.col("deq") < grade_c_minus_max
+                ).then(pl.lit("C-")).otherwise(pl.when(
+                    pl.col("deq") < grade_c_minus_max + 1 * grade_notch_increment
+                ).then(pl.lit("C")).otherwise(pl.when(
+                    pl.col("deq") < grade_c_minus_max + 2 * grade_notch_increment
+                ).then(pl.lit("C+")).otherwise(pl.when(
+                    pl.col("deq") < grade_c_minus_max + 3 * grade_notch_increment
+                ).then(pl.lit("B-")).otherwise(pl.when(
+                    pl.col("deq") < grade_c_minus_max + 4 * grade_notch_increment
+                ).then(pl.lit("B")).otherwise(pl.when(
+                    pl.col("deq") < grade_c_minus_max + 5 * grade_notch_increment
+                ).then(pl.lit("B+")).otherwise(pl.when(
+                    pl.col("deq") < grade_c_minus_max + 6 * grade_notch_increment
+                ).then(pl.lit("A-")).otherwise(pl.when(
+                    pl.col("deq") < grade_c_minus_max + 7 * grade_notch_increment
+                ).then(pl.lit("A")).otherwise(pl.lit("A+"))))))))))))))
         ),
     }
 
+
+# fmt: on
 
 ext = {
     **deq_col_specs(),
@@ -435,6 +486,7 @@ def live_deq(
     meta_decay: float = META_DECAY,
     wr_beta_to_ata: float = WR_BETA_TO_ATA,
     bayes_games: int = BAYES_GAMES,
+    max_deq_days: int = MAX_DEQ_DAYS,
 ) -> pl.DataFrame:
     dc_df = deck_color_df(
         set_code,
@@ -478,6 +530,8 @@ def live_deq(
     card_df = summon(
         set_code,
         columns=[
+            ColName.COLOR,
+            ColName.RARITY,
             ColName.ATA,
             ColName.DECK,
             ColName.WON_DECK,
@@ -505,6 +559,8 @@ def live_deq(
 
         card_df = card_df.join(fallback_ata_df, on=["name"]).select(
             ColName.NAME,
+            ColName.COLOR,
+            ColName.RARITY,
             pl.when(pl.col(ColName.ATA) < 1)
             .then(pl.col("ata_fallback"))
             .otherwise(pl.col(ColName.ATA))
@@ -566,7 +622,10 @@ def live_deq(
         pl.lit(gp_wr_mean).alias(ColName.GP_WR_MEAN)
     )
 
-    set_context = {"observed_days": (end_date - start_date).days, "projection_days": 0}
+    set_context = {
+        "observed_days": (end_date - start_date).days + 1,
+        "projection_days": 0,
+    }
 
     deq_ext = deq_col_specs(
         suffix=suffix,
@@ -580,6 +639,7 @@ def live_deq(
         sample_decay=sample_decay,
         wr_beta_to_ata=wr_beta_to_ata,
         bayes_games=bayes_games,
+        max_deq_days=max_deq_days,
     )
 
     def deq_col(col: str) -> pl.Expr:
@@ -608,6 +668,135 @@ def live_deq(
             deq_col(f"deq_meta_adj{suffix}"),
         )
         .with_columns(deq_col(f"deq{suffix}"))
+        .with_columns(deq_col(f"deq_grade{suffix}"))
     )
 
     return deq_df
+
+
+def deq_ref_dir():
+    return os.path.join(ad_hoc_dir(), "deq")
+
+
+def daily_deq(
+    set_code: str | None = None,
+    as_of: dt.date | None = None,
+    gp_top_min_games: int = 70000,
+    gp_all_min_games: int = 300000,
+    max_format_day_start: int = 15,
+) -> pl.DataFrame:
+    as_of = as_of or dt.date.today()
+    set_code = (
+        [
+            d
+            for d in sorted(start_dates.keys(), key=lambda x: start_dates[x])
+            if start_dates[d] < dt.date.today()
+        ][-1]
+        if set_code is None
+        else set_code
+    )
+    end_date = as_of - dt.timedelta(days=1)
+
+    ref_dir = deq_ref_dir()
+    if not os.path.isdir(ref_dir):
+        os.makedirs(ref_dir)
+
+    history_df_path = os.path.join(ref_dir, "history.parquet")
+
+    if not os.path.isfile(history_df_path):
+        history_df = pl.DataFrame([])
+    else:
+        history_df = pl.read_parquet(history_df_path)
+
+    if (
+        history_df.is_empty()
+        or (set_df := history_df.filter(pl.col("set_code") == set_code)).is_empty()
+    ):
+        start_date = start_dates[set_code]
+        player_cohort = "top"
+        accept = False
+        as_of_df = pl.DataFrame([])
+    else:
+        if (as_of_df := set_df.filter(pl.col("as_of") == as_of)).is_empty():
+            params = set_df.sort("as_of").to_dicts()[-1]
+            player_cohort = params["player_cohort"]
+
+            if player_cohort == "all":
+                start_date = start_dates[set_code]
+                player_cohort = "top"
+            else:
+                start_date = params["start_date"] + dt.timedelta(days=1)
+
+            accept = False
+        else:
+            params = as_of_df.to_dicts()[0]
+            player_cohort = params["player_cohort"]
+            start_date = params["start_date"]
+            accept = True
+
+    while not accept:
+        print(f"Trying start_date {start_date.isoformat()}")
+        num_games = deck_color_df(
+            set_code,
+            start_date=start_date,
+            end_date=end_date,
+            player_cohort=player_cohort,
+        )["num_games"].sum()
+
+        game_threshold = (
+            gp_top_min_games if player_cohort == "top" else gp_all_min_games
+        )
+
+        if num_games >= game_threshold:
+            if (start_date - start_dates[set_code]).days + 1 >= max_format_day_start:
+                accept = True
+                start_date = start_dates[set_code] + dt.timedelta(
+                    days=max_format_day_start - 1
+                )
+            else:
+                start_date = start_date + dt.timedelta(days=1)
+        elif start_date == start_dates[set_code]:
+            if player_cohort == "top":
+                player_cohort = "all"
+            else:
+                accept = True
+        else:
+            accept = True
+            start_date = start_date - dt.timedelta(days=1)
+
+    if as_of_df.is_empty():
+        history_df = pl.concat(
+            [
+                history_df,
+                pl.DataFrame(
+                    [
+                        {
+                            "set_code": set_code,
+                            "as_of": as_of,
+                            "start_date": start_date,
+                            "end_date": end_date,
+                            "player_cohort": player_cohort,
+                        }
+                    ]
+                ),
+            ]
+        )
+
+        history_df.write_parquet(history_df_path)
+
+    return live_deq(
+        set_code,
+        start_date,
+        end_date,
+        player_cohort,
+    )
+
+
+def persist_daily_deq(
+    set_code: str | None = None,
+    as_of: dt.date | None = None,
+    gp_top_min_games: int = 70000,
+    gp_all_min_games: int = 300000,
+    max_format_day_start: int = 15,
+    target_path: str | None = None,
+) -> int: ...

@@ -77,15 +77,19 @@ def seen_is_greatest(metric: str) -> str:
 
 
 def get_metric_context(
-    set_codes: list[str],
     metrics: list[str],
+    set_codes: list[str],
     filter_spec: dict,
     deq_days: int | None,
+    projection_days: int,
     extra_ext: dict[str, ColSpec] | None,
 ) -> pl.DataFrame:
     if any(["deq" in metric for metric in metrics]):
         set_context = deq_bias_set_context(
-            set_codes, filter_spec, observed_days=deq_days
+            set_codes,
+            filter_spec,
+            observed_days=deq_days,
+            projection_days=projection_days,
         )
     else:
         set_context = None
@@ -116,6 +120,7 @@ def get_model_dfs(
     results_filter: dict | None,
     metric_filter: dict | None,
     deq_days: int | None,
+    projection_days: int,
     metric_context: pl.DataFrame | None = None,
     extra_ext: dict[str, ColSpec] | None = None,
 ) -> ModelDFs:
@@ -125,7 +130,14 @@ def get_model_dfs(
     metric_filter = TOP_PLAYER if metric_filter is None else metric_filter
 
     context_df = (
-        get_metric_context(set_codes, [metric], metric_filter, deq_days, extra_ext)
+        get_metric_context(
+            metrics=[metric],
+            set_codes=set_codes, 
+            filter_spec=metric_filter, 
+            deq_days=deq_days, 
+            projection_days=projection_days, 
+            extra_ext=extra_ext
+        )
         if metric_context is None
         else metric_context
     )
@@ -341,12 +353,20 @@ def p1_strat_analysis(
     card_parity: bool = False,
     luck_control: bool = False,
     deq_days: int | None = None,
+    projection_days: int = 0,
     metric_context: pl.DataFrame | None = None,
     extra_ext: dict[str, ColSpec] | None = None,
 ):
     logging.info(f"Running p1 strategy analysis for metric {metric}")
     model_dfs = get_model_dfs(
-        set_codes, metric, results_filter, metric_filter, deq_days, metric_context, extra_ext
+        set_codes=set_codes,
+        metric=metric,
+        results_filter=results_filter,
+        metric_filter=metric_filter,
+        deq_days=deq_days,
+        projection_days=projection_days,
+        metric_context=metric_context,
+        extra_ext=extra_ext,
     )
 
     mapped_df = strategy_mapped_df(model_dfs, card_parity)
@@ -446,6 +466,7 @@ def all_metrics_analysis(
     metrics: list[str] | None = None,
     sets: list[str] | None = None,
     deq_days: int | None = None,
+    projection_days: int = 0,
     metric_context: pl.DataFrame | None = None,
     extra_ext: dict[str, ColSpec] | None = None,
 ):
@@ -455,11 +476,12 @@ def all_metrics_analysis(
         metrics = METRICS
     metric_results = {
         metric: p1_strat_analysis(
-            sets,
-            metric,
+            set_codes=sets,
+            metric=metric,
             metric_filter=metric_filter,
             results_filter=results_filter,
             deq_days=deq_days,
+            projection_days=projection_days,
             metric_context=metric_context,
             extra_ext=extra_ext,
         )
@@ -525,6 +547,7 @@ def set_by_set_results(
         "FDN",
         "DFT",
         "TDM",
+        "FIN",
     ]
 
     results = {
@@ -559,6 +582,7 @@ def card_detail_df(
     metric_filter: dict[str, Any] | None = None,
     metric_context: pl.DataFrame | None = None,
     deq_days: int | None = None,
+    projection_days: int = 0,
     extra_ext: dict[str, ColSpec] | None = None,
 ) -> pl.DataFrame:
     pick_filter = {"$and": [P1P1, results_filter]}
@@ -567,7 +591,14 @@ def card_detail_df(
 
     metric_filter = {"player_cohort": "Top"} if metric_filter is None else metric_filter
     df = (
-        get_metric_context([set_code], metrics, metric_filter, deq_days, extra_ext)
+        get_metric_context(
+            metrics=metrics,
+            set_codes=[set_code],
+            filter_spec=metric_filter,
+            deq_days=deq_days,
+            projection_days=projection_days,
+            extra_ext=extra_ext,
+        )
         if metric_context is None
         else metric_context
     )
