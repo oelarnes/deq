@@ -1,7 +1,3 @@
-set_code = "DFT"
-start_date = dt.date(2025, 2, 11)
-end_date = dt.date(2025, 2, 12)
+from deq.deq import daily_deq
 
-df = ratings_df(set_code, start_date=start_date, end_date=end_date)
-df
-
+_ = daily_deq()

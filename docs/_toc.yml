@@ -15,5 +15,5 @@ parts:
     - file: tdm-post.ipynb
   - caption: "Math"
     chapters: 
-    - file: deq.ipynb
+    - file: deq-docs.ipynb
     - file: bayes-cohorts.ipynb

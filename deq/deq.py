@@ -1,5 +1,7 @@
 import datetime as dt
 import os
+from dataclasses import dataclass
+from typing import Any
 
 import polars as pl
 
@@ -197,34 +199,34 @@ def deq_col_specs(
         ),
         f"deq_grade{suffix}": ColSpec(
             col_type=ColType.AGG,
-            expr=pl.when(pl.col("deq").is_null())
-            .then(None)
-            .otherwise(
-                pl.when(pl.col("deq") < grade_c_minus_max - 4 * grade_notch_increment)
-                .then(pl.lit("F"))
-                .otherwise(pl.when(
-                    pl.col("deq") < grade_c_minus_max - 3 * grade_notch_increment
-                ).then(pl.lit("D-")).otherwise(pl.when(
-                    pl.col("deq") < grade_c_minus_max - 2 * grade_notch_increment
-                ).then(pl.lit("D")).otherwise(pl.when(
-                    pl.col("deq") < grade_c_minus_max - 1 * grade_notch_increment
-                ).then(pl.lit("D+")).otherwise(pl.when(
-                    pl.col("deq") < grade_c_minus_max
-                ).then(pl.lit("C-")).otherwise(pl.when(
-                    pl.col("deq") < grade_c_minus_max + 1 * grade_notch_increment
-                ).then(pl.lit("C")).otherwise(pl.when(
-                    pl.col("deq") < grade_c_minus_max + 2 * grade_notch_increment
-                ).then(pl.lit("C+")).otherwise(pl.when(
-                    pl.col("deq") < grade_c_minus_max + 3 * grade_notch_increment
-                ).then(pl.lit("B-")).otherwise(pl.when(
-                    pl.col("deq") < grade_c_minus_max + 4 * grade_notch_increment
-                ).then(pl.lit("B")).otherwise(pl.when(
-                    pl.col("deq") < grade_c_minus_max + 5 * grade_notch_increment
-                ).then(pl.lit("B+")).otherwise(pl.when(
-                    pl.col("deq") < grade_c_minus_max + 6 * grade_notch_increment
-                ).then(pl.lit("A-")).otherwise(pl.when(
-                    pl.col("deq") < grade_c_minus_max + 7 * grade_notch_increment
-                ).then(pl.lit("A")).otherwise(pl.lit("A+"))))))))))))))
+            expr=pl.when(pl.col("deq").is_null() | pl.col("deq").is_nan())
+            .then(pl.lit("N/A"))
+            .otherwise(pl.when(pl.col("deq").is_null() | pl.col("deq").is_nan()
+            ).then(pl.lit(None)).otherwise(pl.when(
+                pl.col("deq") < grade_c_minus_max - 4 * grade_notch_increment
+            ).then(pl.lit("F")).otherwise(pl.when(
+                pl.col("deq") < grade_c_minus_max - 3 * grade_notch_increment
+            ).then(pl.lit("D-")).otherwise(pl.when(
+                pl.col("deq") < grade_c_minus_max - 2 * grade_notch_increment
+            ).then(pl.lit("D")).otherwise(pl.when(
+                pl.col("deq") < grade_c_minus_max - 1 * grade_notch_increment
+            ).then(pl.lit("D+")).otherwise(pl.when(
+                pl.col("deq") < grade_c_minus_max
+            ).then(pl.lit("C-")).otherwise(pl.when(
+                pl.col("deq") < grade_c_minus_max + 1 * grade_notch_increment
+            ).then(pl.lit("C")).otherwise(pl.when(
+                pl.col("deq") < grade_c_minus_max + 2 * grade_notch_increment
+            ).then(pl.lit("C+")).otherwise(pl.when(
+                pl.col("deq") < grade_c_minus_max + 3 * grade_notch_increment
+            ).then(pl.lit("B-")).otherwise(pl.when(
+                pl.col("deq") < grade_c_minus_max + 4 * grade_notch_increment
+            ).then(pl.lit("B")).otherwise(pl.when(
+                pl.col("deq") < grade_c_minus_max + 5 * grade_notch_increment
+            ).then(pl.lit("B+")).otherwise(pl.when(
+                pl.col("deq") < grade_c_minus_max + 6 * grade_notch_increment
+            ).then(pl.lit("A-")).otherwise(pl.when(
+                pl.col("deq") < grade_c_minus_max + 7 * grade_notch_increment
+            ).then(pl.lit("A")).otherwise(pl.lit("A+")))))))))))))))
         ),
     }
 
@@ -678,13 +680,22 @@ def deq_ref_dir():
     return os.path.join(ad_hoc_dir(), "deq")
 
 
+@dataclass
+class DeqData:
+    df: pl.DataFrame
+    set_code: str
+    start_date: dt.date
+    end_date: dt.date
+    player_cohort: str
+
+
 def daily_deq(
     set_code: str | None = None,
     as_of: dt.date | None = None,
     gp_top_min_games: int = 70000,
     gp_all_min_games: int = 300000,
     max_format_day_start: int = 15,
-) -> pl.DataFrame:
+) -> DeqData:
     as_of = as_of or dt.date.today()
     set_code = (
         [
@@ -705,19 +716,21 @@ def daily_deq(
 
     if not os.path.isfile(history_df_path):
         history_df = pl.DataFrame([])
+        set_df = pl.DataFrame([])
+        as_of_df = pl.DataFrame([])
     else:
         history_df = pl.read_parquet(history_df_path)
+        set_df = history_df.filter(
+            (pl.col("set_code") == set_code) & (pl.col("as_of") <= as_of)
+        )
+        as_of_df = set_df.filter(pl.col("as_of") == as_of)
 
-    if (
-        history_df.is_empty()
-        or (set_df := history_df.filter(pl.col("set_code") == set_code)).is_empty()
-    ):
+    if set_df.is_empty():
         start_date = start_dates[set_code]
         player_cohort = "top"
         accept = False
-        as_of_df = pl.DataFrame([])
     else:
-        if (as_of_df := set_df.filter(pl.col("as_of") == as_of)).is_empty():
+        if as_of_df.is_empty():
             params = set_df.sort("as_of").to_dicts()[-1]
             player_cohort = params["player_cohort"]
 
@@ -764,6 +777,13 @@ def daily_deq(
             accept = True
             start_date = start_date - dt.timedelta(days=1)
 
+    deq_df = live_deq(
+        set_code,
+        start_date,
+        end_date,
+        player_cohort,
+    )
+
     if as_of_df.is_empty():
         history_df = pl.concat(
             [
@@ -782,21 +802,13 @@ def daily_deq(
             ]
         )
 
+        print("Writing history.parquet")
         history_df.write_parquet(history_df_path)
 
-    return live_deq(
-        set_code,
-        start_date,
-        end_date,
-        player_cohort,
+    return DeqData(
+        df=deq_df,
+        set_code=set_code,
+        start_date=start_date,
+        end_date=end_date,
+        player_cohort=player_cohort,
     )
-
-
-def persist_daily_deq(
-    set_code: str | None = None,
-    as_of: dt.date | None = None,
-    gp_top_min_games: int = 70000,
-    gp_all_min_games: int = 300000,
-    max_format_day_start: int = 15,
-    target_path: str | None = None,
-) -> int: ...

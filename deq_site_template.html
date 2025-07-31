@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DEq: Estimated Draft Equity</title>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">DEq</div>
+    </div>
+
+    <div class="text-content">
+        {set_code} {player_cohort} data from {start_date} to {end_date}
+    </div>
+
+    <div class="container">
+        <div class="search-container">
+            <input 
+                type="text" 
+                class="search-input" 
+                id="searchInput"
+                placeholder='Search "B: black cards only, "common: commons only, !rare: no rares...'
+                autocomplete="off"
+            >
+        </div>
+
+        <div class="table-container">
+            <table id="dataTable">
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Grade</th>
+                        <th>DEq</th>
+                        <th>Name</th>
+                        <th class="col-hidden">Color</th>
+                        <th class="col-hidden">Rarity</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+            <div id="noResults" class="no-results" style="display: none;">
+                No results found for your search.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const deq_table = JSON.parse(`{deq_table}`)
+
+        function deqFormat(num) {{
+            return typeof(num) === "number" ? num.toLocaleString('en-US', {{
+                style: 'percent',
+                minimumFractionDigits: 2, 
+                maximumFractionDigits: 2,
+                signDisplay: 'always',
+            }}) : "N/A"
+        }}
+
+        // Function to render table
+        function renderTable(data) {{
+            const tbody = document.getElementById('tableBody');
+            const noResults = document.getElementById('noResults');
+            
+            if (data.length === 0) {{
+                tbody.innerHTML = '';
+                noResults.style.display = 'block';
+                return;
+            }}
+            
+            noResults.style.display = 'none';
+            
+            tbody.innerHTML = data.map((row, i) => `
+                <tr>
+                    <td>${{i + 1}}</td>
+                    <td>${{row.deq_grade}}</td>
+                    <td>${{deqFormat(row.deq)}}</td>
+                    <td>${{row.name}}</td>
+                    <td>${{row.color}}</td>
+                    <td>${{row.rarity}}</td>
+                </tr>
+            `).join('');
+        }}
+
+        // Function to filter data
+        function filterData(searchTerm) {{
+            if (!searchTerm.trim()) {{
+                return deq_table;
+            }}
+            
+            const terms = searchTerm.toLowerCase().split(/\s+/).filter(term => term.length > 0);
+
+            const inexactTerms = terms.filter(term => !term.includes('"') & !term.includes('!'))
+            const exactTerms = terms.filter(term => term.includes('"')).map(term => term.replaceAll('"', ''));
+            const notTerms = terms.filter(term => term.includes('!')).map(term => term.replaceAll('!', ''));
+            
+            return deq_table.filter(row => {{
+                const {{name, color, rarity}} = row
+                const rowText = [name, color, rarity].join(' ').toLowerCase();
+                return inexactTerms.every(term => rowText.includes(term)) & exactTerms.every(term => rowText.split(' ').filter(word => word.toLowerCase() === term).length > 0) & !notTerms.some(term => rowText.includes(term))
+            }});
+        }}
+
+        // Search functionality
+        const searchInput = document.getElementById('searchInput');
+        let searchTimeout;
+
+        searchInput.addEventListener('input', function() {{
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {{
+                const filteredData = filterData(this.value);
+                renderTable(filteredData);
+            }}, 150);
+        }});
+
+        // Add some visual feedback for search
+        searchInput.addEventListener('focus', function() {{
+            this.style.transform = 'translateY(-2px)';
+        }});
+
+        searchInput.addEventListener('blur', function() {{
+            this.style.transform = 'translateY(0)';
+        }});
+
+        renderTable(deq_table)
+    </script>
+</body>
+</html>

@@ -122,7 +122,7 @@ def p1_line_plot(
     analysis: AnalysisResult,
     mode: str = "wr_delta",
     metrics: list[str] | None = None,
-    quality_threshold: float = -3,  # greater than this value
+    quality_threshold: float = -2,  # greater than this value
     colors: str = "pyplot",
     title_extra: str | None = None,
 ) -> None:
