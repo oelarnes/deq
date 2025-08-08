@@ -68,37 +68,3 @@ body {
 .info-list li:last-child {
     border-right: none;
 }
-
-.dropdown-toggle {
-    position: relative;
-}
-
-.dropdown-menu {
-    position: absolute;
-    background-color: var(--pst-color-border-muted);
-    padding: 0 0.5em 0 0.5em;
-    border: none;
-    position: relative;
-    top: 100%;
-    left: 0;
-    right: 0;
-    border: 1px solid var(--pst-color-border);
-    border-top: none;
-    z-index: 1000;
-    opacity: 0;
-    visibility: hidden;
-    transition: all 0.2s ease;
-}
-
-.dropdown.active .dropdown-menu {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0);
-}
-
-.dropdown-item {
-    display: block;
-    width: 100%;
-    white-space: nowrap;
-}
-

@@ -83,44 +83,6 @@
         </div>
     </div>
     <script>
-        document.addEventListener('DOMContentLoaded', function() {{
-            const dropdown = document.getElementById('dropdown');
-            const dropdownToggle = document.getElementById('dropdownToggle');
-            const dropdownItems = document.querySelectorAll('.dropdown-item');
-
-            // Toggle dropdown
-            dropdownToggle.addEventListener('click', function(e) {{
-                e.preventDefault();
-                e.stopPropagation();
-                dropdown.classList.toggle('active');
-            }});
-
-            // Close dropdown when clicking outside
-            document.addEventListener('click', function(e) {{
-                if (!dropdown.contains(e.target)) {{
-                    dropdown.classList.remove('active');
-                }}
-            }});
-
-            // Handle dropdown item selection
-            dropdownItems.forEach(item => {{
-                item.addEventListener('click', function(e) {{
-                    e.preventDefault();
-                    e.stopPropagation();
-                    window.location.href = this.getAttribute('data-link');
-                    dropdownToggle.textContent = this.textContent;
-                    dropdown.classList.remove('active');
-                }});
-            }});
-
-            // Close dropdown on escape key
-            document.addEventListener('keydown', function(e) {{
-                if (e.key === 'Escape') {{
-                    dropdown.classList.remove('active');
-                }}
-            }});
-        }});
-
         const deq_table = JSON.parse(`{deq_table}`)
 
         function deqFormat(num) {{
