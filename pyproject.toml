@@ -21,7 +21,7 @@ readme = "README.md"
 license = {text = "MIT"}
 
 [project.scripts]
-deqdaily = "deq.deq:daily_deq"
+deqdaily = "deq.site:main"
 
 [build-system]
 requires = ["pdm-backend"]

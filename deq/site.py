@@ -1,4 +1,7 @@
 import json
+import math
+import random
+import os
 from pathlib import Path
 
 from deq.deq import daily_deq
@@ -12,8 +15,18 @@ def load_html_template(template_path="deq_site_template.html"):
         return f.read()
 
 
-def main():
-    deq_data = daily_deq()
+def destination_path(set_code: str | None = None) -> Path:
+    base_path = Path("docs") / "_build" / "html"
+    if not os.path.isdir(base_path):
+        os.makedirs(base_path)
+    if set_code is not None:
+        return base_path / f"deq-{set_code.lower()}.html"
+    else:
+        return base_path / "deq.html"
+
+
+def main(set_code: str | None = None):
+    deq_data = daily_deq(set_code)
     table_json = json.dumps(
         deq_data.df.select(
             "deq_grade",
@@ -33,17 +46,33 @@ def main():
         allow_nan=False,
     )
 
+    select_elements = "".join([
+        f'<option value="deq-{set_code.lower()}.html">{set_code}</option>' for 
+        set_code in deq_data.available_sets
+    ])
+
     html_content = load_html_template().format(
         deq_table=table_json,
         set_code=deq_data.set_code,
         player_cohort=deq_data.player_cohort,
         start_date=deq_data.start_date,
         end_date=deq_data.end_date,
+        version=math.floor(random.random() * 1e10),
+        select_elements=select_elements
     )
 
-    output_file = Path("docs") / "_build" / "html" / "deq.html"
-    with open(output_file, "w", encoding="utf-8") as f:
+    path = destination_path(deq_data.set_code)
+    with open(path, "w", encoding="utf-8") as f:
         f.write(html_content)
 
-    print(f"DEq site generated: {output_file}")
-    return output_file
+    if set_code is None:
+        path = destination_path(None)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(html_content)
+
+    print(f"DEq site generated: {path}")
+    return path
+
+
+if __name__ == "__main__":
+    main()

@@ -1,7 +1,6 @@
 import datetime as dt
 import os
 from dataclasses import dataclass
-from typing import Any
 
 import polars as pl
 
@@ -65,6 +64,11 @@ start_dates = {
     "TDM": dt.date(2025, 4, 8),
     "FIN": dt.date(2025, 6, 10),
     "EOE": dt.date(2025, 7, 29),
+}
+
+end_dates = {
+    "TDM": dt.date(2025, 6, 10),
+    "FIN": dt.date(2025, 7, 29),
 }
 
 
@@ -687,6 +691,7 @@ class DeqData:
     start_date: dt.date
     end_date: dt.date
     player_cohort: str
+    available_sets: list[str]
 
 
 def daily_deq(
@@ -706,7 +711,7 @@ def daily_deq(
         if set_code is None
         else set_code
     )
-    end_date = as_of - dt.timedelta(days=1)
+    end_date = end_dates.get(set_code, as_of - dt.timedelta(days=1))
 
     ref_dir = deq_ref_dir()
     if not os.path.isdir(ref_dir):
@@ -805,10 +810,13 @@ def daily_deq(
         print("Writing history.parquet")
         history_df.write_parquet(history_df_path)
 
+    available_sets = list(history_df['set_code'].unique())
+
     return DeqData(
         df=deq_df,
         set_code=set_code,
         start_date=start_date,
         end_date=end_date,
         player_cohort=player_cohort,
+        available_sets=available_sets,
     )

@@ -1,26 +1,64 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DEq: Estimated Draft Equity</title>
+    <link href="_static/styles/theme.css" rel="stylesheet" />
+    <link href="_static/styles/pydata-sphinx-theme.css" rel="stylesheet" />
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/sphinx-book-theme.css" />
+    <link rel="stylesheet" type="text/css" href="_static/togglebutton.css" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css" />
+    <link rel="stylesheet" type="text/css" href="_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinx-thebe.css" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinx-design.min.css" />
+    <link rel="stylesheet" type="text/css" href="_static/.ipynb_checkpoints/style-checkpoint.css" />
+    <link rel="stylesheet" type="text/css" href="_static/style.css?v={version}" />
+    <link rel="icon" href="_static/deq.png"/> 
 </head>
 <body>
-    <div class="header">
-        <div class="logo">DEq</div>
-    </div>
+    <div class="deq-container">
+        <div class="header">
+            <div class="deq-logo">DEq</div>
+        </div>
 
-    <div class="text-content">
-        {set_code} {player_cohort} data from {start_date} to {end_date}
-    </div>
-
-    <div class="container">
+        <div class="info-list-container">
+            <ul class="info-list">
+                <li class="dropdown" id="dropdown">
+                    <select onChange="window.location.href=this.value" name="set-code" id="link-select">
+                        {select_elements}
+                    </select>
+                <!--
+                    <button class="cell-content dropdown-toggle" id="dropdownToggle">
+                        {set_code}
+                    </button>
+                    <div class="dropdown-menu">
+                        <button class="dropdown-item" data-link="deq-eoe.html">EOE</button>
+                        <button class="dropdown-item" data-link="deq-tdm.html">TDM</button>
+                    </div>               
+                -->
+                </li>
+                <li>
+                    <div class="cell-content"> {player_cohort} players </div>
+                </li>
+                <li>
+                    <div class="cell-content"> {start_date} </div>
+                </li>
+                <li>
+                    <div class="cell-content"> {end_date} </div>
+                </li>
+                <li>
+                    <div class="cell-content"> <a href="deq-docs.html">docs</a> </div>
+                </li>
+            </ul>
+        </div>
         <div class="search-container">
             <input 
                 type="text" 
                 class="search-input" 
                 id="searchInput"
-                placeholder='Search "B: black cards only, "common: commons only, !rare: no rares...'
+                placeholder='try "B !rare !mythic "common'
                 autocomplete="off"
             >
         </div>
@@ -29,11 +67,11 @@
             <table id="dataTable">
                 <thead>
                     <tr>
-                        <th>Rank</th>
+                        <th class="col-hidden">Rank</th>
                         <th>Grade</th>
                         <th>DEq</th>
                         <th>Name</th>
-                        <th class="col-hidden">Color</th>
+                        <th>Color</th>
                         <th class="col-hidden">Rarity</th>
                     </tr>
                 </thead>
@@ -44,8 +82,45 @@
             </div>
         </div>
     </div>
-
     <script>
+        document.addEventListener('DOMContentLoaded', function() {{
+            const dropdown = document.getElementById('dropdown');
+            const dropdownToggle = document.getElementById('dropdownToggle');
+            const dropdownItems = document.querySelectorAll('.dropdown-item');
+
+            // Toggle dropdown
+            dropdownToggle.addEventListener('click', function(e) {{
+                e.preventDefault();
+                e.stopPropagation();
+                dropdown.classList.toggle('active');
+            }});
+
+            // Close dropdown when clicking outside
+            document.addEventListener('click', function(e) {{
+                if (!dropdown.contains(e.target)) {{
+                    dropdown.classList.remove('active');
+                }}
+            }});
+
+            // Handle dropdown item selection
+            dropdownItems.forEach(item => {{
+                item.addEventListener('click', function(e) {{
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.location.href = this.getAttribute('data-link');
+                    dropdownToggle.textContent = this.textContent;
+                    dropdown.classList.remove('active');
+                }});
+            }});
+
+            // Close dropdown on escape key
+            document.addEventListener('keydown', function(e) {{
+                if (e.key === 'Escape') {{
+                    dropdown.classList.remove('active');
+                }}
+            }});
+        }});
+
         const deq_table = JSON.parse(`{deq_table}`)
 
         function deqFormat(num) {{
@@ -72,12 +147,12 @@
             
             tbody.innerHTML = data.map((row, i) => `
                 <tr>
-                    <td>${{i + 1}}</td>
+                    <td class="col-hidden">${{i + 1}}</td>
                     <td>${{row.deq_grade}}</td>
                     <td>${{deqFormat(row.deq)}}</td>
                     <td>${{row.name}}</td>
                     <td>${{row.color}}</td>
-                    <td>${{row.rarity}}</td>
+                    <td class="col-hidden">${{row.rarity}}</td>
                 </tr>
             `).join('');
         }}
@@ -90,14 +165,25 @@
             
             const terms = searchTerm.toLowerCase().split(/\s+/).filter(term => term.length > 0);
 
-            const inexactTerms = terms.filter(term => !term.includes('"') & !term.includes('!'))
-            const exactTerms = terms.filter(term => term.includes('"')).map(term => term.replaceAll('"', ''));
-            const notTerms = terms.filter(term => term.includes('!')).map(term => term.replaceAll('!', ''));
+            const quoteChars = ['“', '”', '"'];
+            const inexactTerms = terms.filter(term => {{
+                return !quoteChars.some(char => term.includes(char)) & !term.includes('!')
+            }});
+            const exactTerms = terms.filter(
+                term => quoteChars.some(char => term.includes(char))
+            ).map(term => term.replaceAll(/"|“|”/g, ''));
+            const notTerms = terms.filter(
+                term => term.includes('!')
+            ).map(term => term.replaceAll('!', ''));
             
             return deq_table.filter(row => {{
                 const {{name, color, rarity}} = row
                 const rowText = [name, color, rarity].join(' ').toLowerCase();
-                return inexactTerms.every(term => rowText.includes(term)) & exactTerms.every(term => rowText.split(' ').filter(word => word.toLowerCase() === term).length > 0) & !notTerms.some(term => rowText.includes(term))
+                return inexactTerms.every(
+                    term => rowText.includes(term)
+                ) & exactTerms.every(
+                    term => rowText.split(' ').filter(word => word.toLowerCase() === term).length > 0
+                ) & !notTerms.some(term => rowText.includes(term))
             }});
         }}
 
@@ -124,5 +210,6 @@
 
         renderTable(deq_table)
     </script>
+
 </body>
 </html>

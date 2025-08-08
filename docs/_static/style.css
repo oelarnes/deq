@@ -1,0 +1,104 @@
+body {
+    background-color: var(--pst-color-background);
+    box-sizing: border-box;
+}
+
+.deq-container {
+    color: var(--pst-color-text-base);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    padding: .5rem;
+    text-align: center;
+    align-items: center;
+}
+
+.deq-logo {
+    color: --var(--pst-color-light);
+    font-size: 400%;
+    font-weight: 600;
+    margin: .5rem 0 .5rem;
+}
+
+.search-container {
+    padding: 1em;
+}
+
+.search-input {
+    background-color: var(--pst-color-border-muted);
+    border: 1px solid var(--pst-color-border);
+    border-radius: 1.5em;
+    width: 300px;
+    font-size: 16px;
+    text-align: center;
+}
+
+.col-hidden {
+    display: none;
+}
+
+/* Show all columns on larger screens */
+@media (min-width: 500px) {
+    .col-hidden {
+        display: table-cell;
+    }
+}
+
+.info-list-container {
+    display: inline-block;
+}
+
+.info-list {
+    border: 1px solid var(--pst-color-border);
+    list-style: none;
+    display: flex;
+    padding-left: 0rem;
+}
+
+.info-list li {
+    border-right: 1px solid var(--pst-color-border);
+    background-color: var(--pst-color-border-muted);
+}
+
+.cell-content {
+    background-color: var(--pst-color-border-muted);
+    padding: 0 0.5em 0 0.5em;
+    border: none;
+    position: relative;
+}
+
+.info-list li:last-child {
+    border-right: none;
+}
+
+.dropdown-toggle {
+    position: relative;
+}
+
+.dropdown-menu {
+    position: absolute;
+    background-color: var(--pst-color-border-muted);
+    padding: 0 0.5em 0 0.5em;
+    border: none;
+    position: relative;
+    top: 100%;
+    left: 0;
+    right: 0;
+    border: 1px solid var(--pst-color-border);
+    border-top: none;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.2s ease;
+}
+
+.dropdown.active .dropdown-menu {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.dropdown-item {
+    display: block;
+    width: 100%;
+    white-space: nowrap;
+}
+
