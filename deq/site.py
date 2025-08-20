@@ -51,12 +51,13 @@ def main(set_code: str | None = None):
         set_code in deq_data.available_sets
     ])
 
+    date_format = "%-d %b %y"
     html_content = load_html_template().format(
         deq_table=table_json,
         set_code=deq_data.set_code,
         player_cohort=deq_data.player_cohort,
-        start_date=deq_data.start_date,
-        end_date=deq_data.end_date,
+        start_date=deq_data.start_date.strftime(date_format),
+        end_date=deq_data.end_date.strftime(date_format),
         version=math.floor(random.random() * 1e10),
         select_elements=select_elements
     )

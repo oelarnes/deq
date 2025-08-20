@@ -51,6 +51,7 @@ COLOR_LIST = {
 }
 
 METRIC_LABELS = {
+    "danb": "Dan B",
     "deq": "DEq",
     "deq_a": "DEq A",
     "deq_b": "DEq B",
@@ -68,6 +69,7 @@ METRIC_LABELS = {
     "actual": "Actual",
     "deq_mardu": "Mardu",
     "deq_dragons": "Dragons",
+    "MLP_Logits": "Jiri_one",
 }
 
 FIG_SIZE = (8, 6)

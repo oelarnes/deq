@@ -474,6 +474,8 @@ def all_metrics_analysis(
 
     if metrics is None:
         metrics = METRICS
+
+    context_metrics = set() if metric_context is None else set(metric_context.columns)
     metric_results = {
         metric: p1_strat_analysis(
             set_codes=sets,
@@ -482,7 +484,7 @@ def all_metrics_analysis(
             results_filter=results_filter,
             deq_days=deq_days,
             projection_days=projection_days,
-            metric_context=metric_context,
+            metric_context=metric_context if metric in context_metrics else None,
             extra_ext=extra_ext,
         )
         for metric in metrics

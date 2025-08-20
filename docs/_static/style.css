@@ -8,6 +8,8 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     padding: .5rem;
     text-align: center;
+    display: flex;
+    flex-direction: column;
     align-items: center;
 }
 
@@ -15,11 +17,28 @@ body {
     color: --var(--pst-color-light);
     font-size: 400%;
     font-weight: 600;
-    margin: .5rem 0 .5rem;
+}
+
+.doc-container {
+    max-width: 600px;
+    border: 1px solid var(--pst-color-border);
+    background-color: var(--pst-color-border-muted);
+    border-radius: 1.5em;
+    padding: 0 10px 10px;
+    margin-bottom: 1rem;
+}
+
+.doc-button {
+    border-radius: 1.5em;
+    background-color: var(--pst-color-background);
+    text-align: left;
+    padding: 4px 16px;
+    cursor: pointer;
+    transition: all 0.3s ease;
 }
 
 .search-container {
-    padding: 1em;
+    margin-bottom: 1rem;
 }
 
 .search-input {
@@ -42,29 +61,20 @@ body {
     }
 }
 
-.info-list-container {
+.info-table {
     display: inline-block;
+    margin-bottom: 1rem;
 }
 
-.info-list {
+table {
+    border-collapse: collapse;
     border: 1px solid var(--pst-color-border);
-    list-style: none;
-    display: flex;
-    padding-left: 0rem;
 }
 
-.info-list li {
-    border-right: 1px solid var(--pst-color-border);
-    background-color: var(--pst-color-border-muted);
+th {
+    border-bottom: 1px solid var(--pst-color-border)
 }
 
-.cell-content {
-    background-color: var(--pst-color-border-muted);
-    padding: 0 0.5em 0 0.5em;
-    border: none;
-    position: relative;
-}
-
-.info-list li:last-child {
-    border-right: none;
+tr:nth-child(even) {
+    background-color: #2a2e33;
 }

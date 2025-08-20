@@ -810,7 +810,11 @@ def daily_deq(
         print("Writing history.parquet")
         history_df.write_parquet(history_df_path)
 
-    available_sets = list(history_df['set_code'].unique())
+    available_sets = sorted(
+        list(history_df['set_code'].unique()),
+        key=lambda val: dt.date(2900, 1, 1) if (val == set_code) else start_dates[val],
+        reverse=True
+    )
 
     return DeqData(
         df=deq_df,
