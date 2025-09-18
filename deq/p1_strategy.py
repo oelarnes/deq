@@ -12,7 +12,7 @@ from spells.extension import context_cols
 from spells.config import all_sets
 from spells.utils import wavg
 
-from deq.deq import deq_bias_set_context, BASIC_LANDS, ext
+from deq.main import deq_bias_set_context, BASIC_LANDS, ext
 
 TOP_PLAYER = {ColName.PLAYER_COHORT: "Top"}
 LATE_FORMAT = {"lhs": ColName.FORMAT_DAY, "op": ">=", "rhs": 13}
@@ -531,26 +531,6 @@ def set_by_set_results(
     deq_days: int | None = None,
 ):
     metrics = ["deq", "gih_wr_17l"] if metrics is None else metrics
-    sets = [
-        "NEO",
-        "SNC",
-        "DMU",
-        "BRO",
-        "ONE",
-        "MOM",
-        "LTR",
-        "WOE",
-        "LCI",
-        "MKM",
-        "OTJ",
-        "MH3",
-        "BLB",
-        "DSK",
-        "FDN",
-        "DFT",
-        "TDM",
-        "FIN",
-    ]
 
     results = {
         set_: all_metrics_analysis(
@@ -560,7 +540,7 @@ def set_by_set_results(
             sets=[set_],
             deq_days=deq_days,
         )
-        for set_ in sets
+        for set_ in all_sets
     }
 
     return results
@@ -697,6 +677,29 @@ def skill_cohort_table(result: AnalysisResult):
                 }
             )
         )
-        .fmt_percent("Game Win Rate")
-        .tab_header(title="Win Rates and Game Counts", subtitle="by Skill Cohort")
+        .fmt_percent("game win rate")
+        .tab_header(title="win rates and game counts", subtitle="by skill cohort")
     )
+
+def draft_count_table(
+    sets: list[str] | None = None,
+    results_filter: dict | None = None
+):
+    p1_results_filter = {"$and": [P1P1, results_filter]} if results_filter else P1P1
+    df = summon(
+        sets if sets else all_sets,
+        [ColName.NUM_DRAFTS],
+        group_by=[],
+        filter_spec = {
+            '$and': [
+                p1_results_filter,
+                {'lhs': 'skill_cohort', 'op': 'in', 'rhs': list(UP_ONE_MAP.values())},
+                {'lhs': 'event_matches', 'op': '>', 'rhs': 0},
+            ]
+        },
+        extensions=ext
+    )
+
+    return GT(df.rename({'num_drafts': 'Total Number of Drafts Included'}))
+
+

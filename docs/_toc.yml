@@ -13,7 +13,10 @@ parts:
   - caption: "Tarkir: Dragonstorm"
     chapters:
     - file: tdm-post.ipynb
-  - caption: "Math"
+  - caption: "DEq"
     chapters: 
     - file: deq-docs.ipynb
+    - file: deq-math.ipynb
+  - caption: "Misc"
+    chapters:
     - file: bayes-cohorts.ipynb

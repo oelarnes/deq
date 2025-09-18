@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DEq: Estimated Draft Equity</title>
+    <title>{set_code} DEq: Estimated Draft Equity</title>
     <link href="_static/styles/theme.css" rel="stylesheet" />
     <link href="_static/styles/pydata-sphinx-theme.css" rel="stylesheet" />
     <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
@@ -22,12 +22,6 @@
         <div class="header">
             <div class="deq-logo">DEq</div>
         </div>
-        <div class="doc-container">
-            <button class="doc-button" id="docButton">▼</button>
-            <div class="doc-text" id="docText">
-                DEq, or Estimated Draft Equity, is a card quality metric designed to be used as a pick order in booster draft. The value represents the expected win rate added to your deck by selecting the given card versus a basic land. The metric adjusts GP WR by the opportunity cost as recorded in the ATA statistic, in addition to other minor adjustments, and modifies the result by GP% to account for differences in play rate. For more details, see the <a href="deq-docs.html">docs</a>. Data is sourced daily from 17Lands. DEq is not affiliated with 17Lands.
-            </div>
-        </div>
 
         <div class="info-table-container">
             <table class="info-table">
@@ -36,6 +30,7 @@
                     <th>Players</th>
                     <th>Start</th>
                     <th>End</th>
+                    <th>?</th>
                 </tr>
                 <tr class="info-value-row">
                     <td class="cell-content dropdown" id="dropdown">
@@ -52,8 +47,34 @@
                     <td>
                         <div class="cell-content"> {end_date} </div>
                     </td>
+                    <td>
+                        <button class="doc-button" id="docButton"><span>▼</span></button>
+                    </td>
                 </tr>
+                
             </table>
+            <div class="doc-text" id="docText">
+                <strong>DEq</strong>, or Estimated Draft Equity, is a card quality 
+metric designed to be used as a pick order in booster draft. The value represents 
+the expected win rate added to your deck by selecting the given card versus a basic 
+land. Based on daily data from the <a href="https://17lands.com/card_data">card data</a> 
+page on 17Lands, the metric adjusts 
+GP WR by the opportunity cost as recorded in the ATA statistic, in addition to other 
+minor adjustments, and modifies the result by GP% to account for differences in play 
+rate. For more details, see the <a href="deq-docs.html">documentation</a> and additional 
+content at <a href="intro.html">MagicFlea on Draft</a>. 
+DEq is not affiliated with 17Lands.
+
+                <hr>
+                <strong>Search Examples:</strong>
+                <ul>
+                    <li>Black Lotus</li>
+                    <li>"black lotus"/mox/"sol ring"</li>
+                    <li>c:w/u/b/r/g/c/m</li>
+                    <li>c:w* r:u</li>
+                    <li>r:r/m</li>
+                </ul>
+            </div>
         </div>
 
         <div class="search-container">
@@ -61,7 +82,7 @@
                 type="text" 
                 class="search-input" 
                 id="searchInput"
-                placeholder='try name1/name2 r:c/u c:u/m'
+                placeholder='search name, color, and rarity'
                 autocomplete="off"
             >
         </div>
@@ -76,6 +97,9 @@
                         <th>Name</th>
                         <th>Color</th>
                         <th class="col-hidden">Rarity</th>
+                        <th class="col-hidden {embargo_class}">ATA</th>
+                        <th class="col-hidden {embargo_class}">GP WR</th>
+                        <th class="col-hidden {embargo_class}">% GP</th>
                     </tr>
                 </thead>
                 <tbody id="tableBody"></tbody>
@@ -84,6 +108,10 @@
                 No results found for your search.
             </div>
         </div>
+        <span>
+        Underlying data from <a href="https://17Lands.com/card_data">17Lands<a> with permission
+        </span>
+        <span>Original content ©2025 Joel Barnes</span>
     </div>
     <script>
         const docButton = document.getElementById('docButton');
@@ -91,24 +119,25 @@
 
         docButton.addEventListener('click', function() {{
             const isExpanded = docText.classList.contains('expanded');
+            console.log(isExpanded);
             
             if (isExpanded) {{
                 docText.classList.remove('expanded');
                 docButton.classList.remove('expanded');
-                docButton.querySelector('span').textContent = 'Documentation';
+                docButton.querySelector('span').textContent = '▼';
             }} else {{
                 docText.classList.add('expanded');
                 docButton.classList.add('expanded');
-                docButton.querySelector('span').textContent = 'Hide Documentation';
+                docButton.querySelector('span').textContent = '▲';
             }}
         }});
 
         // Optional: Close docText when clicking outside
         document.addEventListener('click', function(event) {{
-            if (!event.target.closest('.container') && docText.classList.contains('expanded')) {{
+            if (!event.target.closest('.info-table-container') && docText.classList.contains('expanded')) {{
                 docText.classList.remove('expanded');
                 docButton.classList.remove('expanded');
-                docButton.querySelector('span').textContent = 'Documentation';
+                docButton.querySelector('span').textContent = '▼';
             }}
         }});
 
@@ -120,6 +149,21 @@
                 minimumFractionDigits: 2, 
                 maximumFractionDigits: 2,
                 signDisplay: 'always',
+            }}) : "N/A"
+        }}
+
+        function ataFormat(num) {{
+            return typeof(num) == "number" ? num.toLocaleString('en-US', {{
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }}) : "N/A"
+        }}
+
+        function pctFormat(num) {{
+            return typeof(num) == "number" ? num.toLocaleString('en-US', {{
+                style: "percent",
+                minimumFractionDigits: 1,
+                maximumFractionDigits: 1
             }}) : "N/A"
         }}
 
@@ -144,6 +188,9 @@
                     <td>${{row.name}}</td>
                     <td>${{row.color}}</td>
                     <td class="col-hidden">${{row.rarity}}</td>
+                <td class="col-hidden {embargo_class}">${{ataFormat(row.ata)}}</td>
+                <td class="col-hidden {embargo_class}">${{pctFormat(row.gp_wr)}}</td>
+                <td class="col-hidden {embargo_class}">${{pctFormat(row.pct_gp)}}</td>
                 </tr>
             `).join('');
         }}
@@ -154,10 +201,21 @@
                 return orSplit.some(
                     item => row.color.toLowerCase().split('').sort().join('') === 
                         item.toLowerCase().split('').sort().join('') || 
+                        wildCardMatch(item, row.color) ||
                         row.color === '' && item.toLowerCase() === 'c' || 
                         row.color.length > 1 && item.toLowerCase() === 'm'
                     );
             }}
+        }}
+
+        function wildCardMatch(item, color) {{
+            if (item.includes('*')) {{
+                const others = item.replaceAll('*', '');
+                return others.toLowerCase().split('').every(char => {{
+                    return color.toLowerCase().includes(char);
+                }});
+            }}
+            return false;
         }}
 
         function rarityFilter(row) {{
@@ -205,7 +263,6 @@
             }}
 
             const terms = splitTokens(searchTerm.toLowerCase());
-            console.log(terms)
 
             const colorTerms = terms.filter(
                 term => term.startsWith('c:')).map(

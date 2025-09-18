@@ -60,17 +60,37 @@ color_sets = [
     "BRG",
 ]
 
-start_dates = {
-    "TDM": dt.date(2025, 4, 8),
-    "FIN": dt.date(2025, 6, 10),
-    "EOE": dt.date(2025, 7, 29),
-}
+@dataclass
+class DEqConfig():
+    start_date: dt.date
+    end_date: dt.date | None = None
+    is_pick_two: bool = False
 
-end_dates = {
-    "TDM": dt.date(2025, 6, 10),
-    "FIN": dt.date(2025, 7, 29),
+config = {
+    'OM1': DEqConfig(
+        start_date = dt.date(2025, 9, 23),
+        is_pick_two = True
+    ),
+    "EOE": DEqConfig(
+        start_date = dt.date(2025, 7, 29)
+    ),
+    "FIN": DEqConfig(
+        start_date = dt.date(2025, 6, 10),
+        end_date = dt.date(2025, 7, 29)
+    ),
+    "TDM" :DEqConfig(
+        start_date = dt.date(2025, 4, 8),
+        end_date = dt.date(2025, 6, 10),
+    ),
+    "DFT": DEqConfig(
+        start_date = dt.date(2025, 2, 11),
+        end_date = dt.date(2025, 4, 8),
+    ),
+    "PIO": DEqConfig(
+        start_date = dt.date(2024, 12, 10),
+        end_date = dt.date(2025, 2, 11),
+    )
 }
-
 
 def deq_col_specs(
     suffix: str = "",
@@ -87,6 +107,7 @@ def deq_col_specs(
     max_deq_days: int = MAX_DEQ_DAYS,
     grade_c_minus_max: float = GRADE_C_MINUS_MAX,
     grade_notch_increment: float = GRADE_NOTCH_INCREMENT,
+    is_pick_two: bool = False,
 ) -> dict[str, ColSpec]:
     def meta_decay_factor(set_context: dict):
         t: int | None = set_context.get("observed_days")
@@ -111,14 +132,18 @@ def deq_col_specs(
 
     # fmt: off
     return {
+        f"ata_adj{suffix}": ColSpec(
+            col_type=ColType.AGG,
+            expr=pl.col(ColName.ATA) * 2 - 0.5 if is_pick_two else pl.col(ColName.ATA)
+        ),
         f"pick_equity{suffix}": ColSpec(
             col_type=ColType.AGG,
-            expr=pl.when(pl.col(ColName.ATA) >= pick_equity_mid_index)
+            expr=pl.when(pl.col(f"ata_adj{suffix}") >= pick_equity_mid_index)
             .then(
                 pick_equity_mid
                 * (
                     1
-                    - (pl.col(ColName.ATA) - pick_equity_mid_index)
+                    - (pl.col(f"ata_adj{suffix}") - pick_equity_mid_index)
                     / (zero_equity_index - pick_equity_mid_index)
                 ).pow(2)
             )
@@ -127,7 +152,7 @@ def deq_col_specs(
                 + (
                     (
                         1
-                        - (pl.col(ColName.ATA) - pick_equity_mid_index)
+                        - (pl.col(f"ata_adj{suffix}") - pick_equity_mid_index)
                         / (zero_equity_index - pick_equity_mid_index)
                     ).pow(2)
                     - 1
@@ -146,7 +171,7 @@ def deq_col_specs(
         ),
         f"gp_wr_bayes_mu{suffix}": ColSpec(
             col_type=ColType.AGG,
-            expr=pl.col(ColName.GP_WR_MEAN) + wr_beta_to_ata * (pl.col("ata") - 7),
+            expr=pl.col(ColName.GP_WR_MEAN) + wr_beta_to_ata * (pl.col(f"ata_adj{suffix}") - 7),
         ),
         f"gp_wr_b{suffix}": ColSpec(
             col_type=ColType.AGG,
@@ -204,9 +229,7 @@ def deq_col_specs(
         f"deq_grade{suffix}": ColSpec(
             col_type=ColType.AGG,
             expr=pl.when(pl.col("deq").is_null() | pl.col("deq").is_nan())
-            .then(pl.lit("N/A"))
-            .otherwise(pl.when(pl.col("deq").is_null() | pl.col("deq").is_nan()
-            ).then(pl.lit(None)).otherwise(pl.when(
+            .then(pl.lit("N/A")).otherwise(pl.when(
                 pl.col("deq") < grade_c_minus_max - 4 * grade_notch_increment
             ).then(pl.lit("F")).otherwise(pl.when(
                 pl.col("deq") < grade_c_minus_max - 3 * grade_notch_increment
@@ -230,7 +253,7 @@ def deq_col_specs(
                 pl.col("deq") < grade_c_minus_max + 6 * grade_notch_increment
             ).then(pl.lit("A-")).otherwise(pl.when(
                 pl.col("deq") < grade_c_minus_max + 7 * grade_notch_increment
-            ).then(pl.lit("A")).otherwise(pl.lit("A+")))))))))))))))
+            ).then(pl.lit("A")).otherwise(pl.lit("A+"))))))))))))))
         ),
     }
 
@@ -542,6 +565,7 @@ def live_deq(
             ColName.DECK,
             ColName.WON_DECK,
             ColName.PCT_GP,
+            ColName.GP_WR,
         ],
         cdfs=CardDataFileSpec(
             set_code=set_code,
@@ -574,6 +598,7 @@ def live_deq(
             ColName.DECK,
             ColName.WON_DECK,
             ColName.PCT_GP,
+            ColName.GP_WR,
         )
 
     deck_counts_df = summon(
@@ -646,6 +671,7 @@ def live_deq(
         wr_beta_to_ata=wr_beta_to_ata,
         bayes_games=bayes_games,
         max_deq_days=max_deq_days,
+        is_pick_two=config[set_code].is_pick_two,
     )
 
     def deq_col(col: str) -> pl.Expr:
@@ -660,6 +686,9 @@ def live_deq(
 
     deq_df = (
         card_df.with_columns(
+            deq_col(f"ata_adj{suffix}")
+        )
+        .with_columns(
             deq_col(f"pick_equity{suffix}"),
             deq_col(f"gp_wr_bayes_mu{suffix}"),
             ext["deck_small_sample"].expr.alias("deck_small_sample"),  # type: ignore
@@ -704,14 +733,20 @@ def daily_deq(
     as_of = as_of or dt.date.today()
     set_code = (
         [
-            d
-            for d in sorted(start_dates.keys(), key=lambda x: start_dates[x])
-            if start_dates[d] < dt.date.today()
-        ][-1]
+            key for key, cfg in config.items() if
+            cfg.start_date < dt.date.today() and (
+                cfg.end_date is None or cfg.end_date > dt.date.today()
+            )
+        ][0]
         if set_code is None
         else set_code
     )
-    end_date = end_dates.get(set_code, as_of - dt.timedelta(days=1))
+
+    cfg = config[set_code]
+    if cfg.end_date and cfg.end_date < as_of:
+        end_date = cfg.end_date
+    else:
+        end_date = as_of - dt.timedelta(days=1)
 
     ref_dir = deq_ref_dir()
     if not os.path.isdir(ref_dir):
@@ -731,7 +766,7 @@ def daily_deq(
         as_of_df = set_df.filter(pl.col("as_of") == as_of)
 
     if set_df.is_empty():
-        start_date = start_dates[set_code]
+        start_date = cfg.start_date
         player_cohort = "top"
         accept = False
     else:
@@ -740,7 +775,7 @@ def daily_deq(
             player_cohort = params["player_cohort"]
 
             if player_cohort == "all":
-                start_date = start_dates[set_code]
+                start_date = cfg.start_date
                 player_cohort = "top"
             else:
                 start_date = params["start_date"] + dt.timedelta(days=1)
@@ -766,14 +801,14 @@ def daily_deq(
         )
 
         if num_games >= game_threshold:
-            if (start_date - start_dates[set_code]).days + 1 >= max_format_day_start:
+            if (start_date - cfg.start_date).days + 1 >= max_format_day_start:
                 accept = True
-                start_date = start_dates[set_code] + dt.timedelta(
+                start_date = cfg.start_date + dt.timedelta(
                     days=max_format_day_start - 1
                 )
             else:
                 start_date = start_date + dt.timedelta(days=1)
-        elif start_date == start_dates[set_code]:
+        elif start_date == cfg.start_date:
             if player_cohort == "top":
                 player_cohort = "all"
             else:
@@ -812,7 +847,7 @@ def daily_deq(
 
     available_sets = sorted(
         list(history_df['set_code'].unique()),
-        key=lambda val: dt.date(2900, 1, 1) if (val == set_code) else start_dates[val],
+        key=lambda val: config[val].start_date,
         reverse=True
     )
 

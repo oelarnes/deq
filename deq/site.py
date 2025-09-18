@@ -4,7 +4,7 @@ import random
 import os
 from pathlib import Path
 
-from deq.deq import daily_deq
+from deq.main import daily_deq, start_dates
 
 
 def load_html_template(template_path="deq_site_template.html"):
@@ -35,6 +35,7 @@ def main(set_code: str | None = None):
             "rarity",
             "deq",
             "ata",
+            "gp_wr",
             "gp_wr_b",
             "pct_gp",
             "deq_bias_adj",
@@ -46,10 +47,18 @@ def main(set_code: str | None = None):
         allow_nan=False,
     )
 
-    select_elements = "".join([
-        f'<option value="deq-{set_code.lower()}.html">{set_code}</option>' for 
-        set_code in deq_data.available_sets
-    ])
+    select_elements = "".join(
+        [
+            f'<option value="deq-{code.lower()}.html">{code}</option>'
+            if code != deq_data.set_code
+            else f'<option value="deq-{code.lower()}.html" selected>{code}</option>'
+            for code in deq_data.available_sets
+        ]
+    )
+
+    embargo_class = (
+        "embargo-col" if (deq_data.end_date - deq_data.start_date).days < 12 else ""
+    )
 
     date_format = "%-d %b %y"
     html_content = load_html_template().format(
@@ -58,21 +67,23 @@ def main(set_code: str | None = None):
         player_cohort=deq_data.player_cohort,
         start_date=deq_data.start_date.strftime(date_format),
         end_date=deq_data.end_date.strftime(date_format),
+        embargo_class=embargo_class,
         version=math.floor(random.random() * 1e10),
-        select_elements=select_elements
+        select_elements=select_elements,
     )
-
-    path = destination_path(deq_data.set_code)
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(html_content)
 
     if set_code is None:
         path = destination_path(None)
         with open(path, "w", encoding="utf-8") as f:
             f.write(html_content)
+        for set_code in start_dates:
+            main(set_code)
+    else:
+        path = destination_path(deq_data.set_code)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(html_content)
 
     print(f"DEq site generated: {path}")
-    return path
 
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@ import polars as pl
 from spells import summon, view_select, ColName, get_names
 from spells.enums import View
 
-from deq.deq import ext
+from deq import ext
 from deq.plot import METRIC_LABELS
 from deq.p1_strategy import get_metric_context, TOP_PLAYER
 

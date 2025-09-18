@@ -11,7 +11,7 @@ from spells.draft_data import _get_set_context
 from spells.enums import View
 
 from deq import ext, deq_bias_set_context
-from deq.deq import BASIC_LANDS
+from deq.main import BASIC_LANDS
 from deq.p1_strategy import TOP_PLAYER
 
 TOL = 1e-5

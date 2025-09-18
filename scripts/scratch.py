@@ -1,19 +1,24 @@
 import polars as pl
 
-from deq.deq import ext, deq_bias_set_context, live_deq
-from spells import summon
+from deq.main import ext, deq_bias_set_context, live_deq
+from spells import summon, ColSpec, ColType
+from spells.enums import View
+from spells.draft_data import view_select
 pl.Config.set_tbl_rows(1000)
 
-set_code = "TDM"
-start_date = end_date = None
-player_cohort = "top"
+set_code = "MKM"
 
-metrics = ["deq"]
-set_codes = ["TDM"]
-filter_spec = {'player_cohort': 'Top'}
-deq_days = 12
+df = view_select(
+    "MKM", 
+    View.DRAFT, 
+    ["draft_id", "pick"], 
+    filter_spec={'op': '>', 'lhs': 'pack_card_Evolutionary Leap', 'rhs': 0},
+    extensions={'pack_card_Evolutionary Leap': ColSpec(
+        col_type=ColType.GROUP_BY,
+        views=[View.CARD],
+    ),}
+)
 
-as_of = None
-gp_top_min_games = 70000
-gp_all_min_games = 300000
+
+
 
