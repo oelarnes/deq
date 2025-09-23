@@ -72,7 +72,8 @@ config = {
         is_pick_two = True
     ),
     "EOE": DEqConfig(
-        start_date = dt.date(2025, 7, 29)
+        start_date = dt.date(2025, 7, 29),
+        end_date = dt.date(2025, 9, 23)
     ),
     "FIN": DEqConfig(
         start_date = dt.date(2025, 6, 10),

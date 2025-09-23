@@ -4,7 +4,7 @@ import random
 import os
 from pathlib import Path
 
-from deq.main import daily_deq, start_dates
+from deq.main import daily_deq, config
 
 
 def load_html_template(template_path="deq_site_template.html"):
@@ -76,7 +76,7 @@ def main(set_code: str | None = None):
         path = destination_path(None)
         with open(path, "w", encoding="utf-8") as f:
             f.write(html_content)
-        for set_code in start_dates:
+        for set_code in config:
             main(set_code)
     else:
         path = destination_path(deq_data.set_code)
