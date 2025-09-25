@@ -287,7 +287,7 @@ def get_sample_pack(
     metric_filter = TOP_PLAYER if metric_filter is None else metric_filter
 
     card_context = get_metric_context(
-        [set_code], list(metrics), metric_filter, deq_days
+        [set_code], list(metrics), metric_filter, deq_days, 1, None
     ).join(card_attributes, on=["name"])
 
     if isinstance(card_context, pl.DataFrame):

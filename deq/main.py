@@ -72,8 +72,7 @@ config = {
         is_pick_two = True
     ),
     "EOE": DEqConfig(
-        start_date = dt.date(2025, 7, 29),
-        end_date = dt.date(2025, 9, 23)
+        start_date = dt.date(2025, 7, 29)
     ),
     "FIN": DEqConfig(
         start_date = dt.date(2025, 6, 10),
@@ -90,7 +89,19 @@ config = {
     "PIO": DEqConfig(
         start_date = dt.date(2024, 12, 10),
         end_date = dt.date(2025, 2, 11),
-    )
+    ),
+    "FDN": DEqConfig(
+        start_date = dt.date(2024, 11, 12),
+        end_date = dt.date(2024, 12, 10),
+    ),
+    "DSK": DEqConfig(
+        start_date = dt.date(2024, 9, 24),
+        end_date = dt.date(2024, 11, 12),
+    ),
+    "BLB": DEqConfig(
+        start_date = dt.date(2024, 7, 30),
+        end_date = dt.date(2024, 9, 24)
+    ),
 }
 
 def deq_col_specs(
@@ -518,8 +529,11 @@ def live_deq(
     bayes_games: int = BAYES_GAMES,
     max_deq_days: int = MAX_DEQ_DAYS,
 ) -> pl.DataFrame:
+    format = "PickTwoDraft" if config[set_code].is_pick_two else "PremierDraft"
+
     dc_df = deck_color_df(
         set_code,
+        format=format,
         player_cohort=player_cohort,
         start_date=start_date,
         end_date=end_date,
@@ -570,6 +584,7 @@ def live_deq(
         ],
         cdfs=CardDataFileSpec(
             set_code=set_code,
+            format=format,
             player_cohort=player_cohort,
             start_date=start_date,
             end_date=end_date,
@@ -582,6 +597,7 @@ def live_deq(
             columns=[ColName.ATA],
             cdfs=CardDataFileSpec(
                 set_code=set_code,
+                format=format,
                 player_cohort="all",
                 start_date=start_date,
                 end_date=end_date,
@@ -608,6 +624,7 @@ def live_deq(
         group_by=[ColName.NAME, ColName.MAIN_COLORS],
         cdfs=CardDataFileSpec(
             set_code=set_code,
+            format=format,
             player_cohort=player_cohort,
             deck_colors=color_sets,
             start_date=start_date,

@@ -1,3 +1,5 @@
+git checkout main
+
 jupyter-book clean -a docs
 jupyter-book build docs
 

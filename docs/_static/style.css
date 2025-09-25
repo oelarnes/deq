@@ -10,7 +10,25 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
+    table {
+        border-collapse: collapse;
+        border: 1px solid var(--pst-color-border);
+    }
+
+    th {
+        border-bottom: 1px solid var(--pst-color-border);
+    }
+
+    @media (min-width: 800px) {
+        td {
+            padding: 0 1em;
+        }
+    }
+    tr:nth-child(even) {
+        background-color: #2a2e33;
+    }
 }
+
 
 .deq-logo {
     color: --var(--pst-color-light);
@@ -90,21 +108,3 @@ button.doc-button.expanded {
     padding: 0 0.5em;
 }
 
-table {
-    border-collapse: collapse;
-    border: 1px solid var(--pst-color-border);
-}
-
-th {
-    border-bottom: 1px solid var(--pst-color-border);
-}
-
-@media (min-width: 800px) {
-    td {
-        padding: 0 1em;
-    }
-}
-
-tr:nth-child(even) {
-    background-color: #2a2e33;
-}

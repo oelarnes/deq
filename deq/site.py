@@ -1,10 +1,11 @@
+import datetime as dt
 import json
 import math
 import random
 import os
 from pathlib import Path
 
-from deq.main import daily_deq, config
+from deq.main import config, daily_deq
 
 
 def load_html_template(template_path="deq_site_template.html"):
@@ -57,7 +58,9 @@ def main(set_code: str | None = None):
     )
 
     embargo_class = (
-        "embargo-col" if (deq_data.end_date - deq_data.start_date).days < 12 else ""
+        "col-embargo"
+        if (deq_data.end_date - config[deq_data.set_code].start_date).days < 12
+        else ""
     )
 
     date_format = "%-d %b %y"
@@ -77,7 +80,8 @@ def main(set_code: str | None = None):
         with open(path, "w", encoding="utf-8") as f:
             f.write(html_content)
         for set_code in config:
-            main(set_code)
+            if dt.date.today() > config[set_code].start_date:
+                main(set_code)
     else:
         path = destination_path(deq_data.set_code)
         with open(path, "w", encoding="utf-8") as f:
@@ -87,4 +91,5 @@ def main(set_code: str | None = None):
 
 
 if __name__ == "__main__":
+    print(__name__)
     main()
