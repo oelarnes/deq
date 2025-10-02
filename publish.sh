@@ -3,6 +3,7 @@ git checkout main
 jupyter-book clean -a docs
 jupyter-book build docs
 
+cp docs/_images/* docs/_build/html/_images
 .venv/bin/python deq/site.py
 
 SITE_DIR=/var/www/html/on-draft 

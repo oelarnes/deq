@@ -19,7 +19,7 @@ PICK_EQUITY_INIT = 0.03
 PICK_EQUITY_MID = 0.03
 PICK_EQUITY_MID_INDEX = 1
 ZERO_EQUITY_INDEX = 14
-BIAS_ADJ_COEF = 0.5
+BIAS_ADJ_COEF =  0.6
 DEQ_LOSS_FACTOR = 0.6
 SAMPLE_DECAY = 0.95
 META_DECAY = 0.95
@@ -72,11 +72,11 @@ config = {
         is_pick_two = True
     ),
     "EOE": DEqConfig(
-        start_date = dt.date(2025, 7, 29)
+        start_date = dt.date(2025, 7, 29),
+        end_date = dt.date(2025, 9, 23),
     ),
     "FIN": DEqConfig(
         start_date = dt.date(2025, 6, 10),
-        end_date = dt.date(2025, 7, 29)
     ),
     "TDM" :DEqConfig(
         start_date = dt.date(2025, 4, 8),
