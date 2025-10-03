@@ -102,6 +102,10 @@ config = {
         start_date = dt.date(2024, 7, 30),
         end_date = dt.date(2024, 9, 24)
     ),
+    "MH3": DEqConfig(
+        start_date = dt.date(2024, 6, 11),
+        end_date = dt.date(2024, 7, 30)
+    ),
 }
 
 def deq_col_specs(
