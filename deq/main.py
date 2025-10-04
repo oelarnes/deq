@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import polars as pl
 
 from spells import summon, ColName, ColType, ColSpec
+from spells.columns import agg_col
 from spells.cache import ad_hoc_dir
 from spells.draft_data import CardDataFileSpec
 from spells.card_data_files import deck_color_df
@@ -19,7 +20,7 @@ PICK_EQUITY_INIT = 0.03
 PICK_EQUITY_MID = 0.03
 PICK_EQUITY_MID_INDEX = 1
 ZERO_EQUITY_INDEX = 14
-BIAS_ADJ_COEF =  0.6
+BIAS_ADJ_COEF = 0.6
 DEQ_LOSS_FACTOR = 0.6
 SAMPLE_DECAY = 0.95
 META_DECAY = 0.95
@@ -36,6 +37,8 @@ BAYES_MU = 0.54
 UNG = pl.col(ColName.USER_N_GAMES_BUCKET)
 UGWR = pl.col(ColName.USER_GAME_WIN_RATE_BUCKET)
 
+ATA_PRL_BETA = 0.25
+PRL_0 = 1.0 / 14.0
 
 color_sets = [
     "WU",
@@ -60,53 +63,47 @@ color_sets = [
     "BRG",
 ]
 
+
 @dataclass
-class DEqConfig():
+class DEqConfig:
     start_date: dt.date
     end_date: dt.date | None = None
     is_pick_two: bool = False
 
+
 config = {
-    'OM1': DEqConfig(
-        start_date = dt.date(2025, 9, 23),
-        is_pick_two = True
-    ),
+    "OM1": DEqConfig(start_date=dt.date(2025, 9, 23), is_pick_two=True),
     "EOE": DEqConfig(
-        start_date = dt.date(2025, 7, 29),
-        end_date = dt.date(2025, 9, 23),
+        start_date=dt.date(2025, 7, 29),
+        end_date=dt.date(2025, 9, 23),
     ),
     "FIN": DEqConfig(
-        start_date = dt.date(2025, 6, 10),
+        start_date=dt.date(2025, 6, 10),
     ),
-    "TDM" :DEqConfig(
-        start_date = dt.date(2025, 4, 8),
-        end_date = dt.date(2025, 6, 10),
+    "TDM": DEqConfig(
+        start_date=dt.date(2025, 4, 8),
+        end_date=dt.date(2025, 6, 10),
     ),
     "DFT": DEqConfig(
-        start_date = dt.date(2025, 2, 11),
-        end_date = dt.date(2025, 4, 8),
+        start_date=dt.date(2025, 2, 11),
+        end_date=dt.date(2025, 4, 8),
     ),
     "PIO": DEqConfig(
-        start_date = dt.date(2024, 12, 10),
-        end_date = dt.date(2025, 2, 11),
+        start_date=dt.date(2024, 12, 10),
+        end_date=dt.date(2025, 2, 11),
     ),
     "FDN": DEqConfig(
-        start_date = dt.date(2024, 11, 12),
-        end_date = dt.date(2024, 12, 10),
+        start_date=dt.date(2024, 11, 12),
+        end_date=dt.date(2024, 12, 10),
     ),
     "DSK": DEqConfig(
-        start_date = dt.date(2024, 9, 24),
-        end_date = dt.date(2024, 11, 12),
+        start_date=dt.date(2024, 9, 24),
+        end_date=dt.date(2024, 11, 12),
     ),
-    "BLB": DEqConfig(
-        start_date = dt.date(2024, 7, 30),
-        end_date = dt.date(2024, 9, 24)
-    ),
-    "MH3": DEqConfig(
-        start_date = dt.date(2024, 6, 11),
-        end_date = dt.date(2024, 7, 30)
-    ),
+    "BLB": DEqConfig(start_date=dt.date(2024, 7, 30), end_date=dt.date(2024, 9, 24)),
+    "MH3": DEqConfig(start_date=dt.date(2024, 6, 11), end_date=dt.date(2024, 7, 30)),
 }
+
 
 def deq_col_specs(
     suffix: str = "",
@@ -148,13 +145,8 @@ def deq_col_specs(
 
     # fmt: off
     return {
-        f"ata_adj{suffix}": ColSpec(
-            col_type=ColType.AGG,
-            expr=pl.col(ColName.ATA) * 2 - 0.5 if is_pick_two else pl.col(ColName.ATA)
-        ),
-        f"pick_equity{suffix}": ColSpec(
-            col_type=ColType.AGG,
-            expr=pl.when(pl.col(f"ata_adj{suffix}") >= pick_equity_mid_index)
+        f"ata_adj{suffix}": agg_col(pl.col(ColName.ATA) * 2 - 0.5 if is_pick_two else pl.col(ColName.ATA)),
+        f"pick_equity{suffix}": agg_col(pl.when(pl.col(f"ata_adj{suffix}") >= pick_equity_mid_index)
             .then(
                 pick_equity_mid
                 * (
@@ -183,24 +175,17 @@ def deq_col_specs(
                     ** 2
                     - 1
                 )
-            ),
+            )
         ),
-        f"gp_wr_bayes_mu{suffix}": ColSpec(
-            col_type=ColType.AGG,
-            expr=pl.col(ColName.GP_WR_MEAN) + wr_beta_to_ata * (pl.col(f"ata_adj{suffix}") - 7),
-        ),
-        f"gp_wr_b{suffix}": ColSpec(
-            col_type=ColType.AGG,
-            expr=pl.col("deck_small_sample")
+        f"gp_wr_bayes_mu{suffix}": agg_col(pl.col(ColName.GP_WR_MEAN) + wr_beta_to_ata * (pl.col(f"ata_adj{suffix}") - 7)),
+        f"gp_wr_b{suffix}": agg_col(pl.col("deck_small_sample")
             * (
                 pl.col(f"gp_wr_bayes_mu{suffix}") * bayes_games
                 + pl.col(ColName.WON_DECK)
             )
-            / (pl.col(ColName.DECK) + bayes_games),
+            / (pl.col(ColName.DECK) + bayes_games)
         ),
-        f"deq_base{suffix}": ColSpec(
-            col_type=ColType.AGG,
-            expr=(
+        f"deq_base{suffix}": agg_col((
                 pl.col(f"gp_wr_b{suffix}")
                 - pl.col(ColName.GP_WR_MEAN)
                 + pl.col(f"pick_equity{suffix}")
@@ -218,33 +203,24 @@ def deq_col_specs(
                 default=set_context.get("game_wr_excess_other"),
             ),
         ),
-        f"gp_wr_bias{suffix}": ColSpec(
-            col_type=ColType.AGG,
-            expr=pl.col(f"gp_bias_weight{suffix}") / pl.col(ColName.DECK),
-        ),
-        f"deq_bias_adj{suffix}": ColSpec(
-            col_type=ColType.AGG,
-            expr=bias_adj_coef
-            * (pl.col(f"pick_equity{suffix}") / pick_equity_init - 1)
-            * pl.col(f"gp_wr_bias{suffix}"),
+        f"gp_wr_bias{suffix}": agg_col(pl.col(f"gp_bias_weight{suffix}") / pl.col(ColName.DECK)),
+        f"deq_bias_adj{suffix}": agg_col(
+            bias_adj_coef * (pl.col(f"pick_equity{suffix}") / pick_equity_init - 1)
+            * pl.col(f"gp_wr_bias{suffix}")
         ),
         f"meta_regression_factor{suffix}": ColSpec(
             col_type=ColType.CARD_ATTR, expr=meta_decay_factor
         ),
-        f"deq_meta_adj{suffix}": ColSpec(
-            col_type=ColType.AGG,
-            expr=(pl.col(f"gp_wr_bias{suffix}") + pl.col(f"deq_bias_adj{suffix}"))
-            * pl.col(f"meta_regression_factor{suffix}"),
+        f"deq_meta_adj{suffix}": agg_col(
+            (pl.col(f"gp_wr_bias{suffix}") + pl.col(f"deq_bias_adj{suffix}"))
+            * pl.col(f"meta_regression_factor{suffix}")
         ),
-        f"deq{suffix}": ColSpec(
-            col_type=ColType.AGG,
-            expr=pl.col(f"deq_base{suffix}")
+        f"deq{suffix}": agg_col(pl.col(f"deq_base{suffix}")
             + (pl.col(f"deq_bias_adj{suffix}") + pl.col(f"deq_meta_adj{suffix}"))
-            * pl.col("pct_gp"),
+            * pl.col("pct_gp")
         ),
-        f"deq_grade{suffix}": ColSpec(
-            col_type=ColType.AGG,
-            expr=pl.when(pl.col("deq").is_null() | pl.col("deq").is_nan())
+        f"deq_grade{suffix}": agg_col(
+            pl.when(pl.col("deq").is_null() | pl.col("deq").is_nan())
             .then(pl.lit("N/A")).otherwise(pl.when(
                 pl.col("deq") < grade_c_minus_max - 4 * grade_notch_increment
             ).then(pl.lit("F")).otherwise(pl.when(
@@ -270,7 +246,7 @@ def deq_col_specs(
             ).then(pl.lit("A-")).otherwise(pl.when(
                 pl.col("deq") < grade_c_minus_max + 7 * grade_notch_increment
             ).then(pl.lit("A")).otherwise(pl.lit("A+"))))))))))))))
-        ),
+        )
     }
 
 
@@ -287,22 +263,12 @@ ext = {
             - pl.col(f"opening_hand_{name}"),
         ),  # lazy way to use SNC and NEO which don't have "tutored"
     ),
-    ColName.DECK_TOTAL: ColSpec(
-        col_type=ColType.AGG,
-        expr=pl.col(ColName.DECK).sum().over("expansion"),
+    ColName.DECK_TOTAL: agg_col(pl.col(ColName.DECK).sum().over("expansion")),
+    ColName.WON_DECK_TOTAL: agg_col(pl.col(ColName.WON_DECK).sum().over("expansion")),
+    ColName.GP_WR_MEAN: agg_col(
+        pl.col(ColName.WON_DECK_TOTAL) / pl.col(ColName.DECK_TOTAL)
     ),
-    ColName.WON_DECK_TOTAL: ColSpec(
-        col_type=ColType.AGG,
-        expr=pl.col(ColName.WON_DECK).sum().over("expansion"),
-    ),
-    ColName.GP_WR_MEAN: ColSpec(
-        col_type=ColType.AGG,
-        expr=pl.col(ColName.WON_DECK_TOTAL) / pl.col(ColName.DECK_TOTAL),
-    ),
-    ColName.GP_WR_EXCESS: ColSpec(
-        col_type=ColType.AGG,
-        expr=pl.col(ColName.GP_WR) - pl.col(ColName.GP_WR_MEAN),
-    ),
+    ColName.GP_WR_EXCESS: agg_col(pl.col(ColName.GP_WR) - pl.col(ColName.GP_WR_MEAN)),
     "skill_cohort_raw": ColSpec(
         col_type=ColType.GROUP_BY,
         expr=(
@@ -351,62 +317,50 @@ ext = {
             )
         ),
     ),
-    "deck_over_colors": ColSpec(
-        col_type=ColType.AGG,
-        expr=pl.col(ColName.DECK)
+    "deck_over_colors": agg_col(
+        pl.col(ColName.DECK)
         .sum()
-        .over([pl.col(ColName.EXPANSION), pl.col(ColName.COLOR)]),
+        .over([pl.col(ColName.EXPANSION), pl.col(ColName.COLOR)])
     ),
-    "won_deck_over_colors": ColSpec(
-        col_type=ColType.AGG,
-        expr=pl.col(ColName.WON_DECK)
+    "won_deck_over_colors": agg_col(
+        pl.col(ColName.WON_DECK)
         .sum()
-        .over([pl.col(ColName.EXPANSION), pl.col(ColName.COLOR)]),
+        .over([pl.col(ColName.EXPANSION), pl.col(ColName.COLOR)])
     ),
-    "deck_small_sample": ColSpec(
-        col_type=ColType.AGG,
-        expr=pl.when(
+    "deck_small_sample": agg_col(
+        pl.when(
             pl.col(ColName.NAME).is_in(BASIC_LANDS)
             | (pl.col(ColName.DECK) < SAMPLE_THRESHOLD)
         )
         .then(None)
-        .otherwise(1.0),
+        .otherwise(1.0)
     ),
-    "gih_wr_17l": ColSpec(
-        col_type=ColType.AGG,
-        expr=pl.when(
+    "gih_wr_17l": agg_col(
+        pl.when(
             pl.col(ColName.NAME).is_in(BASIC_LANDS)
             | (pl.col(ColName.NUM_GIH) < SAMPLE_THRESHOLD)
         )
         .then(None)
         .otherwise(pl.col(ColName.NUM_GIH_WON))
-        / (pl.col(ColName.NUM_GIH)),
+        / (pl.col(ColName.NUM_GIH))
     ),
-    "gp_wr_17l": ColSpec(
-        col_type=ColType.AGG,
-        expr=pl.col("deck_small_sample")
-        * pl.col(ColName.WON_DECK)
-        / (pl.col(ColName.DECK)),
+    "gp_wr_17l": agg_col(
+        pl.col("deck_small_sample") * pl.col(ColName.WON_DECK) / (pl.col(ColName.DECK))
     ),
-    "gns_wr_17l": ColSpec(
-        col_type=ColType.AGG,
-        expr=pl.when(
+    "gns_wr_17l": agg_col(
+        pl.when(
             pl.col(ColName.NAME).is_in(BASIC_LANDS)
             | (pl.col(ColName.NUM_GNS) < SAMPLE_THRESHOLD)
         )
         .then(None)
         .otherwise(pl.col(ColName.WON_NUM_GNS))
-        / (pl.col(ColName.NUM_GNS)),
+        / (pl.col(ColName.NUM_GNS))
     ),
-    "iwd_17l": ColSpec(
-        col_type=ColType.AGG, expr=pl.col("gih_wr_17l") - pl.col("gns_wr_17l")
-    ),
+    "iwd_17l": agg_col(pl.col("gih_wr_17l") - pl.col("gns_wr_17l")),
     "format_day_sum": ColSpec(
         col_type=ColType.PICK_SUM, expr=pl.col(ColName.FORMAT_DAY)
     ),
-    "mean_day_picked": ColSpec(
-        col_type=ColType.AGG, expr=pl.col("format_day_sum") / pl.col(ColName.NUM_TAKEN)
-    ),
+    "mean_day_picked": agg_col(pl.col("format_day_sum") / pl.col(ColName.NUM_TAKEN)),
     "color_group": ColSpec(
         col_type=ColType.CARD_ATTR,
         expr=(
@@ -445,11 +399,21 @@ ext = {
         expr=lambda name, card_context: pl.col(f"deck_{name}")
         * (1 if card_context[name]["rarity"] == "rare" else 0),
     ),
-    "deck_commons_mean": ColSpec(
-        col_type=ColType.AGG, expr=pl.col("deck_commons") / pl.col("deck")
+    "deck_commons_mean": agg_col(pl.col("deck_commons") / pl.col("deck")),
+    "deck_rares_mean": agg_col(pl.col("deck_rares") / pl.col("deck")),
+    "pick_rate_logit": agg_col(
+        pl.when(pl.col(ColName.NUM_TAKEN) > 0)
+        .then(
+            (
+                pl.col(ColName.NUM_TAKEN)
+                / (pl.col(ColName.NUM_SEEN) - pl.col(ColName.NUM_TAKEN))
+            ).log()
+            - pl.lit(PRL_0).log()
+        )
+        .otherwise(None)
     ),
-    "deck_rares_mean": ColSpec(
-        col_type=ColType.AGG, expr=pl.col("deck_rares") / pl.col("deck")
+    "normalized_pick_rate": agg_col(
+        pl.col("pick_rate_logit") - pl.col("ata") * ATA_PRL_BETA
     ),
 }
 
@@ -707,9 +671,7 @@ def live_deq(
             return expr(set_context).alias(col)
 
     deq_df = (
-        card_df.with_columns(
-            deq_col(f"ata_adj{suffix}")
-        )
+        card_df.with_columns(deq_col(f"ata_adj{suffix}"))
         .with_columns(
             deq_col(f"pick_equity{suffix}"),
             deq_col(f"gp_wr_bayes_mu{suffix}"),
@@ -755,10 +717,10 @@ def daily_deq(
     as_of = as_of or dt.date.today()
     set_code = (
         [
-            key for key, cfg in config.items() if
-            cfg.start_date < dt.date.today() and (
-                cfg.end_date is None or cfg.end_date > dt.date.today()
-            )
+            key
+            for key, cfg in config.items()
+            if cfg.start_date < dt.date.today()
+            and (cfg.end_date is None or cfg.end_date > dt.date.today())
         ][0]
         if set_code is None
         else set_code
@@ -868,9 +830,9 @@ def daily_deq(
         history_df.write_parquet(history_df_path)
 
     available_sets = sorted(
-        list(history_df['set_code'].unique()),
+        list(history_df["set_code"].unique()),
         key=lambda val: config[val].start_date,
-        reverse=True
+        reverse=True,
     )
 
     return DeqData(
