@@ -37,7 +37,12 @@ BAYES_MU = 0.54
 UNG = pl.col(ColName.USER_N_GAMES_BUCKET)
 UGWR = pl.col(ColName.USER_GAME_WIN_RATE_BUCKET)
 
-ATA_PRL_BETA = 0.25
+MAX_NPR = 12.0
+ALSA_PRL_BETA = 0.3
+ALSA_PRL_SEEN_BETA = 0.35
+NPR_P1_OFFSET = 0.5
+
+
 PRL_0 = 1.0 / 14.0
 
 color_sets = [
@@ -79,6 +84,7 @@ config = {
     ),
     "FIN": DEqConfig(
         start_date=dt.date(2025, 6, 10),
+        end_date=dt.date(2025, 10, 7),
     ),
     "TDM": DEqConfig(
         start_date=dt.date(2025, 4, 8),
@@ -95,10 +101,9 @@ config = {
     "FDN": DEqConfig(
         start_date=dt.date(2024, 11, 12),
         end_date=dt.date(2024, 12, 10),
-    ),
+     ),
     "DSK": DEqConfig(
         start_date=dt.date(2024, 9, 24),
-        end_date=dt.date(2024, 11, 12),
     ),
     "BLB": DEqConfig(start_date=dt.date(2024, 7, 30), end_date=dt.date(2024, 9, 24)),
     "MH3": DEqConfig(start_date=dt.date(2024, 6, 11), end_date=dt.date(2024, 7, 30)),
@@ -401,19 +406,69 @@ ext = {
     ),
     "deck_commons_mean": agg_col(pl.col("deck_commons") / pl.col("deck")),
     "deck_rares_mean": agg_col(pl.col("deck_rares") / pl.col("deck")),
-    "pick_rate_logit": agg_col(
-        pl.when(pl.col(ColName.NUM_TAKEN) > 0)
+    "pick_rate_logit_seen": agg_col(
+        pl.when(pl.col(ColName.NUM_SEEN) > 0)
         .then(
-            (
-                pl.col(ColName.NUM_TAKEN)
-                / (pl.col(ColName.NUM_SEEN) - pl.col(ColName.NUM_TAKEN))
-            ).log()
-            - pl.lit(PRL_0).log()
+            pl.when(pl.col(ColName.NUM_SEEN) > pl.col(ColName.NUM_TAKEN))
+            .then(
+                pl.when(pl.col(ColName.NUM_TAKEN) > 0)
+                .then(
+                    (
+                        pl.col(ColName.NUM_TAKEN)
+                        / (pl.col(ColName.NUM_SEEN) - pl.col(ColName.NUM_TAKEN))
+                    ).log(2)
+                    - pl.lit(PRL_0).log(2)
+                )
+                .otherwise(-MAX_NPR)
+            )
+            .otherwise(MAX_NPR)
         )
         .otherwise(None)
     ),
-    "normalized_pick_rate": agg_col(
-        pl.col("pick_rate_logit") - pl.col("ata") * ATA_PRL_BETA
+    "pick_rate_logit": agg_col(
+        pl.when(pl.col(ColName.PACK_CARD) > 0)
+        .then(
+            pl.when(pl.col(ColName.PACK_CARD) > pl.col(ColName.NUM_TAKEN))
+            .then(
+                pl.when(pl.col(ColName.NUM_TAKEN) > 0)
+                .then(
+                    (
+                        pl.col(ColName.NUM_TAKEN)
+                        / (pl.col(ColName.PACK_CARD) - pl.col(ColName.NUM_TAKEN))
+                    ).log(2)
+                    - pl.lit(PRL_0).log(2)
+                )
+                .otherwise(-MAX_NPR)
+            )
+            .otherwise(MAX_NPR)
+        )
+        .otherwise(None)
+    ),
+    "npr": agg_col(
+        pl.when(pl.col(ColName.ALSA) > 3)
+        .then(
+            pl.col("pick_rate_logit")
+            - (pl.col("alsa") - 1) * ALSA_PRL_BETA
+            - NPR_P1_OFFSET
+        )
+        .otherwise(
+            pl.col("pick_rate_logit")
+            - (pl.col("alsa") - 1) * ALSA_PRL_BETA
+            - NPR_P1_OFFSET * (1.0 - (pl.col("alsa") - 3).pow(2) / 4.0)
+        )
+    ),
+    "npr_seen": agg_col(
+        pl.when(pl.col(ColName.ALSA) > 3)
+        .then(
+            pl.col("pick_rate_logit_seen")
+            - (pl.col("alsa") - 1) * ALSA_PRL_SEEN_BETA
+            - NPR_P1_OFFSET
+        )
+        .otherwise(
+            pl.col("pick_rate_logit_seen")
+            - (pl.col("alsa") - 1) * ALSA_PRL_SEEN_BETA
+            - NPR_P1_OFFSET * (1.0 - (pl.col("alsa") - 3).pow(2) / 4.0)
+        )
     ),
 }
 
@@ -545,6 +600,9 @@ def live_deq(
             ColName.COLOR,
             ColName.RARITY,
             ColName.ATA,
+            ColName.ALSA,
+            ColName.NUM_SEEN,
+            ColName.NUM_TAKEN,
             ColName.DECK,
             ColName.WON_DECK,
             ColName.PCT_GP,
@@ -562,7 +620,7 @@ def live_deq(
     if player_cohort != "all":
         fallback_ata_df = summon(
             set_code,
-            columns=[ColName.ATA],
+            columns=[ColName.ATA, ColName.ALSA],
             cdfs=CardDataFileSpec(
                 set_code=set_code,
                 format=format,
@@ -570,7 +628,7 @@ def live_deq(
                 start_date=start_date,
                 end_date=end_date,
             ),
-        ).rename({ColName.ATA: "ata_fallback"})
+        ).rename({ColName.ATA: "ata_fallback", ColName.ALSA: "alsa_fallback"})
 
         card_df = card_df.join(fallback_ata_df, on=["name"]).select(
             ColName.NAME,
@@ -580,6 +638,12 @@ def live_deq(
             .then(pl.col("ata_fallback"))
             .otherwise(pl.col(ColName.ATA))
             .alias(ColName.ATA),
+            pl.when(pl.col(ColName.ALSA) < 1)
+            .then(pl.col("alsa_fallback"))
+            .otherwise(pl.col(ColName.ALSA))
+            .alias(ColName.ALSA),
+            ColName.NUM_SEEN,
+            ColName.NUM_TAKEN,
             ColName.DECK,
             ColName.WON_DECK,
             ColName.PCT_GP,
@@ -644,21 +708,24 @@ def live_deq(
         "projection_days": 0,
     }
 
-    deq_ext = deq_col_specs(
-        suffix=suffix,
-        pick_equity_init=pick_equity_init,
-        pick_equity_mid=pick_equity_mid,
-        pick_equity_mid_index=pick_equity_mid_index,
-        zero_equity_index=zero_equity_index,
-        bias_adj_coef=bias_adj_coef,
-        deq_loss_factor=deq_loss_factor,
-        meta_decay=meta_decay,
-        sample_decay=sample_decay,
-        wr_beta_to_ata=wr_beta_to_ata,
-        bayes_games=bayes_games,
-        max_deq_days=max_deq_days,
-        is_pick_two=config[set_code].is_pick_two,
-    )
+    deq_ext = {
+        **ext,
+        **deq_col_specs(
+            suffix=suffix,
+            pick_equity_init=pick_equity_init,
+            pick_equity_mid=pick_equity_mid,
+            pick_equity_mid_index=pick_equity_mid_index,
+            zero_equity_index=zero_equity_index,
+            bias_adj_coef=bias_adj_coef,
+            deq_loss_factor=deq_loss_factor,
+            meta_decay=meta_decay,
+            sample_decay=sample_decay,
+            wr_beta_to_ata=wr_beta_to_ata,
+            bayes_games=bayes_games,
+            max_deq_days=max_deq_days,
+            is_pick_two=config[set_code].is_pick_two,
+        ),
+    }
 
     def deq_col(col: str) -> pl.Expr:
         expr = deq_ext[col].expr
@@ -671,7 +738,9 @@ def live_deq(
             return expr(set_context).alias(col)
 
     deq_df = (
-        card_df.with_columns(deq_col(f"ata_adj{suffix}"))
+        card_df.with_columns(
+            deq_col(f"ata_adj{suffix}")
+        )
         .with_columns(
             deq_col(f"pick_equity{suffix}"),
             deq_col(f"gp_wr_bayes_mu{suffix}"),
@@ -688,6 +757,8 @@ def live_deq(
         )
         .with_columns(deq_col(f"deq{suffix}"))
         .with_columns(deq_col(f"deq_grade{suffix}"))
+        .with_columns(deq_col("pick_rate_logit_seen"))
+        .with_columns(deq_col("npr_seen"))
     )
 
     return deq_df

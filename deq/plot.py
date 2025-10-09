@@ -70,6 +70,9 @@ METRIC_LABELS = {
     "deq_mardu": "Mardu",
     "deq_dragons": "Dragons",
     "MLP_Logits": "Jiri_one",
+    "npr_seen": "NPR",
+    "pick_rate_logit": "Pick Rate",
+    "pick_rate_logit_seen": "Pick Rate Seen",
 }
 
 FIG_SIZE = (8, 6)

@@ -35,6 +35,7 @@ def main(set_code: str | None = None):
             "color",
             "rarity",
             "deq",
+            "npr_seen",
             "ata",
             "gp_wr",
             "gp_wr_b",
