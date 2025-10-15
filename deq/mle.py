@@ -171,6 +171,148 @@ def find_weighted_mle(
     return alpha
 
 
+def softmax_entropy(theta, x, y):
+    odds = x * np.exp(theta)[None, :]
+    return (np.log(odds.sum(axis=1)) - (y * theta[None, :]).sum(axis=1)).sum()
+
+
+def p_vec(theta, x):
+    odds = x * np.exp(theta)[None, :]
+    return odds / odds.sum(axis=1)[:, None]
+
+
+def softmax_grad(p, y):
+    return (p - y).sum(axis=0)
+
+
+def softmax_hess(p: NDArray[np.float64]) -> NDArray[np.float64]:
+    n = p.shape[0]
+    k = p.shape[1]
+
+    accum = np.zeros([k, k])
+    chunk_size = int(2e8 / k**2)
+    num_chunks = (n - 1) // chunk_size + 1
+
+    for i in range(num_chunks):
+        if not i % 10:
+            print(f"Processing Hessian chunk {i} of {num_chunks}")
+        p_chunk = p[i * chunk_size : (i + 1) * chunk_size]
+        p_diag = np.zeros((p_chunk.shape[0], k, k))
+        p_diag[:, np.arange(k), np.arange(k)] = p_chunk
+        accum += (p_diag - p_chunk[:, :, None] @ p_chunk[:, None, :]).sum(axis=0)
+    return accum
+
+
+@dataclass
+class SoftmaxParams:
+    x: NDArray[np.float64]
+    y: NDArray[np.float64]
+    theta: NDArray[np.float64]
+    train: NDArray[np.bool]
+
+
+def softmax_prep(
+    x_raw, y_raw, theta_max
+) -> tuple[
+    NDArray[np.float64], NDArray[np.float64], NDArray[np.float64], NDArray[np.bool]
+]:
+    """
+    Take the raw x, y, return a filtered set of x, y and a train
+    mask such that there are nontrivial choices on each
+    dimension under the train mask and the Hessian is nonsingular.
+
+    Set theta to theta_min for dimensions without nontrivial choices,
+    and set theta to zero for the dimension near the mean selection rate
+    """
+    k = x_raw.shape[1]
+
+    theta = np.zeros(k)
+    train = np.full(k, True)
+
+    nontrivial_choice = x_raw.sum(axis=1) > 1
+    x = x_raw[nontrivial_choice]
+    y = y_raw[nontrivial_choice]
+
+    never = (y.sum(axis=0) == 0) & (x.sum(axis=0) > 0)
+    theta[never] = -theta_max
+
+    always = (y.sum(axis=0) == x.sum(axis=0)) & (y.sum(axis=0) > 0)
+    theta[always] = theta_max
+
+    train = (x.sum(axis=0) > 0) & ~never & ~always
+
+    if train.sum():
+        # fix a card with mean pick rate at 0
+        select = np.broadcast_to(train[None, :], x.shape)
+        pick_rate = y[select].reshape(y.shape[0], train.sum()).sum(axis=0) / x[select].reshape(y.shape[0], train.sum()).sum(axis=0)
+        pick_rate_mean = y.sum() / x.sum()
+        mean_ind = np.abs(pick_rate - pick_rate_mean).argmin()
+        train[mean_ind] = False
+
+    return x, y, theta, train
+
+
+def softmax_solve(x_raw, y_raw, tol=1e-4, theta_max=10, iters=None, step_coef=0.5):
+    x, y, theta, train = softmax_prep(x_raw, y_raw, theta_max)
+
+    select = np.broadcast_to(train[None, :], x.shape)
+    y_train = y[select].reshape((y.shape[0], train.sum()))
+
+    done = ~train.max()
+    i = 0
+    while not done and (iters is None or i < iters):
+        print(f"Entropy: {softmax_entropy(theta, x, y)}")
+        p = p_vec(theta, x)
+        p_train = p[select].reshape((p.shape[0], train.sum()))
+
+        H = softmax_hess(p_train)
+        update = np.linalg.solve(H, softmax_grad(p_train, y_train))
+        theta[train] -= (1 - step_coef ** (i + 1)) * update
+
+        print(f"Step size {(jump := np.abs(update).max())}")
+        if jump < tol:
+            done = True
+        i += 1
+
+    print(f"Entropy: {softmax_entropy(theta, x, y)}")
+    return theta
+
+
+def pick_priority(
+    set_code: str,
+) -> pl.DataFrame:
+    pick_x = (
+        view_select(
+            set_code,
+            View.DRAFT,
+            [
+                "is_pick",
+                "pack_card",
+            ],
+            filter_spec={"$and": [
+                {"player_cohort": "Top"}, 
+                {"pack_num": 1},
+            ]},
+            extensions=mle_ext(14),
+        )
+        .collect(streaming=True)
+        .to_numpy()
+    )
+
+    names = get_names(set_code)
+    m = len(names)
+
+    picks = pick_x[:, :m]
+    packs = pick_x[:, m:]
+
+    theta = softmax_solve(packs, picks)
+
+    df = pl.DataFrame({'name': names, 'theta': theta}).sort('theta', descending=False)
+
+    save_ad_hoc_dataset(df, f"{set_code}_pick_priorty")
+    return df
+
+
 def marginal_pick_q(
     set_code: str,
     pack_num: int,
@@ -273,6 +415,7 @@ def p0_q(
 
     q = find_weighted_mle(wl, x, alpha, train, diag=True)
     return float(q[0])
+
 
 def marginal_q_by_pick(set_code: str, draft_filter: dict | None = None):
     if draft_filter is None:
