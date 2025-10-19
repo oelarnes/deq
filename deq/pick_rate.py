@@ -3,6 +3,7 @@ from typing import Any
 import numpy as np
 import polars as pl
 from numpy.typing import NDArray
+from scipy.optimize import minimize
 
 from spells import ColSpec, ColName, summon, ColType
 from spells.columns import agg_col
@@ -22,6 +23,26 @@ DEFAULT_FILTER = {
     ]
 }
 
+
+def multilin_opt(
+    card_data_df: pl.DataFrame, priority_df: pl.DataFrame
+) -> tuple[float, float, float]:
+    """
+    Use scipy.optimize to find a, b, c to best fit a multilinear NPR model to 
+    the softmax-optimal pick priority solution
+    """
+
+    join_df = card_data_df.join(priority_df, on="name")
+    rho = join_df.select('pick_rate_logit_seen').to_numpy()
+    alsa = join_df.select('alsa').to_numpy()
+    theta = join_df.select('theta').to_numpy()
+
+    def square_err(x: NDArray[np.float64]):
+        return ((x[0] * rho + x[1] * alsa + x[2] * rho * alsa - theta) ** 2).sum()
+
+    x_0 = (1, -0.25, 0) 
+
+    metho
 
 def prl_df(set_code: str, filter_spec: dict[str, Any] | None = None) -> pl.DataFrame:
     if filter_spec is None:
@@ -94,8 +115,10 @@ def pack_odds_df(
 
     ext = {
         **context_cols("pick_odds"),
-        "seen_pick_odds_pack_mean": agg_col(pl.col("seen_pick_odds_pack_sum") / pl.col('num_taken')),
-        "seen_pick_odds_log": agg_col(pl.col("seen_pick_odds_pack_mean").log(2))
+        "seen_pick_odds_pack_mean": agg_col(
+            pl.col("seen_pick_odds_pack_sum") / pl.col("num_taken")
+        ),
+        "seen_pick_odds_log": agg_col(pl.col("seen_pick_odds_pack_mean").log(2)),
     }
 
     return summon(

@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 import numpy as np
 from numpy.typing import NDArray
+from scipy.sparse import csc_array
 
 import polars as pl
 
@@ -97,7 +98,7 @@ def hess_diag(x, wl, l_probs):
 def hess(x, wl, l_probs):
     accum = np.zeros([x.shape[1], x.shape[1]])
     chunk_size = int(2e8 / x.shape[1] ** 2)
-    num_chunks = x.shape[0] // chunk_size
+    num_chunks = (x.shape[0] - 1) // chunk_size + 1
     for i in range(num_chunks):
         if not i % 10:
             print(f"Processing Hessian chunk {i} of {num_chunks}")
@@ -112,14 +113,6 @@ def hess(x, wl, l_probs):
                 * (1 - l_probs[i * chunk_size : (i + 1) * chunk_size])
             )[:, None, None]
         ).sum(axis=0)
-    accum += (
-        (x[num_chunks * chunk_size :, :, None] @ x[num_chunks * chunk_size :, None, :])
-        * (
-            wl[num_chunks * chunk_size :, :].sum(axis=1)
-            * l_probs[num_chunks * chunk_size :]
-            * (1 - l_probs[num_chunks * chunk_size :])
-        )[:, None, None]
-    ).sum(axis=0)
 
     accum += LAMBDA * np.eye(x.shape[1])
     return accum / wl.sum()
@@ -176,46 +169,32 @@ def softmax_entropy(theta, x, y):
     return (np.log(odds.sum(axis=1)) - (y * theta[None, :]).sum(axis=1)).sum()
 
 
-def p_vec(theta, x):
+def p_vec(theta, x) -> csc_array:
     odds = x * np.exp(theta)[None, :]
-    return odds / odds.sum(axis=1)[:, None]
+    return csc_array(odds / odds.sum(axis=1)[:, None])
 
 
 def softmax_grad(p, y):
     return (p - y).sum(axis=0)
 
 
-def softmax_hess(p: NDArray[np.float64]) -> NDArray[np.float64]:
-    n = p.shape[0]
-    k = p.shape[1]
+def softmax_hess(p: csc_array) -> NDArray[np.float64]:
+    assert p.shape is not None
 
-    accum = np.zeros([k, k])
-    chunk_size = int(2e8 / k**2)
-    num_chunks = (n - 1) // chunk_size + 1
+    outer_product_rows = []
+    for i in range(p.shape[1]):
+        outer_product_rows.append((p * p[:, i : i + 1]).sum(axis=0))
 
-    for i in range(num_chunks):
-        if not i % 10:
-            print(f"Processing Hessian chunk {i} of {num_chunks}")
-        p_chunk = p[i * chunk_size : (i + 1) * chunk_size]
-        p_diag = np.zeros((p_chunk.shape[0], k, k))
-        p_diag[:, np.arange(k), np.arange(k)] = p_chunk
-        accum += (p_diag - p_chunk[:, :, None] @ p_chunk[:, None, :]).sum(axis=0)
-    return accum
-
-
-@dataclass
-class SoftmaxParams:
-    x: NDArray[np.float64]
-    y: NDArray[np.float64]
-    theta: NDArray[np.float64]
-    train: NDArray[np.bool]
+    outer_product = np.stack(outer_product_rows)
+    return np.diag(p.sum(axis=0)) - outer_product
 
 
 def softmax_prep(
-    x_raw, y_raw, theta_max
-) -> tuple[
-    NDArray[np.float64], NDArray[np.float64], NDArray[np.float64], NDArray[np.bool]
-]:
+    x_raw: csc_array,
+    y_raw: csc_array,
+    theta_max: float,
+    zero_ind: int,
+) -> tuple[csc_array, csc_array, NDArray[np.float64], NDArray[np.bool]]:
     """
     Take the raw x, y, return a filtered set of x, y and a train
     mask such that there are nontrivial choices on each
@@ -224,6 +203,7 @@ def softmax_prep(
     Set theta to theta_min for dimensions without nontrivial choices,
     and set theta to zero for the dimension near the mean selection rate
     """
+    assert x_raw.shape and y_raw.shape
     k = x_raw.shape[1]
 
     theta = np.zeros(k)
@@ -240,48 +220,68 @@ def softmax_prep(
     theta[always] = theta_max
 
     train = (x.sum(axis=0) > 0) & ~never & ~always
+    assert train[zero_ind], "Bad zero index provided"
 
-    if train.sum():
-        # fix a card with mean pick rate at 0
-        select = np.broadcast_to(train[None, :], x.shape)
-        pick_rate = y[select].reshape(y.shape[0], train.sum()).sum(axis=0) / x[select].reshape(y.shape[0], train.sum()).sum(axis=0)
-        pick_rate_mean = y.sum() / x.sum()
-        mean_ind = np.abs(pick_rate - pick_rate_mean).argmin()
-        train[mean_ind] = False
+    pick_counts = y.sum(axis=0)[train]
+    pack_counts = x.sum(axis=0)[train]
+
+    pick_rates = pick_counts / pack_counts
+    log_odds = np.log(pick_rates / (1 - pick_rates))
+    log_odds -= log_odds[np.where(train)[0] == zero_ind][0]
+
+    theta[train] = log_odds
+    train[zero_ind] = False
 
     return x, y, theta, train
 
 
-def softmax_solve(x_raw, y_raw, tol=1e-4, theta_max=10, iters=None, step_coef=0.5):
-    x, y, theta, train = softmax_prep(x_raw, y_raw, theta_max)
+def softmax_solve(
+    x_raw: csc_array,
+    y_raw: csc_array,
+    zero_ind: int = 0,
+    tol=1e-8,
+    theta_max=10,
+    iters=None,
+):
+    x, y, theta, train = softmax_prep(x_raw, y_raw, theta_max, zero_ind)
+    assert x.shape and y.shape
 
-    select = np.broadcast_to(train[None, :], x.shape)
-    y_train = y[select].reshape((y.shape[0], train.sum()))
+    y_train = y[:, train]
 
     done = ~train.max()
     i = 0
     while not done and (iters is None or i < iters):
-        print(f"Entropy: {softmax_entropy(theta, x, y)}")
+        starting_entropy = softmax_entropy(theta, x, y)
+        print(f"Entropy: {starting_entropy}")
         p = p_vec(theta, x)
-        p_train = p[select].reshape((p.shape[0], train.sum()))
+        p_train = p[:, train]
 
         H = softmax_hess(p_train)
         update = np.linalg.solve(H, softmax_grad(p_train, y_train))
-        theta[train] -= (1 - step_coef ** (i + 1)) * update
+        theta[train] -= update
+        new_entropy = softmax_entropy(theta, x, y)
 
-        print(f"Step size {(jump := np.abs(update).max())}")
+        # overshoot protection
+        damp = 1
+        while new_entropy > starting_entropy + tol:
+            damp *= 0.5
+            theta[train] += damp * update
+            new_entropy = softmax_entropy(theta, x, y)
+
+        print(f"Calculated step size {(jump := (update ** 2).sum())} damped to {damp}")
         if jump < tol:
             done = True
         i += 1
 
     print(f"Entropy: {softmax_entropy(theta, x, y)}")
+    theta[x.sum(axis=0) == 0] = np.nan
     return theta
 
 
 def pick_priority(
     set_code: str,
 ) -> pl.DataFrame:
-    pick_x = (
+    pick_x = csc_array(
         view_select(
             set_code,
             View.DRAFT,
@@ -289,10 +289,13 @@ def pick_priority(
                 "is_pick",
                 "pack_card",
             ],
-            filter_spec={"$and": [
-                {"player_cohort": "Top"}, 
-                {"pack_num": 1},
-            ]},
+            filter_spec={
+                "$and": [
+                    {"player_cohort": "Top"},
+                    {"pack_num": 1},
+                    {"lhs": "format_day", "op": ">", "rhs": 7},
+                ]
+            },
             extensions=mle_ext(14),
         )
         .collect(streaming=True)
@@ -302,12 +305,21 @@ def pick_priority(
     names = get_names(set_code)
     m = len(names)
 
-    picks = pick_x[:, :m]
-    packs = pick_x[:, m:]
+    x_raw = pick_x[:, m:]
+    y_raw = pick_x[:, :m]
 
-    theta = softmax_solve(packs, picks)
+    p1p1_count = x_raw.sum(axis=1).max()
 
-    df = pl.DataFrame({'name': names, 'theta': theta}).sort('theta', descending=False)
+    p1p1_counts = x_raw[x_raw.sum(axis=1) == p1p1_count].sum(axis=0) + 1
+    p1p1_picks = y_raw[x_raw.sum(axis=1) == p1p1_count].sum(axis=0)
+    pick_rates = p1p1_picks / p1p1_counts
+    zero_ind = np.abs(
+        pick_rates * (p1p1_counts > 0.25 * p1p1_counts.max()) - 1 / p1p1_count
+    ).argmin()
+
+    theta = softmax_solve(x_raw, y_raw, zero_ind=zero_ind)
+
+    df = pl.DataFrame({"name": names, "theta": theta}).sort("theta", descending=False)
 
     save_ad_hoc_dataset(df, f"{set_code}_pick_priorty")
     return df
