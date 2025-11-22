@@ -677,8 +677,8 @@ def skill_cohort_table(result: AnalysisResult):
                 }
             )
         )
-        .fmt_percent("game win rate")
-        .tab_header(title="win rates and game counts", subtitle="by skill cohort")
+        .fmt_percent("Game Win Rate")
+        .tab_header(title="Win Rates and Game Counts", subtitle="by Skill Cohort")
     )
 
 def draft_count_table(

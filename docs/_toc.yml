@@ -17,6 +17,7 @@ parts:
     chapters: 
     - file: deq-docs.ipynb
     - file: deq-math.ipynb
+    - file: npr-docs.ipynb
   - caption: "Misc"
     chapters:
     - file: bayes-cohorts.ipynb

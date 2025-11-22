@@ -51,7 +51,6 @@ COLOR_LIST = {
 }
 
 METRIC_LABELS = {
-    "danb": "Dan B",
     "deq": "DEq",
     "deq_a": "DEq A",
     "deq_b": "DEq B",
@@ -60,7 +59,7 @@ METRIC_LABELS = {
     "gih_wr_17l": "GIH WR",
     "gp_wr_17l": "GP WR",
     "pick_equity": "ATA",
-    "iwd_17l": "IWD",
+    "iwd_17l": "IIH",
     "deq_base": "DEq Base",
     "gp_wr_bias_adj": "GP WR Bias Adj.",
     "oh_wr": "OH WR",
@@ -69,8 +68,7 @@ METRIC_LABELS = {
     "actual": "Actual",
     "deq_mardu": "Mardu",
     "deq_dragons": "Dragons",
-    "MLP_Logits": "Jiri_one",
-    "npr_seen": "NPR",
+    "npr": "NPR",
     "pick_rate_logit": "Pick Rate",
     "pick_rate_logit_seen": "Pick Rate Seen",
 }
@@ -130,7 +128,13 @@ def p1_line_plot(
     quality_threshold: float = -2,  # greater than this value
     colors: str = "pyplot",
     title_extra: str | None = None,
+    metric_labels: dict | None = None,
 ) -> None:
+    metric_labels = {
+        **METRIC_LABELS,
+        **(metric_labels or {})
+    }
+
     if metrics is None:
         metrics = ["deq", "gih_wr_17l", "gp_wr_17l", "pick_equity", "iwd_17l"]
 
@@ -161,7 +165,7 @@ def p1_line_plot(
         y = analysis.df[config["value_template"].format(metric=metric)].to_numpy()
         q = analysis.df[f"{metric}_entropy_loss"].to_numpy() > quality_threshold
         return two_phase_line_graph(
-            METRIC_LABELS[metric], COLOR_LIST[colors][i], x, y, q
+            metric_labels[metric], COLOR_LIST[colors][i], x, y, q
         )
 
     graphs = [graph_fn(i, metric) for i, metric in enumerate(metrics)]
@@ -199,15 +203,6 @@ def p1_line_plot(
         leg.set_loc(9)
         ax.legend(handles=handles, loc=1)
         ax.add_artist(leg)
-    elif mode == "entropy_loss":
-        ax.plot(x, [quality_threshold] * len(x), linestyle="dotted", color="gray")
-        percent_val = 1 - 2**quality_threshold
-        ax.text(
-            50,
-            quality_threshold - 0.2,
-            f"({100 * percent_val:.2f}% information loss)",
-            color="gray",
-        )
     ax.grid(color="lightgray")
     plt.show()
 
@@ -273,7 +268,12 @@ def set_by_set_plot(analyses: dict[str, AnalysisResult]) -> None:
 def p1_delta_bar(
     analysis: AnalysisResult,
     metrics: list[str] | None = None,
+    metric_labels: dict[str, str] | None = None,
 ) -> None:
+    metric_labels = {
+        **METRIC_LABELS,
+        **(metric_labels or {})
+    }
     df = analysis.agg_df
     if metrics is None:
         metrics = ["deq", "gih_wr_17l", "gp_wr_17l", "pick_equity", "iwd_17l"]
@@ -281,13 +281,13 @@ def p1_delta_bar(
     _, ax = plt.subplots()
 
     ax.bar(
-        [METRIC_LABELS[metric] for metric in metrics],
+        [metric_labels[metric] for metric in metrics],
         [df[f"{metric}_strat_delta"][0] for metric in metrics],
         color=[COLOR_LIST["pyplot"][i] for i in range(len(metrics))],
     )
     ax.set_title("Win Rate Delta for Taking P1P1 by Metric")
     ax.set_ylabel("Strategy Win Rate Delta")
-    ax.yaxis.set_major_formatter(mtick.PercentFormatter(1.0, decimals=1))
+    ax.yaxis.set_major_formatter(mtick.PercentFormatter(1.0, decimals=2))
 
     plt.show()
 
@@ -387,7 +387,7 @@ def grouped_bars(
     ]
     ax.legend(handles, palette.keys(), fontsize=9, loc="upper right", ncol=legend_width)
     if is_pct:
-        ax.yaxis.set_major_formatter(mtick.PercentFormatter(1.0, decimals=1))
+        ax.yaxis.set_major_formatter(mtick.PercentFormatter(1.0, decimals=2))
     plt.show()
 
 
@@ -426,7 +426,7 @@ def line_plot(
     if y_label is not None:
         ax.set_ylabel(y_label)
     if is_pct:
-        ax.yaxis.set_major_formatter(mtick.PercentFormatter(1.0, decimals=1))
+        ax.yaxis.set_major_formatter(mtick.PercentFormatter(1.0, decimals=2))
     # Add a grid for readability
     ax.grid(axis="y", linestyle="--", alpha=0.7)
     if return_ax:

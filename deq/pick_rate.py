@@ -9,7 +9,8 @@ from spells import ColSpec, ColName, summon, ColType
 from spells.columns import agg_col
 from spells.extension import context_cols
 
-from deq.main import ext, ALSA_PRL_BETA, NPR_P1_OFFSET
+from deq.main import ext
+from deq.mle import pick_priority
 
 ext = {
     **ext,
@@ -23,26 +24,6 @@ DEFAULT_FILTER = {
     ]
 }
 
-
-def multilin_opt(
-    card_data_df: pl.DataFrame, priority_df: pl.DataFrame
-) -> tuple[float, float, float]:
-    """
-    Use scipy.optimize to find a, b, c to best fit a multilinear NPR model to 
-    the softmax-optimal pick priority solution
-    """
-
-    join_df = card_data_df.join(priority_df, on="name")
-    rho = join_df.select('pick_rate_logit_seen').to_numpy()
-    alsa = join_df.select('alsa').to_numpy()
-    theta = join_df.select('theta').to_numpy()
-
-    def square_err(x: NDArray[np.float64]):
-        return ((x[0] * rho + x[1] * alsa + x[2] * rho * alsa - theta) ** 2).sum()
-
-    x_0 = (1, -0.25, 0) 
-
-    metho
 
 def prl_df(set_code: str, filter_spec: dict[str, Any] | None = None) -> pl.DataFrame:
     if filter_spec is None:
@@ -68,6 +49,46 @@ def prl_df(set_code: str, filter_spec: dict[str, Any] | None = None) -> pl.DataF
     )
 
 
+def three_factor_opt(
+    set_codes: str | list[str],
+) -> NDArray[np.float64]:
+    """
+    Use scipy.optimize to find a, b, c to best fit a NPR model to 
+    the optimal softmax pick priority solution.
+
+    All logs are natural in this model, convert to base 2 at the end
+    """
+
+    if isinstance(set_codes, str):
+        set_codes = [set_codes]
+
+    concat_list = []
+    for set_code in set_codes:
+        priority_df = pick_priority(set_code)
+        card_data_df = prl_df(set_code)
+
+        concat_list.append(card_data_df.join(priority_df, on="name"))
+
+    join_df = pl.concat(concat_list)
+
+    rho = join_df.select('pick_rate_logit_seen').to_numpy()[:,0]
+    alsa = join_df.select('alsa').to_numpy()[:,0]
+    theta = join_df.select('theta').to_numpy()[:,0]
+
+    train = ~(np.isnan(rho) | np.isnan(alsa) | np.isnan(theta))
+
+    r_t = rho[train]
+    a_t = alsa[train]
+    t_t = theta[train]
+
+    A = np.stack([np.ones(t_t.shape), r_t, a_t, a_t ** 2], axis=1)
+
+    sol = np.linalg.lstsq(A, t_t)
+
+    return sol[0].astype(np.float64)
+
+    
+
 def by_pick_df(
     set_code: str, filter_spec: dict[str, Any] | None = None
 ) -> pl.DataFrame:
@@ -85,24 +106,6 @@ def by_pick_df(
     )
 
 
-def npr_curve(
-    alsa: float,
-    prl: float,
-    alsa_prl_beta: float = ALSA_PRL_BETA,
-    npr_p1_offset: float = NPR_P1_OFFSET,
-):
-    X = np.arange(1.0, alsa, step=0.01, dtype=np.float64)
-    Y = (
-        prl
-        + ALSA_PRL_BETA * (X - alsa)
-        - NPR_P1_OFFSET
-        / 4.0
-        * ((X <= 3.0) * (X - 3.0) ** 2 - (alsa <= 3.0) * (alsa - 3.0) ** 2)
-    )
-
-    return (X, Y)
-
-
 def pack_odds_df(
     set_code: str, filter_spec: dict[str, Any] | None = None
 ) -> pl.DataFrame:
@@ -118,7 +121,7 @@ def pack_odds_df(
         "seen_pick_odds_pack_mean": agg_col(
             pl.col("seen_pick_odds_pack_sum") / pl.col("num_taken")
         ),
-        "seen_pick_odds_log": agg_col(pl.col("seen_pick_odds_pack_mean").log(2)),
+        "seen_pick_odds_log": agg_col(pl.col("seen_pick_odds_pack_mean")),
     }
 
     return summon(

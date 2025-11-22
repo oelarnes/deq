@@ -1,4 +1,5 @@
 import datetime as dt
+import math
 import os
 from dataclasses import dataclass
 
@@ -20,7 +21,7 @@ PICK_EQUITY_INIT = 0.03
 PICK_EQUITY_MID = 0.03
 PICK_EQUITY_MID_INDEX = 1
 ZERO_EQUITY_INDEX = 14
-BIAS_ADJ_COEF = 0.6
+BIAS_ADJ_COEF = 1.0
 DEQ_LOSS_FACTOR = 0.6
 SAMPLE_DECAY = 0.95
 META_DECAY = 0.95
@@ -37,13 +38,13 @@ BAYES_MU = 0.54
 UNG = pl.col(ColName.USER_N_GAMES_BUCKET)
 UGWR = pl.col(ColName.USER_GAME_WIN_RATE_BUCKET)
 
-MAX_NPR = 12.0
-ALSA_PRL_BETA = 0.3
-ALSA_PRL_SEEN_BETA = 0.35
-NPR_P1_OFFSET = 0.5
+PR_ODDS_0 = 1.0 / 13.0
+MAX_PRL = 10.0
 
-
-PRL_0 = 1.0 / 14.0
+NPR_INTERCEPT = -1.34
+NPR_PRL_COEF = 2.0
+NPR_ALSA_COEF = -0.16
+NPR_ALSA_SQ_COEF = -0.04
 
 color_sets = [
     "WU",
@@ -74,40 +75,30 @@ class DEqConfig:
     start_date: dt.date
     end_date: dt.date | None = None
     is_pick_two: bool = False
+    overrides: dict | None = None
 
 
 config = {
-    "OM1": DEqConfig(start_date=dt.date(2025, 9, 23), is_pick_two=True),
-    "EOE": DEqConfig(
-        start_date=dt.date(2025, 7, 29),
-        end_date=dt.date(2025, 9, 23),
+    "TLA": DEqConfig(start_date=dt.date(2025, 11, 18)),
+    "Cube+-+Powered": DEqConfig(
+        start_date=dt.date(2025, 10, 28),
+        end_date=dt.date(2025, 11, 18),
+        overrides={
+            'gp_top_min_games': 50000
+        },
     ),
-    "FIN": DEqConfig(
-        start_date=dt.date(2025, 6, 10),
-        end_date=dt.date(2025, 10, 7),
-    ),
-    "TDM": DEqConfig(
-        start_date=dt.date(2025, 4, 8),
-        end_date=dt.date(2025, 6, 10),
-    ),
-    "DFT": DEqConfig(
-        start_date=dt.date(2025, 2, 11),
-        end_date=dt.date(2025, 4, 8),
-    ),
-    "PIO": DEqConfig(
-        start_date=dt.date(2024, 12, 10),
-        end_date=dt.date(2025, 2, 11),
-    ),
-    "FDN": DEqConfig(
-        start_date=dt.date(2024, 11, 12),
-        end_date=dt.date(2024, 12, 10),
-     ),
-    "DSK": DEqConfig(
-        start_date=dt.date(2024, 9, 24),
-        end_date=dt.date(2025, 10, 14),
-    ),
+    "OM1": DEqConfig(start_date=dt.date(2025, 9, 23), end_date=dt.date(2025, 11, 18), is_pick_two=True),
+    "EOE": DEqConfig(start_date=dt.date(2025, 7, 29), end_date=dt.date(2025, 9, 23)),
+    "FIN": DEqConfig(start_date=dt.date(2025, 6, 10), end_date=dt.date(2025, 10, 7)),
+    "TDM": DEqConfig(start_date=dt.date(2025, 4, 8), end_date=dt.date(2025, 10, 28)),
+    "DFT": DEqConfig(start_date=dt.date(2025, 2, 11), end_date=dt.date(2025, 4, 8)),
+    "PIO": DEqConfig(start_date=dt.date(2024, 12, 10), end_date=dt.date(2025, 2, 11)),
+    "FDN": DEqConfig(start_date=dt.date(2024, 11, 12), end_date=dt.date(2024, 12, 10)),
+    "DSK": DEqConfig(start_date=dt.date(2024, 9, 24), end_date=dt.date(2025, 10, 14)),
     "BLB": DEqConfig(start_date=dt.date(2024, 7, 30), end_date=dt.date(2024, 9, 24)),
-    "MH3": DEqConfig(start_date=dt.date(2024, 6, 11)),
+    "MH3": DEqConfig(start_date=dt.date(2024, 6, 11), end_date=dt.date(2025, 10, 21)),
+    "OTJ": DEqConfig(start_date=dt.date(2024, 4, 16), end_date=dt.date(2025, 11, 4)),
+    "MKM": DEqConfig(start_date=dt.date(2024, 2, 6), end_date=dt.date(2024, 4, 16)),
 }
 
 
@@ -417,12 +408,12 @@ ext = {
                     (
                         pl.col(ColName.NUM_TAKEN)
                         / (pl.col(ColName.NUM_SEEN) - pl.col(ColName.NUM_TAKEN))
-                    ).log(2)
-                    - pl.lit(PRL_0).log(2)
+                    ).log()
+                    - pl.lit(PR_ODDS_0).log()
                 )
-                .otherwise(-MAX_NPR)
+                .otherwise(-MAX_PRL)
             )
-            .otherwise(MAX_NPR)
+            .otherwise(MAX_PRL)
         )
         .otherwise(None)
     ),
@@ -436,40 +427,23 @@ ext = {
                     (
                         pl.col(ColName.NUM_TAKEN)
                         / (pl.col(ColName.PACK_CARD) - pl.col(ColName.NUM_TAKEN))
-                    ).log(2)
-                    - pl.lit(PRL_0).log(2)
+                    ).log()
+                    - pl.lit(PR_ODDS_0).log()
                 )
-                .otherwise(-MAX_NPR)
+                .otherwise(-MAX_PRL)
             )
-            .otherwise(MAX_NPR)
+            .otherwise(MAX_PRL)
         )
         .otherwise(None)
     ),
     "npr": agg_col(
-        pl.when(pl.col(ColName.ALSA) > 3)
-        .then(
-            pl.col("pick_rate_logit")
-            - (pl.col("alsa") - 1) * ALSA_PRL_BETA
-            - NPR_P1_OFFSET
+        (
+            NPR_INTERCEPT
+            + NPR_PRL_COEF * pl.col("pick_rate_logit_seen")
+            + NPR_ALSA_COEF * pl.col("alsa")
+            + NPR_ALSA_SQ_COEF * pl.col("alsa") ** 2
         )
-        .otherwise(
-            pl.col("pick_rate_logit")
-            - (pl.col("alsa") - 1) * ALSA_PRL_BETA
-            - NPR_P1_OFFSET * (1.0 - (pl.col("alsa") - 3).pow(2) / 4.0)
-        )
-    ),
-    "npr_seen": agg_col(
-        pl.when(pl.col(ColName.ALSA) > 3)
-        .then(
-            pl.col("pick_rate_logit_seen")
-            - (pl.col("alsa") - 1) * ALSA_PRL_SEEN_BETA
-            - NPR_P1_OFFSET
-        )
-        .otherwise(
-            pl.col("pick_rate_logit_seen")
-            - (pl.col("alsa") - 1) * ALSA_PRL_SEEN_BETA
-            - NPR_P1_OFFSET * (1.0 - (pl.col("alsa") - 3).pow(2) / 4.0)
-        )
+        / math.log(2)
     ),
 }
 
@@ -651,6 +625,24 @@ def live_deq(
             ColName.GP_WR,
         )
 
+    if player_cohort == "all":
+        # Get top player pick rate
+        pick_rate_df = summon(
+            set_code,
+            columns=[ColName.NUM_TAKEN, ColName.NUM_SEEN],
+            cdfs=CardDataFileSpec(
+                set_code=set_code,
+                format=format,
+                player_cohort="top",
+                start_date=start_date,
+                end_date=end_date,
+            ),
+        )
+
+        card_df = card_df.drop([ColName.NUM_TAKEN, ColName.NUM_SEEN]).join(
+            pick_rate_df, on="name"
+        )
+
     deck_counts_df = summon(
         set_code,
         columns=[ColName.DECK],
@@ -739,9 +731,7 @@ def live_deq(
             return expr(set_context).alias(col)
 
     deq_df = (
-        card_df.with_columns(
-            deq_col(f"ata_adj{suffix}")
-        )
+        card_df.with_columns(deq_col(f"ata_adj{suffix}"))
         .with_columns(
             deq_col(f"pick_equity{suffix}"),
             deq_col(f"gp_wr_bayes_mu{suffix}"),
@@ -759,7 +749,11 @@ def live_deq(
         .with_columns(deq_col(f"deq{suffix}"))
         .with_columns(deq_col(f"deq_grade{suffix}"))
         .with_columns(deq_col("pick_rate_logit_seen"))
-        .with_columns(deq_col("npr_seen"))
+        .with_columns(
+            pl.lit("N/A").alias("npr")
+            if config[set_code].is_pick_two
+            else deq_col("npr")
+        )
     )
 
     return deq_df
@@ -785,6 +779,7 @@ def daily_deq(
     gp_top_min_games: int = 70000,
     gp_all_min_games: int = 300000,
     max_format_day_start: int = 15,
+    refresh: bool = False,
 ) -> DeqData:
     as_of = as_of or dt.date.today()
     set_code = (
@@ -792,13 +787,16 @@ def daily_deq(
             key
             for key, cfg in config.items()
             if cfg.start_date < dt.date.today()
-            and (cfg.end_date is None or cfg.end_date > dt.date.today())
+            and (cfg.end_date is None or cfg.end_date >= dt.date.today())
         ][0]
         if set_code is None
         else set_code
     )
 
     cfg = config[set_code]
+
+    if cfg.overrides and 'gp_top_min_games' in cfg.overrides:
+        gp_top_min_games = cfg.overrides['gp_top_min_games']
     if cfg.end_date and cfg.end_date < as_of:
         end_date = cfg.end_date
     else:
@@ -826,7 +824,7 @@ def daily_deq(
         player_cohort = "top"
         accept = False
     else:
-        if as_of_df.is_empty():
+        if as_of_df.is_empty() or refresh:
             params = set_df.sort("as_of").to_dicts()[-1]
             player_cohort = params["player_cohort"]
 
@@ -880,7 +878,7 @@ def daily_deq(
         player_cohort,
     )
 
-    if as_of_df.is_empty():
+    if as_of_df.is_empty() or refresh:
         history_df = pl.concat(
             [
                 history_df,
@@ -896,7 +894,7 @@ def daily_deq(
                     ]
                 ),
             ]
-        )
+        ).group_by(['set_code', 'as_of']).last()
 
         print("Writing history.parquet")
         history_df.write_parquet(history_df_path)

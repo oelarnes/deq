@@ -280,7 +280,28 @@ def softmax_solve(
 
 def pick_priority(
     set_code: str,
+    read_cache: bool = False,
+    write_cache: bool = True,
+    pick_filter: dict | None = None,
 ) -> pl.DataFrame:
+    if pick_filter is None:
+        pick_filter = {
+            '$and': [
+                {'player_cohort': 'Top'},
+                {'lhs': "format_day", "op": ">", "rhs": 7}
+            ]
+        }
+    else:
+        read_cache = False
+        write_cache = False
+
+    ad_hoc_filename = f"{set_code}_pick_priority"
+
+    if read_cache:
+        df = read_ad_hoc_dataset(ad_hoc_filename)
+        if df is not None:
+            return df
+
     pick_x = csc_array(
         view_select(
             set_code,
@@ -289,13 +310,7 @@ def pick_priority(
                 "is_pick",
                 "pack_card",
             ],
-            filter_spec={
-                "$and": [
-                    {"player_cohort": "Top"},
-                    {"pack_num": 1},
-                    {"lhs": "format_day", "op": ">", "rhs": 7},
-                ]
-            },
+            filter_spec=pick_filter,
             extensions=mle_ext(14),
         )
         .collect(streaming=True)
@@ -308,20 +323,21 @@ def pick_priority(
     x_raw = pick_x[:, m:]
     y_raw = pick_x[:, :m]
 
-    p1p1_count = x_raw.sum(axis=1).max()
+    p1_count = x_raw.sum(axis=1).max()
 
-    p1p1_counts = x_raw[x_raw.sum(axis=1) == p1p1_count].sum(axis=0) + 1
-    p1p1_picks = y_raw[x_raw.sum(axis=1) == p1p1_count].sum(axis=0)
-    pick_rates = p1p1_picks / p1p1_counts
+    p1_counts = x_raw[x_raw.sum(axis=1) == p1_count].sum(axis=0) + 1
+    p1_picks = y_raw[x_raw.sum(axis=1) == p1_count].sum(axis=0)
+    pick_rates = p1_picks / p1_counts
     zero_ind = np.abs(
-        pick_rates * (p1p1_counts > 0.25 * p1p1_counts.max()) - 1 / p1p1_count
+        pick_rates * (p1_counts > 0.25 * p1_counts.max()) - 1 / p1_count
     ).argmin()
 
     theta = softmax_solve(x_raw, y_raw, zero_ind=zero_ind)
 
     df = pl.DataFrame({"name": names, "theta": theta}).sort("theta", descending=False)
 
-    save_ad_hoc_dataset(df, f"{set_code}_pick_priorty")
+    if write_cache:
+        save_ad_hoc_dataset(df, ad_hoc_filename)
     return df
 
 

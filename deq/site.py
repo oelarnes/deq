@@ -35,7 +35,7 @@ def main(set_code: str | None = None):
             "color",
             "rarity",
             "deq",
-            "npr_seen",
+            "npr",
             "ata",
             "gp_wr",
             "gp_wr_b",
@@ -49,11 +49,17 @@ def main(set_code: str | None = None):
         allow_nan=False,
     )
 
+    title_map = {
+        'Cube+-+Powered': 'Cube - Powered'
+    }
+    code_map = {
+        'Cube+-+Powered': 'PCube'
+    }
     select_elements = "".join(
         [
-            f'<option value="deq-{code.lower()}.html">{code}</option>'
+            f'<option value="deq-{code.lower()}.html">{code_map.get(code, code)}</option>'
             if code != deq_data.set_code
-            else f'<option value="deq-{code.lower()}.html" selected>{code}</option>'
+            else f'<option value="deq-{code.lower()}.html" selected>{code_map.get(code, code)}</option>'
             for code in deq_data.available_sets
         ]
     )
@@ -67,7 +73,7 @@ def main(set_code: str | None = None):
     date_format = "%-d %b %y"
     html_content = load_html_template().format(
         deq_table=table_json,
-        set_code=deq_data.set_code,
+        set_code=title_map.get(deq_data.set_code, deq_data.set_code),
         player_cohort=deq_data.player_cohort,
         start_date=deq_data.start_date.strftime(date_format),
         end_date=deq_data.end_date.strftime(date_format),
@@ -92,5 +98,4 @@ def main(set_code: str | None = None):
 
 
 if __name__ == "__main__":
-    print(__name__)
     main()

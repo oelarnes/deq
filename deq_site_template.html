@@ -65,6 +65,12 @@ rate. For more details, see the <a href="deq-docs.html">documentation</a> and ad
 content at <a href="intro.html">MagicFlea on Draft</a>. 
 DEq is not affiliated with 17Lands.
 
+<strong>NPR</strong> is a metric measuring the preferences of top players on a logarithmic
+scale. Each
+increment of 1.0 represents twice the chance of being picked P1P1, and an NPR of 0.0
+represents even odds of being chosen from an average pack. For more, see 
+<a href="npr-docs.html">documentation</a>.
+
                 <hr>
                 <strong>Search Examples:</strong>
                 <ul>
@@ -97,6 +103,7 @@ DEq is not affiliated with 17Lands.
                         <th>Name</th>
                         <th>Color</th>
                         <th class="col-hidden">Rarity</th>
+                        <th class="col-hidden">NPR</th>
                         <th class="col-hidden {embargo_class}">ATA</th>
                         <th class="col-hidden {embargo_class}">GP WR</th>
                         <th class="col-hidden {embargo_class}">% GP</th>
@@ -188,9 +195,10 @@ DEq is not affiliated with 17Lands.
                     <td>${{row.name}}</td>
                     <td>${{row.color}}</td>
                     <td class="col-hidden">${{row.rarity}}</td>
-                <td class="col-hidden {embargo_class}">${{ataFormat(row.ata)}}</td>
-                <td class="col-hidden {embargo_class}">${{pctFormat(row.gp_wr)}}</td>
-                <td class="col-hidden {embargo_class}">${{pctFormat(row.pct_gp)}}</td>
+                    <td class="col-hidden">${{ataFormat(row.npr)}}</td>
+                    <td class="col-hidden {embargo_class}">${{ataFormat(row.ata)}}</td>
+                    <td class="col-hidden {embargo_class}">${{pctFormat(row.gp_wr)}}</td>
+                    <td class="col-hidden {embargo_class}">${{pctFormat(row.pct_gp)}}</td>
                 </tr>
             `).join('');
         }}
