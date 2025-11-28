@@ -37,6 +37,7 @@ def main(set_code: str | None = None):
             "deq",
             "npr",
             "pct_top",
+            "image_url",
         )
         .fill_nan(None)
         .sort("deq", descending=True, nulls_last=True)
