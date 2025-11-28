@@ -280,22 +280,27 @@ def softmax_solve(
 
 def pick_priority(
     set_code: str,
-    read_cache: bool = False,
+    pack_one_only: bool = False,
+    read_cache: bool = True,
     write_cache: bool = True,
-    pick_filter: dict | None = None,
 ) -> pl.DataFrame:
-    if pick_filter is None:
+    if pack_one_only:
+        pick_filter = {
+            '$and': [
+                {'player_cohort': 'Top'},
+                {'lhs': "format_day", "op": ">", "rhs": 7},
+                {'pack_num': 1}
+            ]
+        }
+    else:
         pick_filter = {
             '$and': [
                 {'player_cohort': 'Top'},
                 {'lhs': "format_day", "op": ">", "rhs": 7}
             ]
         }
-    else:
-        read_cache = False
-        write_cache = False
 
-    ad_hoc_filename = f"{set_code}_pick_priority"
+    ad_hoc_filename = f"{set_code}_{'pack_one' if pack_one_only else 'all'}_pick_priority"
 
     if read_cache:
         df = read_ad_hoc_dataset(ad_hoc_filename)

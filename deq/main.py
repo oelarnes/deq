@@ -41,9 +41,7 @@ UGWR = pl.col(ColName.USER_GAME_WIN_RATE_BUCKET)
 PR_ODDS_0 = 1.0 / 13.0
 MAX_PRL = 10.0
 
-NPR_INTERCEPT = -1.34
-NPR_PRL_COEF = 2.0
-NPR_ALSA_COEF = -0.16
+NPR_ALSA_COEF = -0.12
 NPR_ALSA_SQ_COEF = -0.04
 
 color_sets = [
@@ -438,8 +436,7 @@ ext = {
     ),
     "npr": agg_col(
         (
-            NPR_INTERCEPT
-            + NPR_PRL_COEF * pl.col("pick_rate_logit_seen")
+            pl.col("pick_rate_logit_seen")
             + NPR_ALSA_COEF * pl.col("alsa")
             + NPR_ALSA_SQ_COEF * pl.col("alsa") ** 2
         )
