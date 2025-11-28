@@ -36,12 +36,7 @@ def main(set_code: str | None = None):
             "rarity",
             "deq",
             "npr",
-            "ata",
-            "gp_wr",
-            "gp_wr_b",
-            "pct_gp",
-            "deq_bias_adj",
-            "deq_meta_adj",
+            "pct_top",
         )
         .fill_nan(None)
         .sort("deq", descending=True, nulls_last=True)
@@ -74,7 +69,6 @@ def main(set_code: str | None = None):
     html_content = load_html_template().format(
         deq_table=table_json,
         set_code=title_map.get(deq_data.set_code, deq_data.set_code),
-        player_cohort=deq_data.player_cohort,
         start_date=deq_data.start_date.strftime(date_format),
         end_date=deq_data.end_date.strftime(date_format),
         embargo_class=embargo_class,

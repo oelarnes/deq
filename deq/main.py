@@ -25,8 +25,6 @@ BIAS_ADJ_COEF = 1.0
 DEQ_LOSS_FACTOR = 0.6
 SAMPLE_DECAY = 0.95
 META_DECAY = 0.95
-WR_BETA_TO_ATA = -0.0033
-BAYES_GAMES = 200
 MAX_DEQ_DAYS = 25
 GRADE_C_MINUS_MAX = -0.001
 GRADE_NOTCH_INCREMENT = 0.0075
@@ -45,6 +43,11 @@ NPR_ALSA_COEF = -0.12
 NPR_ALSA_SQ_COEF = -0.04
 
 color_sets = [
+    "W",
+    "U",
+    "R",
+    "B",
+    "G",
     "WU",
     "WB",
     "WR",
@@ -73,19 +76,18 @@ class DEqConfig:
     start_date: dt.date
     end_date: dt.date | None = None
     is_pick_two: bool = False
-    overrides: dict | None = None
 
 
 config = {
     "TLA": DEqConfig(start_date=dt.date(2025, 11, 18)),
     "Cube+-+Powered": DEqConfig(
-        start_date=dt.date(2025, 10, 28),
-        end_date=dt.date(2025, 11, 18),
-        overrides={
-            'gp_top_min_games': 50000
-        },
+        start_date=dt.date(2025, 10, 28), end_date=dt.date(2025, 11, 18)
     ),
-    "OM1": DEqConfig(start_date=dt.date(2025, 9, 23), end_date=dt.date(2025, 11, 18), is_pick_two=True),
+    "OM1": DEqConfig(
+        start_date=dt.date(2025, 9, 23),
+        end_date=dt.date(2025, 11, 18),
+        is_pick_two=True,
+    ),
     "EOE": DEqConfig(start_date=dt.date(2025, 7, 29), end_date=dt.date(2025, 9, 23)),
     "FIN": DEqConfig(start_date=dt.date(2025, 6, 10), end_date=dt.date(2025, 10, 7)),
     "TDM": DEqConfig(start_date=dt.date(2025, 4, 8), end_date=dt.date(2025, 10, 28)),
@@ -110,8 +112,6 @@ def deq_col_specs(
     deq_loss_factor: float = DEQ_LOSS_FACTOR,
     sample_decay: float = SAMPLE_DECAY,
     meta_decay: float = META_DECAY,
-    wr_beta_to_ata: float = WR_BETA_TO_ATA,
-    bayes_games: int = BAYES_GAMES,
     max_deq_days: int = MAX_DEQ_DAYS,
     grade_c_minus_max: float = GRADE_C_MINUS_MAX,
     grade_notch_increment: float = GRADE_NOTCH_INCREMENT,
@@ -140,7 +140,7 @@ def deq_col_specs(
 
     # fmt: off
     return {
-        f"ata_adj{suffix}": agg_col(pl.col(ColName.ATA) * 2 - 0.5 if is_pick_two else pl.col(ColName.ATA)),
+        f"ata_adj{suffix}": agg_col(pl.col("ata_17l") * 2 - 0.5 if is_pick_two else pl.col("ata_17l")),
         f"pick_equity{suffix}": agg_col(pl.when(pl.col(f"ata_adj{suffix}") >= pick_equity_mid_index)
             .then(
                 pick_equity_mid
@@ -172,17 +172,9 @@ def deq_col_specs(
                 )
             )
         ),
-        f"gp_wr_bayes_mu{suffix}": agg_col(pl.col(ColName.GP_WR_MEAN) + wr_beta_to_ata * (pl.col(f"ata_adj{suffix}") - 7)),
-        f"gp_wr_b{suffix}": agg_col(pl.col("deck_small_sample")
-            * (
-                pl.col(f"gp_wr_bayes_mu{suffix}") * bayes_games
-                + pl.col(ColName.WON_DECK)
-            )
-            / (pl.col(ColName.DECK) + bayes_games)
-        ),
         f"deq_base{suffix}": agg_col((
-                pl.col(f"gp_wr_b{suffix}")
-                - pl.col(ColName.GP_WR_MEAN)
+                pl.col("gp_wr_17l")
+                - pl.col("gp_wr_mean")
                 + pl.col(f"pick_equity{suffix}")
             )
             * pl.col(ColName.PCT_GP),
@@ -330,6 +322,16 @@ ext = {
         .then(None)
         .otherwise(1.0)
     ),
+    "alsa_17l": agg_col(
+        pl.when(pl.col(ColName.NUM_SEEN) < SAMPLE_THRESHOLD)
+        .then(None)
+        .otherwise(pl.col(ColName.ALSA))
+    ),
+    "ata_17l": agg_col(
+        pl.when(pl.col(ColName.NUM_TAKEN) < SAMPLE_THRESHOLD)
+        .then(None)
+        .otherwise(pl.col(ColName.ATA))
+    ),
     "gih_wr_17l": agg_col(
         pl.when(
             pl.col(ColName.NAME).is_in(BASIC_LANDS)
@@ -437,8 +439,8 @@ ext = {
     "npr": agg_col(
         (
             pl.col("pick_rate_logit_seen")
-            + NPR_ALSA_COEF * pl.col("alsa")
-            + NPR_ALSA_SQ_COEF * pl.col("alsa") ** 2
+            + NPR_ALSA_COEF * pl.col("alsa_17l")
+            + NPR_ALSA_SQ_COEF * pl.col("alsa_17l") ** 2
         )
         / math.log(2)
     ),
@@ -510,8 +512,6 @@ def live_deq(
     set_code: str,
     start_date: dt.date,
     end_date: dt.date,
-    player_cohort: str = "top",
-    suffix: str = "",
     pick_equity_init: float = PICK_EQUITY_INIT,
     pick_equity_mid: float = PICK_EQUITY_MID,
     pick_equity_mid_index: int = PICK_EQUITY_MID_INDEX,
@@ -520,178 +520,9 @@ def live_deq(
     deq_loss_factor: float = DEQ_LOSS_FACTOR,
     sample_decay: float = SAMPLE_DECAY,
     meta_decay: float = META_DECAY,
-    wr_beta_to_ata: float = WR_BETA_TO_ATA,
-    bayes_games: int = BAYES_GAMES,
     max_deq_days: int = MAX_DEQ_DAYS,
 ) -> pl.DataFrame:
     format = "PickTwoDraft" if config[set_code].is_pick_two else "PremierDraft"
-
-    dc_df = deck_color_df(
-        set_code,
-        format=format,
-        player_cohort=player_cohort,
-        start_date=start_date,
-        end_date=end_date,
-    ).with_columns(
-        pl.col(ColName.NUM_WON).sum().alias(ColName.GP_WR_MEAN)
-        / pl.col(ColName.NUM_GAMES).sum()
-    )
-    gp_wr_mean = (
-        dc_df.select([ColName.NUM_WON, ColName.NUM_GAMES])
-        .sum()
-        .select(pl.col(ColName.NUM_WON) / pl.col(ColName.NUM_GAMES))[ColName.NUM_WON][0]
-    )
-
-    gp_wr_excess = (
-        pl.col(ColName.NUM_WON).alias(ColName.GP_WR_EXCESS) / pl.col(ColName.NUM_GAMES)
-        - gp_wr_mean
-    )
-
-    excess_wr_df = pl.concat(
-        [
-            (
-                dc_df.filter(~pl.col(ColName.MAIN_COLORS).is_in(color_sets))
-                .select(ColName.NUM_GAMES, ColName.NUM_WON)
-                .sum()
-                .select(
-                    gp_wr_excess,
-                    pl.lit("other").alias(ColName.MAIN_COLORS),
-                )
-            ),
-            (
-                dc_df.filter(pl.col(ColName.MAIN_COLORS).is_in(color_sets)).select(
-                    gp_wr_excess, ColName.MAIN_COLORS
-                )
-            ),
-        ]
-    )
-
-    card_df = summon(
-        set_code,
-        columns=[
-            ColName.COLOR,
-            ColName.RARITY,
-            ColName.ATA,
-            ColName.ALSA,
-            ColName.NUM_SEEN,
-            ColName.NUM_TAKEN,
-            ColName.DECK,
-            ColName.WON_DECK,
-            ColName.PCT_GP,
-            ColName.GP_WR,
-        ],
-        cdfs=CardDataFileSpec(
-            set_code=set_code,
-            format=format,
-            player_cohort=player_cohort,
-            start_date=start_date,
-            end_date=end_date,
-        ),
-    )
-
-    if player_cohort != "all":
-        fallback_ata_df = summon(
-            set_code,
-            columns=[ColName.ATA, ColName.ALSA],
-            cdfs=CardDataFileSpec(
-                set_code=set_code,
-                format=format,
-                player_cohort="all",
-                start_date=start_date,
-                end_date=end_date,
-            ),
-        ).rename({ColName.ATA: "ata_fallback", ColName.ALSA: "alsa_fallback"})
-
-        card_df = card_df.join(fallback_ata_df, on=["name"]).select(
-            ColName.NAME,
-            ColName.COLOR,
-            ColName.RARITY,
-            pl.when(pl.col(ColName.ATA) < 1)
-            .then(pl.col("ata_fallback"))
-            .otherwise(pl.col(ColName.ATA))
-            .alias(ColName.ATA),
-            pl.when(pl.col(ColName.ALSA) < 1)
-            .then(pl.col("alsa_fallback"))
-            .otherwise(pl.col(ColName.ALSA))
-            .alias(ColName.ALSA),
-            ColName.NUM_SEEN,
-            ColName.NUM_TAKEN,
-            ColName.DECK,
-            ColName.WON_DECK,
-            ColName.PCT_GP,
-            ColName.GP_WR,
-        )
-
-    if player_cohort == "all":
-        # Get top player pick rate
-        pick_rate_df = summon(
-            set_code,
-            columns=[ColName.NUM_TAKEN, ColName.NUM_SEEN],
-            cdfs=CardDataFileSpec(
-                set_code=set_code,
-                format=format,
-                player_cohort="top",
-                start_date=start_date,
-                end_date=end_date,
-            ),
-        )
-
-        card_df = card_df.drop([ColName.NUM_TAKEN, ColName.NUM_SEEN]).join(
-            pick_rate_df, on="name"
-        )
-
-    deck_counts_df = summon(
-        set_code,
-        columns=[ColName.DECK],
-        group_by=[ColName.NAME, ColName.MAIN_COLORS],
-        cdfs=CardDataFileSpec(
-            set_code=set_code,
-            format=format,
-            player_cohort=player_cohort,
-            deck_colors=color_sets,
-            start_date=start_date,
-            end_date=end_date,
-        ),
-    )
-
-    other_counts_df = (
-        deck_counts_df.group_by("name")
-        .sum()
-        .join(
-            card_df.select(ColName.NAME, pl.col(ColName.DECK).alias("num_gp_all")),
-            on=ColName.NAME,
-        )
-        .select(
-            ColName.NAME,
-            pl.lit("other").alias(ColName.MAIN_COLORS),
-            -pl.col(ColName.DECK) + pl.col("num_gp_all"),
-        )
-    )
-
-    deck_counts_df = pl.concat([deck_counts_df, other_counts_df])
-
-    bias_adj_df = (
-        deck_counts_df.join(excess_wr_df, on=ColName.MAIN_COLORS)
-        .select(
-            ColName.NAME,
-            (pl.col(ColName.DECK) * pl.col(ColName.GP_WR_EXCESS)).alias(
-                "gp_bias_weight"
-            ),
-            pl.col(ColName.DECK),
-        )
-        .group_by(ColName.NAME)
-        .sum()
-        .select(
-            ColName.NAME,
-            (pl.col("gp_bias_weight") / pl.col(ColName.DECK)).alias(
-                f"gp_wr_bias{suffix}"
-            ),
-        )
-    )
-
-    card_df = card_df.join(bias_adj_df, on="name").with_columns(
-        pl.lit(gp_wr_mean).alias(ColName.GP_WR_MEAN)
-    )
 
     set_context = {
         "observed_days": (end_date - start_date).days + 1,
@@ -701,7 +532,6 @@ def live_deq(
     deq_ext = {
         **ext,
         **deq_col_specs(
-            suffix=suffix,
             pick_equity_init=pick_equity_init,
             pick_equity_mid=pick_equity_mid,
             pick_equity_mid_index=pick_equity_mid_index,
@@ -710,8 +540,6 @@ def live_deq(
             deq_loss_factor=deq_loss_factor,
             meta_decay=meta_decay,
             sample_decay=sample_decay,
-            wr_beta_to_ata=wr_beta_to_ata,
-            bayes_games=bayes_games,
             max_deq_days=max_deq_days,
             is_pick_two=config[set_code].is_pick_two,
         ),
@@ -727,30 +555,205 @@ def live_deq(
         else:
             return expr(set_context).alias(col)
 
+    raw_deq_by_cohort = {}
+    for player_cohort in ["all", "top"]:
+        dc_df = deck_color_df(
+            set_code,
+            format=format,
+            player_cohort=player_cohort,
+            start_date=start_date,
+            end_date=end_date,
+        ).with_columns(
+            pl.col(ColName.NUM_WON).sum().alias(ColName.GP_WR_MEAN)
+            / pl.col(ColName.NUM_GAMES).sum()
+        )
+        gp_wr_mean = (
+            dc_df.select([ColName.NUM_WON, ColName.NUM_GAMES])
+            .sum()
+            .select(pl.col(ColName.NUM_WON) / pl.col(ColName.NUM_GAMES))[
+                ColName.NUM_WON
+            ][0]
+        )
+
+        gp_wr_excess = (
+            pl.col(ColName.NUM_WON).alias(ColName.GP_WR_EXCESS)
+            / pl.col(ColName.NUM_GAMES)
+            - gp_wr_mean
+        )
+
+        excess_wr_df = pl.concat(
+            [
+                (
+                    dc_df.filter(~pl.col(ColName.MAIN_COLORS).is_in(color_sets))
+                    .select(ColName.NUM_GAMES, ColName.NUM_WON)
+                    .sum()
+                    .select(
+                        gp_wr_excess,
+                        pl.lit("other").alias(ColName.MAIN_COLORS),
+                    )
+                ),
+                (
+                    dc_df.filter(pl.col(ColName.MAIN_COLORS).is_in(color_sets)).select(
+                        gp_wr_excess, ColName.MAIN_COLORS
+                    )
+                ),
+            ]
+        )
+
+        card_df = summon(
+            set_code,
+            columns=[
+                ColName.COLOR,
+                ColName.RARITY,
+                ColName.IMAGE_URL,
+                ColName.ATA,
+                ColName.ALSA,
+                ColName.NUM_SEEN,
+                ColName.NUM_TAKEN,
+                ColName.DECK,
+                ColName.WON_DECK,
+                ColName.PCT_GP,
+                ColName.GP_WR,
+            ],
+            cdfs=CardDataFileSpec(
+                set_code=set_code,
+                format=format,
+                player_cohort=player_cohort,
+                start_date=start_date,
+                end_date=end_date,
+            ),
+        )
+
+        deck_counts_df = summon(
+            set_code,
+            columns=[ColName.DECK],
+            group_by=[ColName.NAME, ColName.MAIN_COLORS],
+            cdfs=CardDataFileSpec(
+                set_code=set_code,
+                format=format,
+                player_cohort=player_cohort,
+                deck_colors=color_sets,
+                start_date=start_date,
+                end_date=end_date,
+            ),
+        )
+
+        other_counts_df = (
+            deck_counts_df.group_by("name")
+            .sum()
+            .join(
+                card_df.select(ColName.NAME, pl.col(ColName.DECK).alias("num_gp_all")),
+                on=ColName.NAME,
+            )
+            .select(
+                ColName.NAME,
+                pl.lit("other").alias(ColName.MAIN_COLORS),
+                -pl.col(ColName.DECK) + pl.col("num_gp_all"),
+            )
+        )
+
+        deck_counts_df = pl.concat([deck_counts_df, other_counts_df])
+
+        bias_adj_df = (
+            deck_counts_df.join(excess_wr_df, on=ColName.MAIN_COLORS)
+            .select(
+                ColName.NAME,
+                (pl.col(ColName.DECK) * pl.col(ColName.GP_WR_EXCESS)).alias(
+                    "gp_bias_weight"
+                ),
+                pl.col(ColName.DECK),
+            )
+            .group_by(ColName.NAME)
+            .sum()
+            .select(
+                ColName.NAME,
+                (pl.col("gp_bias_weight") / pl.col(ColName.DECK)).alias("gp_wr_bias"),
+            )
+        )
+
+        card_df = card_df.join(bias_adj_df, on="name").with_columns(
+            pl.lit(gp_wr_mean).alias(ColName.GP_WR_MEAN)
+        )
+
+        card_df = card_df.with_columns(
+            deq_col("ata_17l"),
+            deq_col("alsa_17l")
+        )
+
+        # ata fallback for top.
+        if player_cohort == "top" and "all" in raw_deq_by_cohort:
+            fallback_df = raw_deq_by_cohort["all"].select(
+                [
+                    "name",
+                    pl.col("ata_17l").alias("ata_fallback"),
+                    pl.col("alsa_17l").alias("alsa_fallback"),
+                ]
+            )
+            card_df = (
+                card_df.join(fallback_df, on=ColName.NAME)
+                .with_columns(
+                    pl.when(pl.col("ata_17l").is_null())
+                    .then(pl.col("ata_fallback"))
+                    .otherwise(pl.col("ata"))
+                    .alias("ata_new"),
+                    pl.when(pl.col("alsa_17l").is_null())
+                    .then(pl.col("alsa_fallback"))
+                    .otherwise(pl.col("alsa"))
+                    .alias("alsa_new"),
+
+                )
+                .drop("ata_17l", "ata_fallback", "alsa_17l", "alsa_fallback")
+                .rename({"ata_new": "ata_17l", "alsa_new": "alsa_17l"})
+            )
+
+        deq_df = (
+            card_df.with_columns(deq_col("deck_small_sample"))
+            .with_columns(deq_col("ata_adj"), deq_col("gp_wr_17l"))
+            .with_columns(
+                deq_col("pick_equity"),
+            )
+            .with_columns(
+                deq_col("deq_base"),
+                deq_col("deq_bias_adj"),
+                deq_col("meta_regression_factor"),
+            )
+            .with_columns(
+                deq_col("deq_meta_adj"),
+            )
+            .with_columns(deq_col("deq"))
+            .with_columns(deq_col("pick_rate_logit_seen"))
+            .with_columns(
+                pl.lit("N/A").alias("npr")
+                if config[set_code].is_pick_two
+                else deq_col("npr")
+            )
+        )
+        raw_deq_by_cohort[player_cohort] = deq_df
+
+    ALL_WEIGHT = 1000
     deq_df = (
-        card_df.with_columns(deq_col(f"ata_adj{suffix}"))
-        .with_columns(
-            deq_col(f"pick_equity{suffix}"),
-            deq_col(f"gp_wr_bayes_mu{suffix}"),
-            ext["deck_small_sample"].expr.alias("deck_small_sample"),  # type: ignore
-        )
-        .with_columns(deq_col(f"gp_wr_b{suffix}"))
-        .with_columns(
-            deq_col(f"deq_base{suffix}"),
-            deq_col(f"deq_bias_adj{suffix}"),
-            deq_col(f"meta_regression_factor{suffix}"),
+        raw_deq_by_cohort["top"]
+        .rename({"deq": "deq_top"})
+        .join(
+            raw_deq_by_cohort["all"].select("name", pl.col("deq").alias("deq_all")),
+            on="name",
         )
         .with_columns(
-            deq_col(f"deq_meta_adj{suffix}"),
+            pl.when(pl.col("deq_top").is_finite())
+            .then(pl.col("deck") / (ALL_WEIGHT + pl.col("deck")))
+            .otherwise(pl.lit(0))
+            .alias("pct_top"),
         )
-        .with_columns(deq_col(f"deq{suffix}"))
-        .with_columns(deq_col(f"deq_grade{suffix}"))
-        .with_columns(deq_col("pick_rate_logit_seen"))
         .with_columns(
-            pl.lit("N/A").alias("npr")
-            if config[set_code].is_pick_two
-            else deq_col("npr")
+            pl.when(pl.col("pct_top") > 0)
+            .then(
+                pl.col("pct_top") * pl.col("deq_top")
+                + (1 - pl.col("pct_top")) * pl.col("deq_all")
+            )
+            .otherwise(pl.col("deq_all"))
+            .alias("deq"),
         )
+        .with_columns(deq_col("deq_grade"))
     )
 
     return deq_df
@@ -766,15 +769,13 @@ class DeqData:
     set_code: str
     start_date: dt.date
     end_date: dt.date
-    player_cohort: str
     available_sets: list[str]
 
 
 def daily_deq(
     set_code: str | None = None,
     as_of: dt.date | None = None,
-    gp_top_min_games: int = 70000,
-    gp_all_min_games: int = 300000,
+    gp_top_min_games: int = 50000,
     max_format_day_start: int = 15,
     refresh: bool = False,
 ) -> DeqData:
@@ -792,8 +793,6 @@ def daily_deq(
 
     cfg = config[set_code]
 
-    if cfg.overrides and 'gp_top_min_games' in cfg.overrides:
-        gp_top_min_games = cfg.overrides['gp_top_min_games']
     if cfg.end_date and cfg.end_date < as_of:
         end_date = cfg.end_date
     else:
@@ -803,7 +802,7 @@ def daily_deq(
     if not os.path.isdir(ref_dir):
         os.makedirs(ref_dir)
 
-    history_df_path = os.path.join(ref_dir, "history.parquet")
+    history_df_path = os.path.join(ref_dir, "history_v2.parquet")
 
     if not os.path.isfile(history_df_path):
         history_df = pl.DataFrame([])
@@ -818,23 +817,14 @@ def daily_deq(
 
     if set_df.is_empty():
         start_date = cfg.start_date
-        player_cohort = "top"
         accept = False
     else:
         if as_of_df.is_empty() or refresh:
             params = set_df.sort("as_of").to_dicts()[-1]
-            player_cohort = params["player_cohort"]
-
-            if player_cohort == "all":
-                start_date = cfg.start_date
-                player_cohort = "top"
-            else:
-                start_date = params["start_date"] + dt.timedelta(days=1)
-
+            start_date = params["start_date"] + dt.timedelta(days=1)
             accept = False
         else:
             params = as_of_df.to_dicts()[0]
-            player_cohort = params["player_cohort"]
             start_date = params["start_date"]
             accept = True
 
@@ -844,14 +834,10 @@ def daily_deq(
             set_code,
             start_date=start_date,
             end_date=end_date,
-            player_cohort=player_cohort,
+            player_cohort="top"
         )["num_games"].sum()
 
-        game_threshold = (
-            gp_top_min_games if player_cohort == "top" else gp_all_min_games
-        )
-
-        if num_games >= game_threshold:
+        if num_games >= gp_top_min_games:
             if (start_date - cfg.start_date).days + 1 >= max_format_day_start:
                 accept = True
                 start_date = cfg.start_date + dt.timedelta(
@@ -860,11 +846,9 @@ def daily_deq(
             else:
                 start_date = start_date + dt.timedelta(days=1)
         elif start_date == cfg.start_date:
-            if player_cohort == "top":
-                player_cohort = "all"
-            else:
-                accept = True
+            accept = True
         else:
+            "using previous cached end date"
             accept = True
             start_date = start_date - dt.timedelta(days=1)
 
@@ -872,26 +856,28 @@ def daily_deq(
         set_code,
         start_date,
         end_date,
-        player_cohort,
     )
 
     if as_of_df.is_empty() or refresh:
-        history_df = pl.concat(
-            [
-                history_df,
-                pl.DataFrame(
-                    [
-                        {
-                            "set_code": set_code,
-                            "as_of": as_of,
-                            "start_date": start_date,
-                            "end_date": end_date,
-                            "player_cohort": player_cohort,
-                        }
-                    ]
-                ),
-            ]
-        ).group_by(['set_code', 'as_of']).last()
+        history_df = (
+            pl.concat(
+                [
+                    history_df,
+                    pl.DataFrame(
+                        [
+                            {
+                                "set_code": set_code,
+                                "as_of": as_of,
+                                "start_date": start_date,
+                                "end_date": end_date,
+                            }
+                        ]
+                    ),
+                ]
+            )
+            .group_by(["set_code", "as_of"])
+            .last()
+        )
 
         print("Writing history.parquet")
         history_df.write_parquet(history_df_path)
@@ -907,6 +893,5 @@ def daily_deq(
         set_code=set_code,
         start_date=start_date,
         end_date=end_date,
-        player_cohort=player_cohort,
         available_sets=available_sets,
     )
