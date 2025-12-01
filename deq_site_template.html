@@ -38,10 +38,10 @@
                         </select>
                     </td>
                     <td>
-                        <div class="cell-content"> {start_date} </div>
+                        <div class="cell-content">{start_date}</div>
                     </td>
                     <td>
-                        <div class="cell-content"> {end_date} </div>
+                        <div class="cell-content">{end_date}</div>
                     </td>
                     <td>
                         <button class="doc-button" id="docButton"><span>▼</span></button>
@@ -120,6 +120,28 @@ DEq is not affiliated with 17Lands.
         </span>
         <span>Original content ©2025 Joel Barnes</span>
     </div>
+    <div class="modal-overlay" id="modal">
+        <div class="modal-content">
+            <button class="modal-close" id="modalClose">&times;</button>
+            <div class="modal-image-container">
+                <img class="modal-image" id="modalImage" src="" alt="">
+            </div>
+            <div class="modal-stats">
+                <div class="stat-item">
+                    <span class="stat-label">DEq:</span>
+                    <span class="stat-value" id="modalDeq">-</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">DEq Grade:</span>
+                    <span class="stat-value" id="modalGrade">-</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">NPR:</span>
+                    <span class="stat-value" id="modalNpr">-</span>
+                </div>
+            </div>
+        </div>
+    </div>
     <script>
         const docButton = document.getElementById('docButton');
         const docText = document.getElementById('docText');
@@ -139,7 +161,6 @@ DEq is not affiliated with 17Lands.
             }}
         }});
 
-        // Optional: Close docText when clicking outside
         document.addEventListener('click', function(event) {{
             if (!event.target.closest('.info-table-container') && docText.classList.contains('expanded')) {{
                 docText.classList.remove('expanded');
@@ -192,13 +213,20 @@ DEq is not affiliated with 17Lands.
                     <td class="col-hidden">${{i + 1}}</td>
                     <td>${{row.deq_grade}}</td>
                     <td>${{deqFormat(row.deq)}}</td>
-                    <td>${{row.name}}</td>
+                    <td class="${{row.image_url ? 'name-cell-clickable' : ''}}" data-row-index="${{data.indexOf(row)}}">${{row.name}}</td>
                     <td>${{row.color}}</td>
                     <td class="col-hidden">${{row.rarity}}</td>
                     <td class="col-hidden">${{pctFormat(row.pct_top)}}</td>
                     <td class="col-hidden">${{nprFormat(row.npr)}}</td>
                 </tr>
             `).join('');
+
+            tbody.querySelectorAll('.name-cell-clickable').forEach(cell => {{
+                cell.addEventListener('click', function() {{
+                    const rowIndex = parseInt(this.getAttribute('data-row-index'));
+                    openModal(data[rowIndex]);
+                }});
+            }});
         }}
 
         function colorFilter(row) {{
@@ -310,6 +338,47 @@ DEq is not affiliated with 17Lands.
 
         searchInput.addEventListener('blur', function() {{
             this.style.transform = 'translateY(0)';
+        }});
+
+        // Modal functionality
+        const modal = document.getElementById('modal');
+        const modalClose = document.getElementById('modalClose');
+        const modalImage = document.getElementById('modalImage');
+        const modalDeq = document.getElementById('modalDeq');
+        const modalGrade = document.getElementById('modalGrade');
+        const modalNpr = document.getElementById('modalNpr');
+
+        function openModal(row) {{
+            const imageContainer = document.querySelector('.modal-image-container');
+            if (row.image_url) {
+                modalImage.src = row.image_url;
+                modalImage.alt = row.name;
+                imageContainer.style.display = 'block';
+            } else {
+                imageContainer.style.display = 'none';
+            }
+
+            modalDeq.textContent = deqFormat(row.deq);
+            modalGrade.textContent = row.deq_grade;
+            modalNpr.textContent = nprFormat(row.npr);
+            modal.classList.add('active');
+        }}
+
+        function closeModal() {{
+            modal.classList.remove('active');
+        }}
+
+        modalClose.addEventListener('click', closeModal);
+        modal.addEventListener('click', function(e) {{
+            if (e.target === modal) {{
+                closeModal();
+            }}
+        }});
+
+        document.addEventListener('keydown', function(e) {{
+            if (e.key === 'Escape') {{
+                closeModal();
+            }}
         }});
 
         renderTable(deq_table)
