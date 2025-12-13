@@ -89,7 +89,7 @@ config = {
         is_pick_two=True,
     ),
     "EOE": DEqConfig(start_date=dt.date(2025, 7, 29), end_date=dt.date(2025, 9, 23)),
-    "FIN": DEqConfig(start_date=dt.date(2025, 6, 10), end_date=dt.date(2025, 10, 7)),
+    "FIN": DEqConfig(start_date=dt.date(2025, 6, 10)),
     "TDM": DEqConfig(start_date=dt.date(2025, 4, 8), end_date=dt.date(2025, 10, 28)),
     "DFT": DEqConfig(start_date=dt.date(2025, 2, 11), end_date=dt.date(2025, 4, 8)),
     "PIO": DEqConfig(start_date=dt.date(2024, 12, 10), end_date=dt.date(2025, 2, 11)),
@@ -99,6 +99,7 @@ config = {
     "MH3": DEqConfig(start_date=dt.date(2024, 6, 11), end_date=dt.date(2025, 10, 21)),
     "OTJ": DEqConfig(start_date=dt.date(2024, 4, 16), end_date=dt.date(2025, 11, 4)),
     "MKM": DEqConfig(start_date=dt.date(2024, 2, 6), end_date=dt.date(2024, 4, 16)),
+    "LCI": DEqConfig(start_date=dt.date(2023, 11, 14), end_date=dt.date(2024, 2, 6)),
 }
 
 
