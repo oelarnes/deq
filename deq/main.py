@@ -76,12 +76,15 @@ class DEqConfig:
     start_date: dt.date
     end_date: dt.date | None = None
     is_pick_two: bool = False
+    cube: bool = False
 
 
 config = {
-    "TLA": DEqConfig(start_date=dt.date(2025, 11, 18)),
+    "TMT": DEqConfig(start_date=dt.date(2026, 3, 3)),
+    "ECL": DEqConfig(start_date=dt.date(2026, 1, 20), end_date=dt.date(2026, 3, 2)),
+    "TLA": DEqConfig(start_date=dt.date(2025, 11, 18), end_date=dt.date(2026, 1, 20)),
     "Cube+-+Powered": DEqConfig(
-        start_date=dt.date(2025, 10, 28), end_date=dt.date(2025, 11, 18)
+        start_date=dt.date(2025, 10, 28), end_date=dt.date(2026, 3, 2), cube=True
     ),
     "OM1": DEqConfig(
         start_date=dt.date(2025, 9, 23),
@@ -89,7 +92,7 @@ config = {
         is_pick_two=True,
     ),
     "EOE": DEqConfig(start_date=dt.date(2025, 7, 29), end_date=dt.date(2025, 9, 23)),
-    "FIN": DEqConfig(start_date=dt.date(2025, 6, 10)),
+    "FIN": DEqConfig(start_date=dt.date(2025, 6, 10), end_date=dt.date(2025, 12, 30)),
     "TDM": DEqConfig(start_date=dt.date(2025, 4, 8), end_date=dt.date(2025, 10, 28)),
     "DFT": DEqConfig(start_date=dt.date(2025, 2, 11), end_date=dt.date(2025, 4, 8)),
     "PIO": DEqConfig(start_date=dt.date(2024, 12, 10), end_date=dt.date(2025, 2, 11)),
@@ -100,6 +103,9 @@ config = {
     "OTJ": DEqConfig(start_date=dt.date(2024, 4, 16), end_date=dt.date(2025, 11, 4)),
     "MKM": DEqConfig(start_date=dt.date(2024, 2, 6), end_date=dt.date(2024, 4, 16)),
     "LCI": DEqConfig(start_date=dt.date(2023, 11, 14), end_date=dt.date(2024, 2, 6)),
+    "WOE": DEqConfig(start_date=dt.date(2023, 9, 5), end_date=dt.date(2025, 9, 23)),
+    "LTR": DEqConfig(start_date=dt.date(2023, 6, 20), end_date=dt.date(2023, 9, 5)),
+    "MOM": DEqConfig(start_date=dt.date(2023, 4, 18), end_date=dt.date(2023, 6, 20)),
 }
 
 
@@ -786,7 +792,7 @@ def daily_deq(
             key
             for key, cfg in config.items()
             if cfg.start_date < dt.date.today()
-            and (cfg.end_date is None or cfg.end_date >= dt.date.today())
+            and (cfg.end_date is None or cfg.end_date >= dt.date.today() - dt.timedelta(days=1))
         ][0]
         if set_code is None
         else set_code
@@ -839,7 +845,7 @@ def daily_deq(
         )["num_games"].sum()
 
         if num_games >= gp_top_min_games:
-            if (start_date - cfg.start_date).days + 1 >= max_format_day_start:
+            if not cfg.cube and (start_date - cfg.start_date).days + 1 >= max_format_day_start:
                 accept = True
                 start_date = cfg.start_date + dt.timedelta(
                     days=max_format_day_start - 1
