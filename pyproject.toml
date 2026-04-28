@@ -30,6 +30,9 @@ build-backend = "pdm.backend"
 [tool.pdm]
 distribution = true
 
+[tool.pdm.scripts]
+pre_install = "python3 scripts/check_spells_branch.py"
+
 [dependency-groups]
 dev = [
     "ruff>=0.8.6",
