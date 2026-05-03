@@ -345,6 +345,20 @@ def test_live_deq_matches_expected(blb_data) -> None:  # noqa: ARG001 — fixtur
         pytest.fail(msg)
 
 
+def test_empty_color_sets_zeroes_bias_adj(blb_data) -> None:  # noqa: ARG001
+    """color_sets=[] means no color-pair tracking; deq_bias_adj must be zero for all cards."""
+    df = live_deq(BLB_SET, BLB_START, BLB_END, color_sets=[])
+    non_zero = df.filter(
+        pl.col("deq_bias_adj").is_not_null()
+        & pl.col("deq_bias_adj").is_finite()
+        & (pl.col("deq_bias_adj").abs() > 1e-9)
+    )
+    assert non_zero.is_empty(), (
+        f"Expected deq_bias_adj=0 for all cards with color_sets=[], "
+        f"got non-zero on: {non_zero['name'].to_list()}"
+    )
+
+
 def _fmt_val(x: float | None, sig: int = 5) -> str:
     if x is None:
         return "None"

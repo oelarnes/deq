@@ -536,7 +536,8 @@ def live_deq(
     max_deq_days: int = MAX_DEQ_DAYS,
     color_sets: list[str] | None = None,
 ) -> pl.DataFrame:
-    color_sets = color_sets or COLOR_SETS
+    if color_sets is None:
+        color_sets = COLOR_SETS
     format = "PickTwoDraft" if config[set_code].is_pick_two else "PremierDraft"
 
     set_context = {
@@ -640,31 +641,37 @@ def live_deq(
             ),
         )
 
-        deck_counts_df = summon(
-            set_code,
-            columns=[ColName.DECK],
-            group_by=[ColName.NAME, ColName.MAIN_COLORS],
-            cdfs=CardDataFileSpec(
-                set_code=set_code,
-                format=format,
-                player_cohort=player_cohort,
-                deck_colors=color_sets,
-                start_date=start_date,
-                end_date=end_date,
-            ),
-        )
+        if color_sets:
+            deck_counts_df = summon(
+                set_code,
+                columns=[ColName.DECK],
+                group_by=[ColName.NAME, ColName.MAIN_COLORS],
+                cdfs=CardDataFileSpec(
+                    set_code=set_code,
+                    format=format,
+                    player_cohort=player_cohort,
+                    deck_colors=color_sets,
+                    start_date=start_date,
+                    end_date=end_date,
+                ),
+            )
+        else:
+            deck_counts_df = pl.DataFrame(
+                {ColName.NAME: [], ColName.MAIN_COLORS: [], ColName.DECK: []},
+                schema={ColName.NAME: pl.String, ColName.MAIN_COLORS: pl.String, ColName.DECK: pl.Int64},
+            )
 
         other_counts_df = (
-            deck_counts_df.group_by("name")
-            .sum()
+            card_df.select(ColName.NAME, pl.col(ColName.DECK).alias("num_gp_all"))
             .join(
-                card_df.select(ColName.NAME, pl.col(ColName.DECK).alias("num_gp_all")),
+                deck_counts_df.group_by(ColName.NAME).agg(pl.col(ColName.DECK).sum()),
                 on=ColName.NAME,
+                how="left",
             )
             .select(
                 ColName.NAME,
                 pl.lit("other").alias(ColName.MAIN_COLORS),
-                -pl.col(ColName.DECK) + pl.col("num_gp_all"),
+                (pl.col("num_gp_all") - pl.col(ColName.DECK).fill_null(0)).alias(ColName.DECK),
             )
         )
 
