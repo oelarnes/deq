@@ -42,7 +42,7 @@ MAX_PRL = 10.0
 NPR_ALSA_COEF = -0.12
 NPR_ALSA_SQ_COEF = -0.04
 
-color_sets = [
+COLOR_SETS = [
     "W",
     "U",
     "R",
@@ -124,7 +124,10 @@ def deq_col_specs(
     grade_c_minus_max: float = GRADE_C_MINUS_MAX,
     grade_notch_increment: float = GRADE_NOTCH_INCREMENT,
     is_pick_two: bool = False,
+    color_sets: list[str] | None = None,
 ) -> dict[str, ColSpec]:
+    color_sets = color_sets or COLOR_SETS
+
     def meta_decay_factor(set_context: dict):
         t: int | None = set_context.get("observed_days")
         ft = set_context.get("projection_days")
@@ -460,7 +463,9 @@ def deq_bias_set_context(
     metric_filter: dict,
     observed_days: int | None = None,
     projection_days: int = 0,
+    color_sets: list[str] | None = None,
 ):
+    color_sets = color_sets or COLOR_SETS
     if isinstance(set_codes, str):
         set_codes = [set_codes]
 
@@ -529,7 +534,9 @@ def live_deq(
     sample_decay: float = SAMPLE_DECAY,
     meta_decay: float = META_DECAY,
     max_deq_days: int = MAX_DEQ_DAYS,
+    color_sets: list[str] | None = None,
 ) -> pl.DataFrame:
+    color_sets = color_sets or COLOR_SETS
     format = "PickTwoDraft" if config[set_code].is_pick_two else "PremierDraft"
 
     set_context = {
@@ -550,6 +557,7 @@ def live_deq(
             sample_decay=sample_decay,
             max_deq_days=max_deq_days,
             is_pick_two=config[set_code].is_pick_two,
+            color_sets=color_sets,
         ),
     }
 

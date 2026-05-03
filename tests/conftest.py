@@ -1,8 +1,10 @@
 """Test fixtures for deq.
 
-Pins real-data tests to TDM (closed format, 2025-04-22 → 2025-10-28). The
-ratings / deck_color JSONs under fixtures/spells_data/ are the actual
-17lands snapshot used in production; we monkeypatch SPELLS_DATA_HOME to
+Pins real-data tests to BLB (Bloomburrow, 2024-08-13 → 2024-09-24), a
+two-color-pair format — color_sets is restricted to the 10 two-color pairs so
+the fixture only ships those 22 ratings files plus both deck_color files.
+The ratings / deck_color JSONs under fixtures/spells_data/ are trimmed to 50
+cards from the actual 17lands snapshot; we monkeypatch SPELLS_DATA_HOME to
 that tree so spells reads from disk and never tries to download.
 """
 
@@ -17,14 +19,15 @@ import pytest
 
 FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "spells_data"
 
-TDM_SET = "TDM"
-TDM_START = dt.date(2025, 4, 22)
-TDM_END = dt.date(2025, 10, 28)
+BLB_SET = "BLB"
+BLB_START = dt.date(2024, 8, 13)
+BLB_END = dt.date(2024, 9, 24)
+BLB_COLOR_SETS = ["WU", "WB", "WR", "WG", "UB", "UR", "UG", "BR", "BG", "RG"]
 
 
 @pytest.fixture()
-def tdm_data(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[Path, None, None]:
-    """Stage the TDM ratings + deck_color JSONs under a temp SPELLS_DATA_HOME.
+def blb_data(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[Path, None, None]:
+    """Stage the BLB ratings + deck_color JSONs under a temp SPELLS_DATA_HOME.
 
     Copies (not symlinks) so spells' lazy-write code can't pollute the
     fixture tree on accident. Also points the ad_hoc cache at the temp dir
@@ -33,8 +36,8 @@ def tdm_data(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[Path,
     monkeypatch.setenv("SPELLS_DATA_HOME", str(tmp_path))
 
     for sub in ("ratings", "deck_color"):
-        src = FIXTURE_ROOT / sub / TDM_SET
-        dst = tmp_path / sub / TDM_SET
+        src = FIXTURE_ROOT / sub / BLB_SET
+        dst = tmp_path / sub / BLB_SET
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(src, dst)
 
