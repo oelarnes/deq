@@ -345,18 +345,53 @@ def test_live_deq_matches_expected(blb_data) -> None:  # noqa: ARG001 — fixtur
         pytest.fail(msg)
 
 
+ZEROED_BY_EMPTY_COLOR_SETS = ("deq_bias_adj", "deq_meta_adj")
+UNAFFECTED_BY_BIAS = ("deq_base", "pct_top", "npr")
+
+
 def test_empty_color_sets_zeroes_bias_adj(blb_data) -> None:  # noqa: ARG001
-    """color_sets=[] means no color-pair tracking; deq_bias_adj must be zero for all cards."""
-    df = live_deq(BLB_SET, BLB_START, BLB_END, color_sets=[])
-    non_zero = df.filter(
-        pl.col("deq_bias_adj").is_not_null()
-        & pl.col("deq_bias_adj").is_finite()
-        & (pl.col("deq_bias_adj").abs() > 1e-9)
-    )
-    assert non_zero.is_empty(), (
-        f"Expected deq_bias_adj=0 for all cards with color_sets=[], "
-        f"got non-zero on: {non_zero['name'].to_list()}"
-    )
+    """color_sets=[] means no color-pair tracking.
+
+    deq_bias_adj and deq_meta_adj must be zero (both depend on gp_wr_bias
+    which is zero when no pairs are tracked). The components that don't touch
+    color-pair data — deq_base, pct_top, npr — must match EXPECTED.
+    """
+    df = live_deq(BLB_SET, BLB_START, BLB_END, color_sets=[]).sort("name")
+
+    for col in ZEROED_BY_EMPTY_COLOR_SETS:
+        non_zero = df.filter(
+            pl.col(col).is_not_null()
+            & pl.col(col).is_finite()
+            & (pl.col(col).abs() > 1e-9)
+        )
+        assert non_zero.is_empty(), (
+            f"Expected {col}=0 for all cards with color_sets=[], "
+            f"got non-zero on: {non_zero['name'].to_list()}"
+        )
+
+    actual = {
+        row["name"]: tuple(row[m] for m in UNAFFECTED_BY_BIAS)
+        for row in df.select(["name", *UNAFFECTED_BY_BIAS]).iter_rows(named=True)
+    }
+    regressions: list[str] = []
+    for name, exp_row in EXPECTED.items():
+        if name not in actual:
+            regressions.append(f"{name}: missing from output")
+            continue
+        act_row = actual[name]
+        metric_indices = [METRICS.index(m) for m in UNAFFECTED_BY_BIAS]
+        for m, idx in zip(UNAFFECTED_BY_BIAS, metric_indices):
+            exp = exp_row[idx]
+            act = act_row[UNAFFECTED_BY_BIAS.index(m)]
+            if not _values_close(act, exp):
+                regressions.append(
+                    f"{name:35s} {m:14s} expected={exp!r:>26}  actual={act!r:>26}"
+                )
+    if regressions:
+        pytest.fail(
+            f"Unaffected metrics differ with color_sets=[] on {len(regressions)} case(s):\n  "
+            + "\n  ".join(regressions)
+        )
 
 
 def _fmt_val(x: float | None, sig: int = 5) -> str:
