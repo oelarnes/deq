@@ -1,143 +1,183 @@
-"""Real-data tests for the core DEq model, pinned to TDM.
+"""Regression test for live_deq() pinned to a 50-card TDM snapshot.
 
-These tests run live_deq() against the committed TDM ratings snapshot and
-assert structural and regression-style properties. Per-card pinned values
-are intentionally loose (±0.002) so minor numerical drift in spells doesn't
-break CI; tighten if a regression slips past.
+For every card in the trimmed fixture set we lock in expected values for
+nine derived metrics: the four DEq components (pick_equity, deq_base,
+deq_bias_adj, deq_meta_adj), the per-cohort cohort DEq (top, all), pct_top,
+the combined deq, and npr. A regression on any single metric is reported
+with the per-card actual/expected/diff line so the failing metric is obvious.
+
+Regenerating the EXPECTED table after an intentional model change:
+
+    pdm run python tests/test_deq_model.py regenerate
+
+Pipe the output back into this file (everything between the markers).
 """
 
 from __future__ import annotations
 
 import math
+import sys
+from typing import Iterable
 
 import polars as pl
 import pytest
 
-from deq.main import (
-    GRADE_C_MINUS_MAX,
-    GRADE_NOTCH_INCREMENT,
-    PICK_EQUITY_INIT,
-    PICK_EQUITY_MID,
-    PICK_EQUITY_MID_INDEX,
-    ZERO_EQUITY_INDEX,
-    deq_col_specs,
-    live_deq,
+from deq.main import live_deq
+
+try:
+    from .conftest import TDM_END, TDM_SET, TDM_START
+except ImportError:  # script-mode (regenerate)
+    import datetime as _dt
+
+    TDM_SET = "TDM"
+    TDM_START = _dt.date(2025, 4, 22)
+    TDM_END = _dt.date(2025, 10, 28)
+
+METRICS = (
+    "pick_equity",
+    "deq_base",
+    "deq_bias_adj",
+    "deq_meta_adj",
+    "deq_top",
+    "deq_all",
+    "pct_top",
+    "deq",
+    "npr",
 )
 
-from .conftest import TDM_END, TDM_SET, TDM_START
-
-EXPECTED_COLUMNS = {
-    "name",
-    "color",
-    "rarity",
-    "image_url",
-    "deq",
-    "deq_grade",
-    "npr",
-    "pct_top",
+# --- BEGIN EXPECTED ---
+EXPECTED: dict[str, tuple[float | None, ...]] = {
+    'Abzan Devotee': (0.0038488686644795314, -0.00463058455188518, 0.0015854909115921318, 8.072260197730121e-05, -0.003672415174221122, -0.0024213595911141443, 0.9160369437447523, -0.003567372723918269, -2.6956646250268332),
+    'Abzan Monument': (0.005800706458320827, 0.0005735673825327757, 0.008344791244012191, 0.0006919623472558306, 0.005554541078235538, 0.0014520684491944975, 0.8339697825004151, 0.004873406655349761, -1.761910675418069),
+    'Adorned Crocodile': (0.0006817048957968584, -0.0029827597939883306, -0.0009387664329769551, -7.550992497721094e-06, -0.0031211234173810754, -0.0021607297512617587, 0.7656982193064668, -0.0028961014712425293, -4.755137782991153),
+    'Aegis Sculptor': (0.00399604347717738, -0.015327768469421004, 0.0039173002484278125, 0.00020824108549860712, -0.013818544423357624, -0.008585967068249246, 0.7098926602843052, -0.012300535327010547, -2.4400704538033486),
+    'Agent of Kotis': (0.001575867616105261, -0.004574585122859451, 0.004008697455141293, 7.688198353236042e-05, -0.0033418775098061583, -0.005265349469236737, 0.8917397423405867, -0.0035501130797347693, -3.61145139832642),
+    'Aggressive Negotiations': (0.0023646961280204895, 0.0032385438823338, -0.004037948245433231, -0.0001195255166332227, 0.0014907538474522605, -0.0010694212334738697, 0.9288914171940553, 0.0013087034257125087, -3.336871627383358),
+    'Ainok Wayfarer': (0.00951258521657247, 0.009884711441989137, 0.0023054772330192447, 0.0003703062340652918, 0.012262530974708172, 0.018170212912812598, 0.9753390875462392, 0.012408219801788429, -0.3369887757361552),
+    "Alchemist's Assistant": (0.009659360238971786, -0.00346460328211293, -0.0015612071583346668, -0.0002564679343914962, -0.004816273853899383, 0.003841007900135801, 0.84, -0.003431108773253753, -1.2075282671928074),
+    "Alesha's Legacy": (0.0005006464897273226, -0.002894556006567373, -0.007586104230160031, -4.453754436228503e-05, -0.003527013010892218, -0.004449065554706794, 0.580360889634914, -0.003913942320088432, -4.962512120278978),
+    'All-Out Assault': (0.026420714873129875, 0.025205666723167822, -0.0007270667932102251, -0.0018565701507569528, 0.02295934975911728, 0.029609139877564437, 0.6785599485695918, 0.025096858636792355, 3.185948080239099),
+    'Ambling Stormshell': (0.02535029793235068, 0.02778303342269218, 0.0007201172084078388, 0.001358156812246788, 0.029738022328368086, 0.03233033899312098, 0.8768472906403941, 0.030057273149150462, 4.171162283980067),
+    'Anafenza, Unyielding Lineage': (0.02593145875514129, 0.031381318760523504, -0.0006215232159995618, -0.0013703590314580207, 0.029515921035779477, 0.027027371293919442, 0.7892962494732406, 0.028991574271797167, 2.562223353605513),
+    'Arashin Sunshield': (0.0007009669518739597, -0.0016389734630880674, -0.005013825441764857, -4.1495619292138555e-05, -0.0019671426897830985, -0.0020513965305566095, 0.5956328346138293, -0.002001212176549581, -4.680276652454659),
+    'Arid Mesa': (None, None, None, None, None, None, 0.0, None, 0.1903129176130541),
+    'Armament Dragon': (0.011747384686945127, -0.0065204659347724075, 0.00542897840037019, 0.0012087124320062982, -0.0017513305353457388, -0.0009981319058023318, 0.8398718975180144, -0.001630722268004921, -0.538175826111352),
+    'Attuned Hunter': (0.00822030934354175, 0.0018411859957010927, 8.766679063568741e-06, 1.1446174097610449e-06, 0.0018480657486222014, -0.005432762242644869, 0.8461775111521305, 0.0007281106661322661, -1.3758273562920942),
+    'Auroral Procession': (0.004694789739447089, -0.004260346678153715, 0.0042979548195752875, 0.0002758397355445828, -0.00177640392566865, -0.0053412187871179125, 0.860296172115116, -0.0022744222075140345, -1.9284892583664297),
+    'Avenger of the Fallen': (0.023951363928099798, -0.006605126581549262, -1.2299335391159371e-05, -1.6847801010455257e-05, -0.0066310912214321135, 0.010895711868599818, 0.7159897756319228, -0.0016532999433770353, 1.4657576134322352),
+    'Awaken the Honored Dead': (0.02234172230626537, 0.032627912789340435, 0.001471086912176453, 0.0014846109400068802, 0.035292406794621436, 0.03217902230330973, 0.8627504803733187, 0.03486509626877575, 2.6536544300640923),
+    'Barrensteppe Siege': (0.025733769898102183, -0.0032404078174179817, 6.725844863083035e-05, 0.00014034429678572055, -0.0030598935881248623, 0.0008523939311680085, 0.7040544539804676, -0.001902069522042332, 1.7420682659505295),
+    'Bearer of Glory': (0.00895389536575908, 0.018597564763443906, -0.007193053286707816, -0.0010586255041712502, 0.011649299511630686, 0.008445050238618182, 0.9576988155668359, 0.01151375597216315, -1.0349087514535904),
+    'Betor, Kin to All': (0.027734622303436048, 0.02520773864704017, 0.0005694096145962015, 0.002411544147936033, 0.027926690273624093, 0.03572095618983397, 0.7143673236218223, 0.03015298730767433, 4.495336628238499),
+    'Bewildering Blizzard': (0.010680644504656722, 0.00518907930233071, 0.003022578019752941, 0.0005780576212683654, 0.007938237077952954, 0.004302379570894216, 0.9212846347607053, 0.007652039226326794, -0.11207049726225002),
+    'Bloodfell Caves': (0.006592088514597731, 0.0056780363256251415, -0.0009429436645654884, -9.18617883504517e-05, 0.0049062774532365894, 0.004307689185469876, 0.9504508968387673, 0.004876617941405913, -1.2033137268249443),
+    'Bloomvine Regent': (0.027425191558914194, 0.029798023511107385, 0.0003623211366658867, 0.0013350182449629077, 0.03141516376359314, 0.030339334138991085, 0.8377150275884453, 0.031240572782645065, 4.2846831323747985),
+    'Blossoming Sands': (0.0052558745158482485, -0.0034280061609240787, 0.005387499929121496, 0.00039586667313061134, 0.0007686172138181482, 0.00307429762375918, 0.9469861633886444, 0.0008908501783487655, -1.7015513049876763),
+    'Bone-Cairn Butcher': (0.008788647604196807, 0.0023300679528236124, -0.006125049376013459, -0.0008779141951600715, -0.0015798845218912491, -0.0056127756556939535, 0.7334754797441365, -0.0026547488965721405, -1.4985118866856877),
+    'Boulderborn Dragon': (0.002709496672833639, -0.013333229373769705, 0.004432579312737107, 0.00015223775716163057, -0.011482426457800102, -0.009033482051882728, 0.9266539533519144, -0.011302806067165118, -2.9069080569129953),
+    'Breaching Dragonstorm': (0.006979545122180538, -0.014161453292443131, 0.0043529225501407875, 0.00045654431975631975, -0.01177800955044017, -0.010810492645026324, 0.8263285863146926, -0.011609979521712515, -1.4052023958435067),
+    'Call the Spirit Dragons': (0.00965316502254272, None, 0.004796238730890297, 0.0007871589631784814, None, -0.017535945338762515, 0.0, -0.017535945338762515, -0.8663178010570399),
+    'Caustic Exhale': (0.016611933213160908, 0.01820612503064921, 0.0006328633453469196, 0.00027164457376393635, 0.019023210461139875, 0.020994506715913717, 0.9653967265303298, 0.01909142376453355, 0.9847745930364089),
+    'Champion of Dusan': (0.007414309268495195, 0.007881134281820952, 0.0006339312985923054, 7.198935795751392e-05, 0.008457590068337064, 0.007453756548928044, 0.9644166103262997, 0.008421870269048412, -1.1789375144274805),
+    'Channeled Dragonfire': (0.01369804788297795, 0.008075698230948567, -0.0015539002958429979, -0.0004516801464172344, 0.006302585860278322, 0.016389782847817135, 0.9220576773187841, 0.007088805422830062, 0.43255382873807013),
+    'Clarion Conqueror': (0.022608704897552238, 0.032159724213110225, -0.0008503457896223032, -0.0008997865440368237, 0.030611561548482026, 0.022846479068865763, 0.7917534360683048, 0.028994509803455734, 1.8029323733826093),
+    'Constrictor Sage': (0.0072143121301775125, -0.006356348698912918, 0.0034958443410614153, 0.00038288967598014266, -0.0040091769982691094, -0.0011309172434161383, 0.8430141287284144, -0.003557330882907575, -1.338213877684082),
+    'Coordinated Maneuver': (0.007573457527441328, 0.018422392882658394, -0.008029015925851134, -0.0009379571015179839, 0.011470428053927596, 0.008153716085254717, 0.9534818811927246, 0.01131614085251936, -1.3770091864593494),
+    'Cori Mountain Monastery': (0.014827164768159826, 0.032761908139739386, -0.0009532863220417826, -0.00032225786028531196, 0.03160576906559125, 0.03057791647793824, 0.867127292054212, 0.031469195508900705, 0.6904437374553257),
+    'Cori Mountain Stalwart': (0.015536053320710057, 0.02269151620819587, -0.0038335491715314305, -0.001424438536594867, 0.017989119850545396, 0.014968998995835786, 0.9173280423280423, 0.017739440547080647, 0.7216388514122146),
+    'Cori-Steel Cutter': (0.027330053865622133, 0.041276473620883616, -0.00027656150778741534, -0.0009793062081767726, 0.04006149740456566, 0.039724822916828426, 0.8589761669722183, 0.04001401827782229, 4.741325651561893),
+    'Corroding Dragonstorm': (0.0034087750234724173, -0.014087321921455153, 0.004938089647267313, 0.00021898166320922523, -0.012744988079268126, -0.014309833975577141, 0.60967993754879, -0.01335577882724198, -2.777452901812962),
+    'Craterhoof Behemoth': (0.024573639967558517, 0.015506192036393768, 0.0007633312209495612, 0.001195811420892004, 0.01713252354053268, 0.013965642806120723, 0.6598639455782312, 0.016055353222705484, 2.362047804505859),
+    'Cruel Truths': (0.00047690934420754075, -0.002588587741278482, 0.0022702869203800593, 1.2686550253839164e-05, -0.0024178012206943285, -0.00364088611925117, 0.6174445294567712, -0.002885699039576058, -5.082135055629766),
+    'Dalkovan Encampment': (0.013737253592406467, 0.0304830767870092, -0.004634544378019745, -0.0013542593916607585, 0.0253330239030844, 0.0224390741415941, 0.8079139454475605, 0.024777136511326757, 0.17330804651254225),
+    'Dalkovan Packbeasts': (0.020056246149679345, 0.028506700594871398, -0.003320733275981801, -0.002316978828410297, 0.023345637502648328, 0.02250624708588523, 0.8946148171567078, 0.02325717819010084, 1.103219325317215),
+    'Death Begets Life': (0.02476014612000046, 0.037597188497508774, 0.0009612162131597641, 0.0015712449684967332, 0.03990493283048433, 0.03388032673475888, 0.7798811358133392, 0.03857880337952121, 3.802463270352311),
+    'Defibrillating Current': (0.006954039436804406, -0.0054239287987690645, -0.0030714677143317357, -0.00032061000794895967, -0.007377735081109848, -0.00490842074526653, 0.7820876007844846, -0.006839640869768964, -1.6333330811437232),
+    'Delta Bloodflies': (0.0011432725220488784, 0.0013679425954136542, -0.012267703328658485, -0.0001681336874181247, -0.002212552200656202, -0.0033763024512262416, 0.8493522145224465, -0.002387868598753527, -4.4795692162561584),
+    'Descendant of Storms': (0.018992649933422246, 0.0363185097805789, -0.003386654036527455, -0.002021447208626269, 0.03147139727841251, 0.0322184294336715, 0.9262699992627, 0.031526475959770546, 1.415638330208512),
+    'Desperate Measures': (0.0030218813158984113, -0.0001439383718300571, -0.003889473585958607, -0.0001507111398218119, -0.0011750600378276715, -0.003693319617471414, 0.6426018584703359, -0.002075081331481618, -3.053316724244253),
+    'Devoted Duelist': (0.003548226105432395, -0.0012140264029641312, -0.008139511483090202, -0.00037769706551429925, -0.005658052473612538, -0.007567096963282209, 0.9253229781196326, -0.005800614230738195, -2.725923776828855),
 }
+# --- END EXPECTED ---
 
 
-@pytest.fixture()
-def tdm_deq(tdm_data) -> pl.DataFrame:  # noqa: ARG001 — fixture activates env
-    """Compute live_deq for TDM. Function-scoped because the underlying
-    monkeypatch (SPELLS_DATA_HOME) is function-scoped; live_deq is fast
-    enough on the cached fixtures that the recompute is cheap."""
-    return live_deq(TDM_SET, TDM_START, TDM_END)
+def _values_close(actual: float | None, expected: float | None) -> bool:
+    """None matches None; NaN matches NaN; finite floats compared with isclose."""
+    if expected is None:
+        return actual is None or (isinstance(actual, float) and math.isnan(actual))
+    if actual is None:
+        return False
+    if isinstance(actual, float) and math.isnan(actual):
+        return False
+    return math.isclose(actual, expected, rel_tol=1e-9, abs_tol=1e-12)
 
 
-def test_live_deq_returns_expected_columns(tdm_deq: pl.DataFrame) -> None:
-    assert EXPECTED_COLUMNS.issubset(set(tdm_deq.columns)), (
-        f"missing columns: {EXPECTED_COLUMNS - set(tdm_deq.columns)}"
+def test_live_deq_matches_expected(tdm_data) -> None:  # noqa: ARG001 — fixture activates env
+    df = live_deq(TDM_SET, TDM_START, TDM_END).sort("name")
+    assert df.height == len(EXPECTED), (
+        f"row count {df.height} != fixture card count {len(EXPECTED)}"
     )
 
-
-def test_live_deq_has_cards(tdm_deq: pl.DataFrame) -> None:
-    assert tdm_deq["name"].n_unique() > 100, "TDM should yield more than 100 cards"
-
-
-def test_live_deq_grade_distribution(tdm_deq: pl.DataFrame) -> None:
-    grades = set(tdm_deq["deq_grade"].drop_nulls().to_list())
-    # TDM has clear bombs and clear unplayables; both ends of the scale should appear.
-    assert any(g.startswith("A") for g in grades), f"expected at least one A-tier grade, got {grades}"
-    assert any(g.startswith("D") for g in grades), f"expected at least one D-tier grade, got {grades}"
-
-
-def test_live_deq_grade_monotone_with_deq(tdm_deq: pl.DataFrame) -> None:
-    """Higher deq → better letter grade."""
-    grade_order = ["F", "D-", "D", "D+", "C-", "C", "C+", "B-", "B", "B+", "A-", "A", "A+"]
-    rank = {g: i for i, g in enumerate(grade_order)}
-
-    medians = (
-        tdm_deq.filter(pl.col("deq_grade").is_in(grade_order))
-        .group_by("deq_grade")
-        .agg(pl.col("deq").median().alias("median_deq"))
-        .sort("deq_grade")
-        .with_columns(
-            pl.col("deq_grade").replace_strict(rank, return_dtype=pl.Int64).alias("rank")
-        )
-        .sort("rank")
-    )
-
-    deqs = medians["median_deq"].to_list()
-    assert deqs == sorted(deqs), f"grade-bucket median DEqs must be monotone, got {deqs}"
-
-
-def test_live_deq_pinned_landmark_cards(tdm_deq: pl.DataFrame) -> None:
-    """Anchor a couple of well-known TDM cards. Tolerance is loose by design."""
-    pinned = {
-        # Marquee mythics — should grade strongly positive.
-        "Ugin, Eye of the Storms": (0.0, None),       # min, max
-        "Sheoldred, the Apocalypse": (0.0, None),     # may not be in TDM; skip if absent
+    actual: dict[str, tuple] = {
+        row["name"]: tuple(row[m] for m in METRICS)
+        for row in df.select(["name", *METRICS]).iter_rows(named=True)
     }
-    df = tdm_deq.filter(pl.col("name").is_in(list(pinned.keys())))
-    seen = dict(zip(df["name"].to_list(), df["deq"].to_list()))
 
-    for name, (lo, hi) in pinned.items():
-        if name not in seen:
+    regressions: list[str] = []
+    for name, exp_row in EXPECTED.items():
+        if name not in actual:
+            regressions.append(f"{name}: missing from output")
             continue
-        deq = seen[name]
-        if lo is not None:
-            assert deq >= lo, f"{name}: deq={deq} below floor {lo}"
-        if hi is not None:
-            assert deq <= hi, f"{name}: deq={deq} above ceiling {hi}"
+        act_row = actual[name]
+        for metric, exp, act in zip(METRICS, exp_row, act_row):
+            if not _values_close(act, exp):
+                regressions.append(
+                    f"{name:35s} {metric:14s} expected={exp!r:>26}  actual={act!r:>26}"
+                )
+
+    if regressions:
+        msg = "DEq regressions on {n} metric(s):\n  ".format(n=len(regressions))
+        msg += "\n  ".join(regressions)
+        pytest.fail(msg)
 
 
-def test_pick_equity_piecewise_at_known_points() -> None:
-    """The pick_equity ColSpec is a piecewise quadratic. Verify boundary values
-    by evaluating against synthetic ata_adj inputs.
+def _format_expected(df: pl.DataFrame) -> str:
+    """Render the EXPECTED dict in the inline-table format used in this file."""
+    df = df.sort("name").select(["name", *METRICS])
+    lines = ["EXPECTED: dict[str, tuple[float | None, ...]] = {"]
+    for row in df.iter_rows(named=True):
+        items = ", ".join(repr(row[m]) for m in METRICS)
+        lines.append(f"    {row['name']!r}: ({items}),")
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def regenerate_expected() -> str:
+    """Recompute live_deq on the current fixtures and return the source for EXPECTED.
+
+    Run as `pdm run python tests/test_deq_model.py regenerate` and paste the
+    output between the BEGIN/END EXPECTED markers in this file.
     """
-    specs = deq_col_specs()
-    pe_expr = specs["pick_equity"].expr
-    assert isinstance(pe_expr, pl.Expr)
+    import datetime as dt
+    import os
+    import shutil
+    import tempfile
+    from pathlib import Path
 
-    midpoint = (PICK_EQUITY_MID_INDEX + ZERO_EQUITY_INDEX) / 2
-    df = pl.DataFrame(
-        {"ata_adj": [float(PICK_EQUITY_MID_INDEX), midpoint, float(ZERO_EQUITY_INDEX)]}
-    ).with_columns(pe_expr.alias("pe"))
-
-    pe = df["pe"].to_list()
-    # At the mid index, pick_equity == PICK_EQUITY_MID.
-    assert math.isclose(pe[0], PICK_EQUITY_MID, abs_tol=1e-9)
-    # At the zero-equity index, pick_equity == 0.
-    assert math.isclose(pe[2], 0.0, abs_tol=1e-9)
-    # Strictly decreasing on [PICK_EQUITY_MID_INDEX, ZERO_EQUITY_INDEX].
-    assert pe[0] > pe[1] > pe[2]
+    src = Path(__file__).parent / "fixtures" / "spells_data"
+    with tempfile.TemporaryDirectory() as td:
+        td_path = Path(td)
+        os.environ["SPELLS_DATA_HOME"] = str(td_path)
+        for sub in ("ratings", "deck_color"):
+            shutil.copytree(src / sub, td_path / sub)
+        (td_path / "ad_hoc").mkdir()
+        df = live_deq(TDM_SET, TDM_START, TDM_END)
+    return _format_expected(df)
 
 
-def test_grade_thresholds_align_with_constants() -> None:
-    """The DEq value at the C-/C boundary should round to GRADE_C_MINUS_MAX
-    exactly, and adjacent grades should be GRADE_NOTCH_INCREMENT apart.
-    """
-    specs = deq_col_specs()
-    grade_expr = specs["deq_grade"].expr
-    assert isinstance(grade_expr, pl.Expr)
-
-    just_below = GRADE_C_MINUS_MAX - 1e-9
-    just_above = GRADE_C_MINUS_MAX + 1e-9
-    one_notch = GRADE_C_MINUS_MAX + GRADE_NOTCH_INCREMENT + 1e-9
-
-    df = pl.DataFrame({"deq": [just_below, just_above, one_notch]}).with_columns(
-        grade_expr.alias("g")
-    )
-    assert df["g"].to_list() == ["C-", "C", "C+"]
+if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "regenerate":
+        print(regenerate_expected())
+    else:
+        print("Usage: python tests/test_deq_model.py regenerate", file=sys.stderr)
+        sys.exit(2)
