@@ -1,6 +1,12 @@
 let deq_table = [];
 let currentRenderedData = [];
+let sortState = { col: 'deq', dir: 'desc' };
 
+// Grade ordered worst→best so desc sort puts A+ first
+const GRADE_ORDER = ['N/A', 'F', 'D-', 'D', 'D+', 'C-', 'C', 'C+', 'B-', 'B', 'B+', 'A-', 'A', 'A+'];
+const RARITY_ORDER = { common: 0, uncommon: 1, rare: 2, mythic: 3 };
+
+// Doc panel toggle
 const docButton = document.getElementById('docButton');
 const docText = document.getElementById('docText');
 
@@ -25,17 +31,84 @@ document.addEventListener('click', function(event) {
     }
 });
 
+// Column description row (shown as first tbody row when a ? is active)
+let openColDesc = null;
+
+document.querySelectorAll('.col-info').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+        e.stopImmediatePropagation();
+        const text = this.dataset.colDesc;
+        openColDesc = openColDesc === text ? null : text;
+        renderTable(sortData(filterData(searchInput.value)));
+    });
+});
+
+// Sorting
+function sortKey(row, col) {
+    switch (col) {
+        case 'grade':   return GRADE_ORDER.indexOf(row.deq_grade);
+        case 'deq':     return row.deq;
+        case 'name':    return row.name;
+        case 'color':   return row.color;
+        case 'rarity':  return RARITY_ORDER[row.rarity] ?? -1;
+        case 'pct_top': return row.pct_top;
+        case 'npr':     return row.npr;
+        default:        return null;
+    }
+}
+
+function sortData(data) {
+    const { col, dir } = sortState;
+    const mult = dir === 'asc' ? 1 : -1;
+    return [...data].sort((a, b) => {
+        const ka = sortKey(a, col);
+        const kb = sortKey(b, col);
+        if (ka == null && kb == null) return 0;
+        if (ka == null) return 1;
+        if (kb == null) return -1;
+        if (typeof ka === 'string') return mult * ka.localeCompare(kb);
+        return mult * (ka - kb);
+    });
+}
+
+function updateSortIndicators() {
+    document.querySelectorAll('#dataTable .sort-ind').forEach(el => el.textContent = '');
+    const th = document.querySelector(`#dataTable th[data-sort="${sortState.col}"]`);
+    if (th) th.querySelector('.sort-ind').textContent = sortState.dir === 'desc' ? '▼' : '▲';
+}
+
+document.querySelector('#dataTable thead').addEventListener('click', function(e) {
+    const th = e.target.closest('th[data-sort]');
+    if (!th) return;
+    const col = th.dataset.sort;
+    if (sortState.col === col) {
+        sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortState.col = col;
+        sortState.dir = (col === 'name' || col === 'color') ? 'asc' : 'desc';
+    }
+    updateSortIndicators();
+    renderTable(sortData(filterData(searchInput.value)));
+});
+
 // Modal
 const modal = document.getElementById('modal');
 const modalClose = document.getElementById('modalClose');
+const modalPrev = document.getElementById('modalPrev');
+const modalNext = document.getElementById('modalNext');
+let openModalIdx = -1;
 
-function openModal(card) {
+function openModal(idx) {
+    const card = currentRenderedData[idx];
+    openModalIdx = idx;
     document.getElementById('modalImage').src = card.image_url || '';
     document.getElementById('modalImage').alt = card.name;
     document.getElementById('modalGrade').textContent = card.deq_grade;
     document.getElementById('modalDeq').textContent = deqFormat(card.deq);
     document.getElementById('modalNpr').textContent = nprFormat(card.npr);
     document.getElementById('modalPctTop').textContent = pctFormat(card.pct_top);
+    modalPrev.disabled = idx <= 0;
+    modalNext.disabled = idx >= currentRenderedData.length - 1;
     modal.classList.add('active');
 }
 
@@ -44,6 +117,8 @@ function closeModal() {
 }
 
 modalClose.addEventListener('click', closeModal);
+modalPrev.addEventListener('click', () => openModal(openModalIdx - 1));
+modalNext.addEventListener('click', () => openModal(openModalIdx + 1));
 
 modal.addEventListener('click', function(e) {
     if (e.target === modal) closeModal();
@@ -51,14 +126,25 @@ modal.addEventListener('click', function(e) {
 
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') closeModal();
+    if (!modal.classList.contains('active')) return;
+    if (e.key === 'ArrowLeft' && !modalPrev.disabled) openModal(openModalIdx - 1);
+    if (e.key === 'ArrowRight' && !modalNext.disabled) openModal(openModalIdx + 1);
 });
 
 document.getElementById('tableBody').addEventListener('click', function(e) {
     const cell = e.target.closest('.name-cell');
     if (!cell) return;
-    openModal(currentRenderedData[parseInt(cell.dataset.idx, 10)]);
+    openModal(parseInt(cell.dataset.idx, 10));
 });
 
+document.querySelector('.modal-stats').addEventListener('click', function(e) {
+    const label = e.target.closest('.stat-label');
+    if (!label) return;
+    const desc = document.getElementById(label.dataset.desc);
+    if (desc) desc.classList.toggle('open');
+});
+
+// Formatters
 function deqFormat(num) {
     return typeof(num) === "number" ? num.toLocaleString('en-US', {
         style: 'percent',
@@ -83,6 +169,7 @@ function pctFormat(num) {
     }) : "N/A"
 }
 
+// Table rendering
 function renderTable(data) {
     currentRenderedData = data;
     const tbody = document.getElementById('tableBody');
@@ -96,7 +183,10 @@ function renderTable(data) {
 
     noResults.style.display = 'none';
 
-    tbody.innerHTML = data.map((row, i) => `
+    tbody.innerHTML = (openColDesc
+        ? `<tr class="col-desc-row"><td colspan="8">${openColDesc}</td></tr>`
+        : ''
+    ) + data.map((row, i) => `
         <tr>
             <td class="col-hidden">${i + 1}</td>
             <td>${row.deq_grade}</td>
@@ -110,6 +200,7 @@ function renderTable(data) {
     `).join('');
 }
 
+// Filtering
 function colorFilter(row) {
     return term => {
         orSplit = term.split('/');
@@ -199,13 +290,14 @@ function filterData(searchTerm) {
     })
 }
 
+// Search
 const searchInput = document.getElementById('searchInput');
 let searchTimeout;
 
 searchInput.addEventListener('input', function() {
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(() => {
-        renderTable(filterData(this.value));
+        renderTable(sortData(filterData(this.value)));
     }, 150);
 });
 
@@ -217,6 +309,7 @@ searchInput.addEventListener('blur', function() {
     this.style.transform = 'translateY(0)';
 });
 
+// Set switching
 const linkSelect = document.getElementById('link-select');
 
 async function loadSet(setCode) {
@@ -227,7 +320,7 @@ async function loadSet(setCode) {
     document.title = `${data.set_code} DEq: Estimated Draft Equity`;
     deq_table = data.cards;
     searchInput.value = '';
-    renderTable(deq_table);
+    renderTable(sortData(deq_table));
     searchInput.focus();
 }
 

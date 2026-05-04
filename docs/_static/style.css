@@ -108,6 +108,49 @@ button.doc-button.expanded {
     padding: 0 0.5em;
 }
 
+th[data-sort] {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+
+th[data-sort]:hover {
+    color: var(--pst-color-primary);
+}
+
+.sort-ind {
+    display: inline-block;
+    width: 1em;
+    font-size: 0.75em;
+    opacity: 0.6;
+}
+
+.col-info {
+    background: none;
+    border: none;
+    font: inherit;
+    font-size: 0.75em;
+    opacity: 0.5;
+    cursor: pointer;
+    padding: 4px 3px;
+    vertical-align: middle;
+    color: inherit;
+}
+
+.col-info:hover {
+    opacity: 1;
+}
+
+.col-desc-row td {
+    font-style: italic;
+    font-size: 0.9em;
+    color: var(--pst-color-text-muted);
+    text-align: left;
+    padding: 4px 8px;
+    background: var(--pst-color-surface);
+    border-bottom: 1px solid var(--pst-color-border);
+}
+
 .name-cell {
     cursor: pointer;
     text-decoration: underline;
@@ -149,16 +192,14 @@ button.doc-button.expanded {
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
 
-.modal-close {
+.modal-close,
+.modal-nav {
     position: absolute;
-    top: 10px;
-    right: 10px;
-    background: rgba(0, 0, 0, 0.45);
+    background: rgba(0, 0, 0, 0.6);
     border: none;
-    font-size: 18px;
     line-height: 1;
-    width: 26px;
-    height: 26px;
+    width: 30px;
+    height: 30px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -169,9 +210,30 @@ button.doc-button.expanded {
     z-index: 1;
 }
 
-.modal-close:hover {
-    background: rgba(0, 0, 0, 0.7);
+.modal-close:hover,
+.modal-nav:hover {
+    background: rgba(0, 0, 0, 0.8);
 }
+
+.modal-close {
+    top: 8px;
+    right: 8px;
+    font-size: 20px;
+}
+
+.modal-nav {
+    top: 8px;
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.modal-nav:disabled {
+    opacity: 0.25;
+    cursor: default;
+}
+
+#modalPrev { left: 8px; }
+#modalNext { right: 44px; }
 
 .modal-body {
     display: flex;
@@ -192,38 +254,55 @@ button.doc-button.expanded {
 
 /* Stats table — mirrors the data table style */
 .modal-stats {
-    display: table;
     width: 100%;
     border-collapse: collapse;
     border: 1px solid var(--pst-color-border);
 }
 
-.stat-item {
-    display: table-row;
-}
-
-.stat-item:nth-child(even) {
+.stat-item:nth-child(4n+3) {
     background-color: #2a2e33;
 }
 
 .stat-label,
 .stat-value {
-    display: table-cell;
     padding: 3px 8px;
     border-bottom: 1px solid var(--pst-color-border);
     white-space: nowrap;
 }
 
-.stat-item:last-child .stat-label,
-.stat-item:last-child .stat-value {
-    border-bottom: none;
-}
-
 .stat-label {
     color: var(--pst-color-text-muted);
     width: 50%;
+    cursor: pointer;
 }
 
 .stat-value {
     text-align: right;
+}
+
+.stat-info {
+    font-size: 0.7em;
+    opacity: 0.5;
+    vertical-align: super;
+}
+
+.stat-desc {
+    display: none;
+}
+
+.stat-desc.open {
+    display: table-row;
+}
+
+.stat-desc td {
+    padding: 3px 8px 5px;
+    font-size: 0.85em;
+    color: var(--pst-color-text-muted);
+    font-style: italic;
+    border-bottom: 1px solid var(--pst-color-border);
+    white-space: normal;
+}
+
+.stat-desc:last-child td {
+    border-bottom: none;
 }
