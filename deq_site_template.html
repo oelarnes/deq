@@ -15,7 +15,7 @@
     <link rel="stylesheet" type="text/css" href="_static/sphinx-design.min.css" />
     <link rel="stylesheet" type="text/css" href="_static/.ipynb_checkpoints/style-checkpoint.css" />
     <link rel="stylesheet" type="text/css" href="_static/style.css?v={version}" />
-    <link rel="icon" href="_static/deq.png"/> 
+    <link rel="icon" href="_static/deq.png"/>
 </head>
 <body>
     <div class="deq-container">
@@ -33,41 +33,41 @@
                 </tr>
                 <tr class="info-value-row">
                     <td class="cell-content dropdown" id="dropdown">
-                        <select onChange="window.location.href=this.value" name="set-code" id="link-select">
+                        <select name="set-code" id="link-select">
                             {select_elements}
                         </select>
                     </td>
                     <td>
-                        <div class="cell-content"> {start_date} </div>
+                        <div class="cell-content" id="startDate"> {start_date} </div>
                     </td>
                     <td>
-                        <div class="cell-content"> {end_date} </div>
+                        <div class="cell-content" id="endDate"> {end_date} </div>
                     </td>
                     <td>
                         <button class="doc-button" id="docButton"><span>▼</span></button>
                     </td>
                 </tr>
-                
+
             </table>
             <div class="doc-text" id="docText">
-                <p><strong>DEq</strong>, or Estimated Draft Equity, is a card quality 
-metric designed to be used as a pick order in booster draft. The value represents 
-the expected win rate added to your deck by selecting the given card versus a basic 
+                <p><strong>DEq</strong>, or Estimated Draft Equity, is a card quality
+metric designed to be used as a pick order in booster draft. The value represents
+the expected win rate added to your deck by selecting the given card versus a basic
 land. </p>
-                <p>Based on daily data from the <a href="https://17lands.com/card_data">card data</a> 
-page on 17Lands, the metric adjusts 
-GP WR by the opportunity cost as recorded in the ATA statistic, in addition to other 
-minor adjustments, and modifies the result by % GP to account for differences in play 
+                <p>Based on daily data from the <a href="https://17lands.com/card_data">card data</a>
+page on 17Lands, the metric adjusts
+GP WR by the opportunity cost as recorded in the ATA statistic, in addition to other
+minor adjustments, and modifies the result by % GP to account for differences in play
 rate. DEq combines top- and all-player data. The <strong>% Top</strong>
 field shows the relative contribution of top-player data, which is determined only based on sample size. </p>
                 <p>
-For more details, see the <a href="deq-docs.html">documentation</a> and additional 
+For more details, see the <a href="deq-docs.html">documentation</a> and additional
 content at <a href="intro.html">MagicFlea on Draft</a>.</p>
                 <p>
 <strong>NPR</strong> is a metric measuring the preferences of top players on a logarithmic
 scale. Each
 increment of 1.0 represents twice the chance of being picked first from a random fresh pack,
-and an NPR of 0.0 represents even odds of being chosen from an average pack. For more, see 
+and an NPR of 0.0 represents even odds of being chosen from an average pack. For more, see
 <a href="npr-docs.html">documentation</a>.</p>
                 <p>
 DEq is not affiliated with 17Lands.
@@ -100,14 +100,13 @@ DEq is not affiliated with 17Lands.
             <table id="dataTable">
                 <thead>
                     <tr>
-                        <th class="col-hidden">Rank</th>
-                        <th>Grade</th>
-                        <th>DEq</th>
-                        <th>Name</th>
-                        <th>Color</th>
-                        <th class="col-hidden">Rarity</th>
-                        <th class="col-hidden">% Top</th>
-                        <th class="col-hidden">NPR</th>
+                        <th>Grade <button class="col-info" data-col-desc="A+ to F letter grade, using fixed DEq increments.">?</button></th>
+                        <th data-sort="deq">DEq <span class="sort-ind">▼</span><button class="col-info" data-col-desc="Expected win-rate gain from picking this card over a basic land.">?</button></th>
+                        <th data-sort="name">Name <span class="sort-ind"></span></th>
+                        <th data-sort="color">Color <span class="sort-ind"></span></th>
+                        <th class="col-hidden" data-sort="rarity">Rarity <span class="sort-ind"></span></th>
+                        <th class="col-hidden" data-sort="pct_top">% Top <span class="sort-ind"></span><button class="col-info" data-col-desc="Share of DEq derived from top-player data, based on sample size.">?</button></th>
+                        <th class="col-hidden" data-sort="npr">NPR <span class="sort-ind"></span><button class="col-info" data-col-desc="Top-player pick preference; each +1.0 means twice as likely to be taken from a fresh pack.">?</button></th>
                     </tr>
                 </thead>
                 <tbody id="tableBody"></tbody>
@@ -117,204 +116,55 @@ DEq is not affiliated with 17Lands.
             </div>
         </div>
         <span>
-        Underlying data from <a href="https://17Lands.com/card_data">17Lands<a> with permission
+        Underlying data from <a href="https://17Lands.com/card_data">17Lands</a> with permission
         </span>
         <span>Original content ©2025 MagicFlea</span>
     </div>
-    <script>
-        const docButton = document.getElementById('docButton');
-        const docText = document.getElementById('docText');
 
-        docButton.addEventListener('click', function() {{
-            const isExpanded = docText.classList.contains('expanded');
-            console.log(isExpanded);
-            
-            if (isExpanded) {{
-                docText.classList.remove('expanded');
-                docButton.classList.remove('expanded');
-                docButton.querySelector('span').textContent = '▼';
-            }} else {{
-                docText.classList.add('expanded');
-                docButton.classList.add('expanded');
-                docButton.querySelector('span').textContent = '▲';
-            }}
-        }});
+    <div class="modal-overlay" id="modal">
+        <div class="modal-content">
+            <button class="modal-nav" id="modalPrev">&#8249;</button>
+            <button class="modal-nav" id="modalNext">&#8250;</button>
+            <button class="modal-close" id="modalClose">&times;</button>
+            <div class="modal-body">
+                <div class="modal-image-container">
+                    <img class="modal-image" id="modalImage" src="" alt="">
+                </div>
+                <table class="modal-stats">
+                    <tr class="stat-item">
+                        <td class="stat-label" data-desc="desc-grade">Grade <span class="stat-info">?</span></td>
+                        <td class="stat-value" id="modalGrade"></td>
+                    </tr>
+                    <tr class="stat-desc" id="desc-grade">
+                        <td colspan="2">A+ to F letter grade, using fixed DEq increments.</td>
+                    </tr>
+                    <tr class="stat-item">
+                        <td class="stat-label" data-desc="desc-deq">DEq <span class="stat-info">?</span></td>
+                        <td class="stat-value" id="modalDeq"></td>
+                    </tr>
+                    <tr class="stat-desc" id="desc-deq">
+                        <td colspan="2">Expected win-rate gain from picking this card over a basic land.</td>
+                    </tr>
+                    <tr class="stat-item">
+                        <td class="stat-label" data-desc="desc-npr">NPR <span class="stat-info">?</span></td>
+                        <td class="stat-value" id="modalNpr"></td>
+                    </tr>
+                    <tr class="stat-desc" id="desc-npr">
+                        <td colspan="2">Top-player pick preference on a log scale; +1.0 means twice as likely to be taken from a fresh pack.</td>
+                    </tr>
+                    <tr class="stat-item">
+                        <td class="stat-label" data-desc="desc-pct-top">% Top <span class="stat-info">?</span></td>
+                        <td class="stat-value" id="modalPctTop"></td>
+                    </tr>
+                    <tr class="stat-desc" id="desc-pct-top">
+                        <td colspan="2">Share of this card's DEq derived from top-player data, determined by sample size.</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
 
-        // Optional: Close docText when clicking outside
-        document.addEventListener('click', function(event) {{
-            if (!event.target.closest('.info-table-container') && docText.classList.contains('expanded')) {{
-                docText.classList.remove('expanded');
-                docButton.classList.remove('expanded');
-                docButton.querySelector('span').textContent = '▼';
-            }}
-        }});
-
-        const deq_table = JSON.parse(`{deq_table}`)
-
-        function deqFormat(num) {{
-            return typeof(num) === "number" ? num.toLocaleString('en-US', {{
-                style: 'percent',
-                minimumFractionDigits: 2, 
-                maximumFractionDigits: 2,
-                signDisplay: 'always',
-            }}) : "N/A"
-        }}
-
-        function nprFormat(num) {{
-            return typeof(num) == "number" ? num.toLocaleString('en-US', {{
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-            }}) : "N/A"
-        }}
-
-        function pctFormat(num) {{
-            return typeof(num) == "number" ? num.toLocaleString('en-US', {{
-                style: "percent",
-                minimumFractionDigits: 1,
-                maximumFractionDigits: 1
-            }}) : "N/A"
-        }}
-
-        // Function to render table
-        function renderTable(data) {{
-            const tbody = document.getElementById('tableBody');
-            const noResults = document.getElementById('noResults');
-            
-            if (data.length === 0) {{
-                tbody.innerHTML = '';
-                noResults.style.display = 'block';
-                return;
-            }}
-            
-            noResults.style.display = 'none';
-            
-            tbody.innerHTML = data.map((row, i) => `
-                <tr>
-                    <td class="col-hidden">${{i + 1}}</td>
-                    <td>${{row.deq_grade}}</td>
-                    <td>${{deqFormat(row.deq)}}</td>
-                    <td>${{row.name}}</td>
-                    <td>${{row.color}}</td>
-                    <td class="col-hidden">${{row.rarity}}</td>
-                    <td class="col-hidden">${{pctFormat(row.pct_top)}}</td>
-                    <td class="col-hidden">${{nprFormat(row.npr)}}</td>
-                </tr>
-            `).join('');
-        }}
-
-        function colorFilter(row) {{
-            return term => {{
-                orSplit = term.split('/');
-                return orSplit.some(
-                    item => row.color.toLowerCase().split('').sort().join('') === 
-                        item.toLowerCase().split('').sort().join('') || 
-                        wildCardMatch(item, row.color) ||
-                        row.color === '' && item.toLowerCase() === 'c' || 
-                        row.color.length > 1 && item.toLowerCase() === 'm'
-                    );
-            }}
-        }}
-
-        function wildCardMatch(item, color) {{
-            if (item.includes('*')) {{
-                const others = item.replaceAll('*', '');
-                return others.toLowerCase().split('').every(char => {{
-                    return color.toLowerCase().includes(char);
-                }});
-            }}
-            return false;
-        }}
-
-        function rarityFilter(row) {{
-            return term => {{
-                orSplit = term.split('/');
-                return orSplit.some(
-                    item => row.rarity.toLowerCase().startsWith(item.toLowerCase())
-                )
-            }}
-        }}
-
-        function nameFilter(row) {{
-            return term => {{
-                orSplit = term.split('/');
-                return orSplit.some(
-                    item => row.name.toLowerCase().includes(item)
-                )
-            }}
-        }}
-
-        function splitTokens(searchTerm) {{
-            const quoteSplit = searchTerm.split(/"|“|”/).reduce(
-                (allTerms, term, index) => {{
-                    if (index % 2) {{
-                        const lastTerm = allTerms.pop()
-                        return [...allTerms, lastTerm + term].filter(item => item.length > 0)
-                    }}
-                    else {{
-                        const split = term.split(/\s+/)
-                        if (allTerms.length > 0){{
-                            const lastTerm = allTerms.pop()
-                            const firstTerm = split.shift()
-                            return [...allTerms, lastTerm + firstTerm, ...split]
-                        }}
-                        return split
-                    }}
-                }}, []
-            )
-            return quoteSplit
-        }}
-        // Function to filter data
-        function filterData(searchTerm) {{
-            if (!searchTerm.trim()) {{
-                return deq_table;
-            }}
-
-            const terms = splitTokens(searchTerm.toLowerCase());
-
-            const colorTerms = terms.filter(
-                term => term.startsWith('c:')).map(
-                    term => term.slice(2)
-                ).filter(term => term.length > 0
-            );
-            const rarityTerms = terms.filter(
-                term => term.startsWith('r:')).map(
-                    term => term.slice(2)
-                ).filter(term => term.length > 0
-            );
-            const nameTerms = terms.filter(
-                term => !term.startsWith('c:') && !term.startsWith('r:')
-            );
-
-            return deq_table.filter(row => {{
-                return colorTerms.every(colorFilter(row)) && 
-                    rarityTerms.every(rarityFilter(row)) && 
-                    nameTerms.every(nameFilter(row));
-            }})
-        }}
-
-        // Search functionality
-        const searchInput = document.getElementById('searchInput');
-        let searchTimeout;
-
-        searchInput.addEventListener('input', function() {{
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(() => {{
-                const filteredData = filterData(this.value);
-                renderTable(filteredData);
-            }}, 150);
-        }});
-
-        // Add some visual feedback for search
-        searchInput.addEventListener('focus', function() {{
-            this.style.transform = 'translateY(-2px)';
-        }});
-
-        searchInput.addEventListener('blur', function() {{
-            this.style.transform = 'translateY(0)';
-        }});
-
-        renderTable(deq_table)
-    </script>
+    <script src="_static/deq.js?v={version}"></script>
 
 </body>
 </html>
