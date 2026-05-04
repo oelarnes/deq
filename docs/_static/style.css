@@ -108,10 +108,13 @@ button.doc-button.expanded {
     padding: 0 0.5em;
 }
 
+th {
+    white-space: nowrap;
+}
+
 th[data-sort] {
     cursor: pointer;
     user-select: none;
-    white-space: nowrap;
 }
 
 th[data-sort]:hover {

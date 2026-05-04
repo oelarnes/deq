@@ -5,6 +5,14 @@ let sortState = { col: 'deq', dir: 'desc' };
 // Grade ordered worst→best so desc sort puts A+ first
 const GRADE_ORDER = ['N/A', 'F', 'D-', 'D', 'D+', 'C-', 'C', 'C+', 'B-', 'B', 'B+', 'A-', 'A', 'A+'];
 const RARITY_ORDER = { common: 0, uncommon: 1, rare: 2, mythic: 3 };
+const WUBRG = { W: 0, U: 1, B: 2, R: 3, G: 4 };
+
+function colorSortKey(color) {
+    if (!color) return -1;
+    let val = 0;
+    for (const c of color) val = val * 5 + (WUBRG[c] ?? 0);
+    return color.length * 10000 + val;
+}
 
 // Doc panel toggle
 const docButton = document.getElementById('docButton');
@@ -49,7 +57,7 @@ function sortKey(row, col) {
         case 'grade':   return GRADE_ORDER.indexOf(row.deq_grade);
         case 'deq':     return row.deq;
         case 'name':    return row.name;
-        case 'color':   return row.color;
+        case 'color':   return colorSortKey(row.color);
         case 'rarity':  return RARITY_ORDER[row.rarity] ?? -1;
         case 'pct_top': return row.pct_top;
         case 'npr':     return row.npr;
@@ -85,8 +93,9 @@ document.querySelector('#dataTable thead').addEventListener('click', function(e)
         sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
     } else {
         sortState.col = col;
-        sortState.dir = (col === 'name' || col === 'color') ? 'asc' : 'desc';
+        sortState.dir = (col === 'name' || col === 'color' || col === 'rarity') ? 'asc' : 'desc';
     }
+    openColDesc = null;
     updateSortIndicators();
     renderTable(sortData(filterData(searchInput.value)));
 });
@@ -123,6 +132,22 @@ modalNext.addEventListener('click', () => openModal(openModalIdx + 1));
 modal.addEventListener('click', function(e) {
     if (e.target === modal) closeModal();
 });
+
+let touchStartX = 0, touchStartY = 0;
+
+modal.addEventListener('touchstart', e => {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+}, { passive: true });
+
+modal.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+        if (dx < 0 && !modalNext.disabled) openModal(openModalIdx + 1);
+        if (dx > 0 && !modalPrev.disabled) openModal(openModalIdx - 1);
+    }
+}, { passive: true });
 
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') closeModal();
@@ -188,7 +213,6 @@ function renderTable(data) {
         : ''
     ) + data.map((row, i) => `
         <tr>
-            <td class="col-hidden">${i + 1}</td>
             <td>${row.deq_grade}</td>
             <td>${deqFormat(row.deq)}</td>
             <td class="name-cell" data-idx="${i}">${row.name}</td>
