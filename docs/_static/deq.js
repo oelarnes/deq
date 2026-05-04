@@ -107,21 +107,24 @@ const modalNext = document.getElementById('modalNext');
 let openModalIdx = -1;
 
 const modalImage = document.getElementById('modalImage');
+let navigating = false;
 
-function jiggle(dir) {
+function navigateModal(idx, dir) {
+    if (navigating) return;
+    navigating = true;
     modalImage.classList.remove('jiggle-left', 'jiggle-right');
-    void modalImage.offsetWidth; // restart animation if already playing
+    void modalImage.offsetWidth;
     modalImage.classList.add(dir < 0 ? 'jiggle-left' : 'jiggle-right');
+    modalImage.addEventListener('animationend', () => {
+        navigating = false;
+        modalImage.classList.remove('jiggle-left', 'jiggle-right');
+        openModal(idx);
+    }, { once: true });
 }
 
-modalImage.addEventListener('animationend', () => {
-    modalImage.classList.remove('jiggle-left', 'jiggle-right');
-});
-
-function openModal(idx, dir = 0) {
+function openModal(idx) {
     const card = currentRenderedData[idx];
     openModalIdx = idx;
-    if (dir !== 0) jiggle(dir);
     modalImage.src = card.image_url || '';
     modalImage.alt = card.name;
     document.getElementById('modalGrade').textContent = card.deq_grade;
@@ -138,8 +141,8 @@ function closeModal() {
 }
 
 modalClose.addEventListener('click', closeModal);
-modalPrev.addEventListener('click', () => openModal(openModalIdx - 1, 1));
-modalNext.addEventListener('click', () => openModal(openModalIdx + 1, -1));
+modalPrev.addEventListener('click', () => navigateModal(openModalIdx - 1, 1));
+modalNext.addEventListener('click', () => navigateModal(openModalIdx + 1, -1));
 
 modal.addEventListener('click', function(e) {
     if (e.target === modal) closeModal();
@@ -156,16 +159,16 @@ modal.addEventListener('touchend', e => {
     const dx = e.changedTouches[0].clientX - touchStartX;
     const dy = e.changedTouches[0].clientY - touchStartY;
     if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
-        if (dx < 0 && !modalNext.disabled) openModal(openModalIdx + 1, -1);
-        if (dx > 0 && !modalPrev.disabled) openModal(openModalIdx - 1, 1);
+        if (dx < 0 && !modalNext.disabled) navigateModal(openModalIdx + 1, -1);
+        if (dx > 0 && !modalPrev.disabled) navigateModal(openModalIdx - 1, 1);
     }
 }, { passive: true });
 
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') closeModal();
     if (!modal.classList.contains('active')) return;
-    if (e.key === 'ArrowLeft' && !modalPrev.disabled) openModal(openModalIdx - 1, 1);
-    if (e.key === 'ArrowRight' && !modalNext.disabled) openModal(openModalIdx + 1, -1);
+    if (e.key === 'ArrowLeft' && !modalPrev.disabled) openModal(openModalIdx - 1);
+    if (e.key === 'ArrowRight' && !modalNext.disabled) openModal(openModalIdx + 1);
 });
 
 document.getElementById('tableBody').addEventListener('click', function(e) {
