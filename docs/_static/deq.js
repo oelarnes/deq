@@ -54,7 +54,6 @@ document.querySelectorAll('.col-info').forEach(btn => {
 // Sorting
 function sortKey(row, col) {
     switch (col) {
-        case 'grade':   return GRADE_ORDER.indexOf(row.deq_grade);
         case 'deq':     return row.deq;
         case 'name':    return row.name;
         case 'color':   return colorSortKey(row.color);
@@ -209,7 +208,7 @@ function renderTable(data) {
     noResults.style.display = 'none';
 
     tbody.innerHTML = (openColDesc
-        ? `<tr class="col-desc-row"><td colspan="8">${openColDesc}</td></tr>`
+        ? `<tr class="col-desc-row"><td colspan="7">${openColDesc}</td></tr>`
         : ''
     ) + data.map((row, i) => `
         <tr>
@@ -227,7 +226,7 @@ function renderTable(data) {
 // Filtering
 function colorFilter(row) {
     return term => {
-        orSplit = term.split('/');
+        const orSplit = term.split('/');
         return orSplit.some(
             item => row.color.toLowerCase().split('').sort().join('') ===
                 item.toLowerCase().split('').sort().join('') ||
@@ -250,7 +249,7 @@ function wildCardMatch(item, color) {
 
 function rarityFilter(row) {
     return term => {
-        orSplit = term.split('/');
+        const orSplit = term.split('/');
         return orSplit.some(
             item => row.rarity.toLowerCase().startsWith(item.toLowerCase())
         )
@@ -259,7 +258,7 @@ function rarityFilter(row) {
 
 function nameFilter(row) {
     return term => {
-        orSplit = term.split('/');
+        const orSplit = term.split('/');
         return orSplit.some(
             item => row.name.toLowerCase().includes(item)
         )

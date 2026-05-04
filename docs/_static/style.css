@@ -31,7 +31,7 @@ body {
 
 
 .deq-logo {
-    color: --var(--pst-color-light);
+    color: var(--pst-color-light);
     font-size: 400%;
     font-weight: 600;
 }
