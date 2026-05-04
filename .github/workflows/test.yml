@@ -1,0 +1,39 @@
+name: tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out spells (sibling repo, required by pdm pre_install)
+        uses: actions/checkout@v4
+        with:
+          repository: oelarnes/spells
+          ref: main
+          path: spells
+
+      - name: Check out deq
+        uses: actions/checkout@v4
+        with:
+          path: deq
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install pdm
+        run: pip install pdm
+
+      - name: Install deq + dev deps
+        working-directory: deq
+        run: pdm install --dev
+
+      - name: Run pytest
+        working-directory: deq
+        run: pdm run test

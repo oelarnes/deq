@@ -32,6 +32,7 @@ distribution = true
 
 [tool.pdm.scripts]
 pre_install = "python3 scripts/check_spells_branch.py"
+test = "pytest -v"
 
 [dependency-groups]
 dev = [
@@ -39,4 +40,5 @@ dev = [
     "pyright>=1.1.390",
     "matplotlib>=3.10.0",
     "jupyter-book>=1.0.3",
+    "pytest>=8.0.0",
 ]
