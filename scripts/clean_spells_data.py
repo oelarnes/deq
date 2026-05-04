@@ -5,6 +5,9 @@ window; old files accumulate indefinitely. This script keeps only the most
 recent N date-range variants per (set_code, format, cohort, color) key and
 deletes the rest.
 
+Only ratings/ files are cleaned. deck_color/ files are preserved because the
+site does a linear date search across variants to determine sample size.
+
 Usage:
     pdm run python scripts/clean_spells_data.py          # dry-run (default)
     pdm run python scripts/clean_spells_data.py --execute
@@ -26,12 +29,6 @@ SPELLS_DATA_HOME = Path(
 # e.g. PremierDraft_all_WU_2024-08-13_2024-09-24.json
 FNAME_RE = re.compile(
     r"^(?P<fmt>.+)_(?P<cohort>all|top)_(?P<color>[A-Z+\-]+)_"
-    r"(?P<start>\d{4}-\d{2}-\d{2})_(?P<end>\d{4}-\d{2}-\d{2})\.json$"
-)
-
-# deck_color: {format}_{cohort}_{start}_{end}.json  (no color field)
-DC_FNAME_RE = re.compile(
-    r"^(?P<fmt>.+)_(?P<cohort>all|top)_"
     r"(?P<start>\d{4}-\d{2}-\d{2})_(?P<end>\d{4}-\d{2}-\d{2})\.json$"
 )
 
@@ -73,9 +70,7 @@ def gather_deletions(data_subdir: str, fname_re: re.Pattern) -> list[Path]:
 
 
 def main(execute: bool) -> None:
-    deletions = gather_deletions("ratings", FNAME_RE) + gather_deletions(
-        "deck_color", DC_FNAME_RE
-    )
+    deletions = gather_deletions("ratings", FNAME_RE)
 
     if not deletions:
         print("Nothing to clean.")
