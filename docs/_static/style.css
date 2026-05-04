@@ -309,18 +309,3 @@ th[data-sort]:hover {
 .stat-desc:last-child td {
     border-bottom: none;
 }
-
-@keyframes jiggle-left {
-    0%   { transform: translateX(0); }
-    35%  { transform: translateX(-18px); }
-    100% { transform: translateX(0); }
-}
-
-@keyframes jiggle-right {
-    0%   { transform: translateX(0); }
-    35%  { transform: translateX(18px); }
-    100% { transform: translateX(0); }
-}
-
-.jiggle-left  { animation: jiggle-left  0.28s ease-out; }
-.jiggle-right { animation: jiggle-right 0.28s ease-out; }

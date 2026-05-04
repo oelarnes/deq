@@ -106,22 +106,6 @@ const modalPrev = document.getElementById('modalPrev');
 const modalNext = document.getElementById('modalNext');
 let openModalIdx = -1;
 
-const modalImage = document.getElementById('modalImage');
-let navigating = false;
-
-function navigateModal(idx, dir) {
-    if (navigating) return;
-    navigating = true;
-    modalImage.classList.remove('jiggle-left', 'jiggle-right');
-    void modalImage.offsetWidth;
-    modalImage.classList.add(dir < 0 ? 'jiggle-left' : 'jiggle-right');
-    modalImage.addEventListener('animationend', () => {
-        navigating = false;
-        modalImage.classList.remove('jiggle-left', 'jiggle-right');
-        openModal(idx);
-    }, { once: true });
-}
-
 function openModal(idx) {
     const card = currentRenderedData[idx];
     openModalIdx = idx;
@@ -141,8 +125,8 @@ function closeModal() {
 }
 
 modalClose.addEventListener('click', closeModal);
-modalPrev.addEventListener('click', () => navigateModal(openModalIdx - 1, 1));
-modalNext.addEventListener('click', () => navigateModal(openModalIdx + 1, -1));
+modalPrev.addEventListener('click', () => openModal(openModalIdx - 1));
+modalNext.addEventListener('click', () => openModal(openModalIdx + 1));
 
 modal.addEventListener('click', function(e) {
     if (e.target === modal) closeModal();
@@ -159,8 +143,8 @@ modal.addEventListener('touchend', e => {
     const dx = e.changedTouches[0].clientX - touchStartX;
     const dy = e.changedTouches[0].clientY - touchStartY;
     if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
-        if (dx < 0 && !modalNext.disabled) navigateModal(openModalIdx + 1, -1);
-        if (dx > 0 && !modalPrev.disabled) navigateModal(openModalIdx - 1, 1);
+        if (dx < 0 && !modalNext.disabled) openModal(openModalIdx + 1);
+        if (dx > 0 && !modalPrev.disabled) openModal(openModalIdx - 1);
     }
 }, { passive: true });
 
