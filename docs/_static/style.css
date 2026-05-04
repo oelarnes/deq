@@ -108,3 +108,122 @@ button.doc-button.expanded {
     padding: 0 0.5em;
 }
 
+.name-cell {
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    color: var(--pst-color-primary);
+}
+
+.name-cell:hover {
+    text-decoration-style: solid;
+}
+
+/* Modal */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    box-sizing: border-box;
+}
+
+.modal-overlay.active {
+    display: flex;
+}
+
+.modal-content {
+    background: var(--pst-color-surface);
+    border: 1px solid var(--pst-color-border);
+    border-radius: 8px;
+    padding: 6px;
+    width: 100%;
+    max-width: min(360px, 84vw);
+    max-height: 94vh;
+    overflow-y: auto;
+    position: relative;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.modal-close {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(0, 0, 0, 0.45);
+    border: none;
+    font-size: 18px;
+    line-height: 1;
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #fff;
+    border-radius: 50%;
+    transition: background 0.2s;
+    z-index: 1;
+}
+
+.modal-close:hover {
+    background: rgba(0, 0, 0, 0.7);
+}
+
+.modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.modal-image-container {
+    line-height: 0;
+}
+
+.modal-image {
+    width: 100%;
+    height: auto;
+    border-radius: 4px;
+    display: block;
+}
+
+/* Stats table — mirrors the data table style */
+.modal-stats {
+    display: table;
+    width: 100%;
+    border-collapse: collapse;
+    border: 1px solid var(--pst-color-border);
+}
+
+.stat-item {
+    display: table-row;
+}
+
+.stat-item:nth-child(even) {
+    background-color: #2a2e33;
+}
+
+.stat-label,
+.stat-value {
+    display: table-cell;
+    padding: 3px 8px;
+    border-bottom: 1px solid var(--pst-color-border);
+    white-space: nowrap;
+}
+
+.stat-item:last-child .stat-label,
+.stat-item:last-child .stat-value {
+    border-bottom: none;
+}
+
+.stat-label {
+    color: var(--pst-color-text-muted);
+    width: 50%;
+}
+
+.stat-value {
+    text-align: right;
+}

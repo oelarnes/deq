@@ -1,4 +1,5 @@
 let deq_table = [];
+let currentRenderedData = [];
 
 const docButton = document.getElementById('docButton');
 const docText = document.getElementById('docText');
@@ -22,6 +23,40 @@ document.addEventListener('click', function(event) {
         docButton.classList.remove('expanded');
         docButton.querySelector('span').textContent = '▼';
     }
+});
+
+// Modal
+const modal = document.getElementById('modal');
+const modalClose = document.getElementById('modalClose');
+
+function openModal(card) {
+    document.getElementById('modalImage').src = card.image_url || '';
+    document.getElementById('modalImage').alt = card.name;
+    document.getElementById('modalGrade').textContent = card.deq_grade;
+    document.getElementById('modalDeq').textContent = deqFormat(card.deq);
+    document.getElementById('modalNpr').textContent = nprFormat(card.npr);
+    document.getElementById('modalPctTop').textContent = pctFormat(card.pct_top);
+    modal.classList.add('active');
+}
+
+function closeModal() {
+    modal.classList.remove('active');
+}
+
+modalClose.addEventListener('click', closeModal);
+
+modal.addEventListener('click', function(e) {
+    if (e.target === modal) closeModal();
+});
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeModal();
+});
+
+document.getElementById('tableBody').addEventListener('click', function(e) {
+    const cell = e.target.closest('.name-cell');
+    if (!cell) return;
+    openModal(currentRenderedData[parseInt(cell.dataset.idx, 10)]);
 });
 
 function deqFormat(num) {
@@ -49,6 +84,7 @@ function pctFormat(num) {
 }
 
 function renderTable(data) {
+    currentRenderedData = data;
     const tbody = document.getElementById('tableBody');
     const noResults = document.getElementById('noResults');
 
@@ -65,7 +101,7 @@ function renderTable(data) {
             <td class="col-hidden">${i + 1}</td>
             <td>${row.deq_grade}</td>
             <td>${deqFormat(row.deq)}</td>
-            <td>${row.name}</td>
+            <td class="name-cell" data-idx="${i}">${row.name}</td>
             <td>${row.color}</td>
             <td class="col-hidden">${row.rarity}</td>
             <td class="col-hidden">${pctFormat(row.pct_top)}</td>

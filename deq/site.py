@@ -114,8 +114,9 @@ def sync_static() -> None:
     src = Path("docs") / "_static"
     dst = build_dir() / "_static"
     for f in src.iterdir():
-        shutil.copy2(f, dst / f.name)
-        print(f"  copied {f.name}")
+        if f.is_file():
+            shutil.copy2(f, dst / f.name)
+            print(f"  copied {f.name}")
 
 
 def main(set_code: str | None = None):
