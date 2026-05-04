@@ -2,6 +2,7 @@ import datetime as dt
 import json
 import math
 import random
+import shutil
 from pathlib import Path
 
 from deq.main import config, daily_deq
@@ -22,6 +23,35 @@ def data_dir() -> Path:
     d = build_dir() / "data"
     d.mkdir(exist_ok=True)
     return d
+
+
+def sanity_check(deq_data) -> None:
+    code = deq_data.set_code
+    df = deq_data.df
+
+    if len(df) == 0:
+        raise ValueError(f"{code}: dataframe is empty")
+
+    rated = df["deq"].drop_nulls()
+    rated_count = len(rated)
+
+    if rated_count == 0:
+        raise ValueError(f"{code}: no cards have DEq ratings")
+
+    deq_min, deq_max = rated.min(), rated.max()
+    if not (-0.20 < deq_min < deq_max < 0.20):
+        raise ValueError(f"{code}: DEq range [{deq_min:.4f}, {deq_max:.4f}] outside plausible bounds")
+
+    existing = data_dir() / f"{code}.json"
+    if existing.exists():
+        with open(existing) as f:
+            prev = json.load(f)
+        prev_rated = sum(1 for c in prev["cards"] if c["deq"] is not None)
+        if prev_rated > 0 and rated_count < prev_rated * 0.80:
+            raise ValueError(
+                f"{code}: rated cards dropped from {prev_rated} to {rated_count} "
+                f"({100 * (1 - rated_count / prev_rated):.0f}% loss)"
+            )
 
 
 def write_set_json(deq_data) -> Path:
@@ -80,8 +110,18 @@ def write_html(deq_data, version: int) -> Path:
     return path
 
 
+def sync_static() -> None:
+    src = Path("docs") / "_static"
+    dst = build_dir() / "_static"
+    for f in src.iterdir():
+        shutil.copy2(f, dst / f.name)
+        print(f"  copied {f.name}")
+
+
 def main(set_code: str | None = None):
     version = math.floor(random.random() * 1e10)
+
+    sync_static()
 
     # daily_deq(None) returns the latest active set; use it as the page default
     default_data = daily_deq(set_code)
@@ -90,6 +130,7 @@ def main(set_code: str | None = None):
     for code in config:
         if dt.date.today() > config[code].start_date:
             data = default_data if code == default_data.set_code else daily_deq(code)
+            sanity_check(data)
             write_set_json(data)
 
     write_html(default_data, version)
