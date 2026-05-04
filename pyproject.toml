@@ -11,7 +11,7 @@ dependencies = [
     "requests>=2.32.3",
     "matplotlib>=3.9.2",
     "scikit-learn>=1.5.2",
-    "spells-mtg @ file:///home/joel/dev/spells",
+    "spells-mtg>=0.11.23",
     "plotly>=5.24.1",
     "toolz>=1.0.0",
     "great-tables>=0.15.0",
@@ -31,7 +31,6 @@ build-backend = "pdm.backend"
 distribution = true
 
 [tool.pdm.scripts]
-pre_install = "python3 scripts/check_spells_branch.py"
 test = "pytest -v"
 
 [dependency-groups]
