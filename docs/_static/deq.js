@@ -343,6 +343,7 @@ async function loadSet(setCode) {
     document.getElementById('startDate').textContent = data.start_date;
     document.getElementById('endDate').textContent = data.end_date;
     document.title = `${data.set_code} DEq: Estimated Draft Equity`;
+    document.getElementById('dataTable').classList.toggle('embargo-active', !!data.embargoed);
     deq_table = data.cards;
     searchInput.value = '';
     renderTable(sortData(deq_table));
