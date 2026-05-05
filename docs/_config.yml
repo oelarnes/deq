@@ -2,9 +2,9 @@
 # Learn more at https://jupyterbook.org/customize/config.html
 
 title: "MagicFlea on Draft: Spells and DEq"
-author: Joel Barnes
+author: MagicFlea
 logo: mfod-logo.png
-copyright: "2024-2025" 
+copyright: "2024-2026" 
 
 # Force re-execution of notebooks on each build.
 # See https://jupyterbook.org/content/execute.html
