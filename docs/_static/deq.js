@@ -58,7 +58,6 @@ function sortKey(row, col) {
         case 'name':    return row.name;
         case 'color':   return colorSortKey(row.color);
         case 'rarity':  return RARITY_ORDER[row.rarity] ?? -1;
-        case 'pct_top': return row.pct_top;
         case 'npr':     return row.npr;
         default:        return null;
     }
@@ -165,7 +164,10 @@ document.querySelector('.modal-stats').addEventListener('click', function(e) {
     const label = e.target.closest('.stat-label');
     if (!label) return;
     const desc = document.getElementById(label.dataset.desc);
-    if (desc) desc.classList.toggle('open');
+    if (!desc) return;
+    const isOpen = desc.classList.contains('open');
+    document.querySelectorAll('.stat-desc.open').forEach(el => el.classList.remove('open'));
+    if (!isOpen) desc.classList.add('open');
 });
 
 // Formatters
