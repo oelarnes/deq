@@ -56,10 +56,12 @@ def sanity_check(deq_data) -> None:
 
 def write_set_json(deq_data) -> Path:
     date_format = "%-d %b %y"
+    days_live = (deq_data.end_date - config[deq_data.set_code].start_date).days
     payload = {
         "set_code": deq_data.set_code,
         "start_date": deq_data.start_date.strftime(date_format),
         "end_date": deq_data.end_date.strftime(date_format),
+        "embargoed": days_live < 12,
         "cards": (
             deq_data.df.select(
                 "deq_grade", "name", "color", "rarity",
@@ -88,17 +90,10 @@ def write_html(deq_data, version: int) -> Path:
         for code in deq_data.available_sets
     )
 
-    embargo_class = (
-        "col-embargo"
-        if (deq_data.end_date - config[deq_data.set_code].start_date).days < 12
-        else ""
-    )
-
     html = load_html_template().format(
         set_code=title_map.get(deq_data.set_code, deq_data.set_code),
         start_date=deq_data.start_date.strftime(date_format),
         end_date=deq_data.end_date.strftime(date_format),
-        embargo_class=embargo_class,
         select_elements=select_elements,
         version=version,
     )
