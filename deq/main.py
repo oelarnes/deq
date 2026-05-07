@@ -79,6 +79,32 @@ class DEqConfig:
     cube: bool = False
 
 
+all_sets = [
+    "TLA",
+    "EOE",
+    "FIN",
+    "TDM",
+    "DFT",
+    "PIO",
+    "FDN",
+    "DSK",
+    "BLB",
+    "MH3",
+    "OTJ",
+    "MKM",
+    "KTK",
+    "LCI",
+    "WOE",
+    "LTR",
+    "MOM",
+    "SIR",
+    "ONE",
+    "BRO",
+    "DMU",
+    "SNC",
+    "NEO",
+]
+
 config = {
     "SOS": DEqConfig(start_date=dt.date(2026, 4, 21)),
     "TMT": DEqConfig(start_date=dt.date(2026, 3, 3), end_date=dt.date(2026, 4, 21)),

@@ -9,7 +9,7 @@ import polars as pl
 from spells import summon, ColName, ColSpec
 from spells.log import make_verbose
 from spells.extension import context_cols
-from spells.config import all_sets
+from deq.main import all_sets
 from spells.utils import wavg
 
 from deq.main import deq_bias_set_context, BASIC_LANDS, ext
