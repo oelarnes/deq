@@ -1,0 +1,69 @@
+import datetime as dt
+from dataclasses import dataclass
+
+
+@dataclass
+class DEqConfig:
+    start_date: dt.date
+    end_date: dt.date | None = None
+    is_pick_two: bool = False
+    cube: bool = False
+
+
+# Sets included in the p1 strategy analysis (requires full public parquet data)
+p1_sets = [
+    "SOS",
+    "EOE",
+    "FIN",
+    "TDM",
+    "DFT",
+    "PIO",
+    "FDN",
+    "DSK",
+    "BLB",
+    "MH3",
+    "OTJ",
+    "MKM",
+    "KTK",
+    "LCI",
+    "WOE",
+    "LTR",
+    "MOM",
+    "SIR",
+    "ONE",
+    "BRO",
+    "DMU",
+    "SNC",
+    "NEO",
+]
+
+# Per-set configuration for DEq daily calculations
+config = {
+    "SOS": DEqConfig(start_date=dt.date(2026, 4, 21)),
+    "TMT": DEqConfig(start_date=dt.date(2026, 3, 3), end_date=dt.date(2026, 4, 21)),
+    "ECL": DEqConfig(start_date=dt.date(2026, 1, 20), end_date=dt.date(2026, 3, 2)),
+    "TLA": DEqConfig(start_date=dt.date(2025, 11, 18), end_date=dt.date(2026, 1, 20)),
+    "Cube+-+Powered": DEqConfig(
+        start_date=dt.date(2025, 10, 28), end_date=dt.date(2026, 4, 21), cube=True
+    ),
+    "OM1": DEqConfig(
+        start_date=dt.date(2025, 9, 23),
+        end_date=dt.date(2025, 11, 18),
+        is_pick_two=True,
+    ),
+    "EOE": DEqConfig(start_date=dt.date(2025, 7, 29), end_date=dt.date(2025, 9, 23)),
+    "FIN": DEqConfig(start_date=dt.date(2025, 6, 10), end_date=dt.date(2025, 12, 30)),
+    "TDM": DEqConfig(start_date=dt.date(2025, 4, 8), end_date=dt.date(2025, 10, 28)),
+    "DFT": DEqConfig(start_date=dt.date(2025, 2, 11), end_date=dt.date(2025, 4, 8)),
+    "PIO": DEqConfig(start_date=dt.date(2024, 12, 10), end_date=dt.date(2025, 2, 11)),
+    "FDN": DEqConfig(start_date=dt.date(2024, 11, 12), end_date=dt.date(2024, 12, 10)),
+    "DSK": DEqConfig(start_date=dt.date(2024, 9, 24), end_date=dt.date(2025, 10, 14)),
+    "BLB": DEqConfig(start_date=dt.date(2024, 7, 30), end_date=dt.date(2024, 9, 24)),
+    "MH3": DEqConfig(start_date=dt.date(2024, 6, 11), end_date=dt.date(2025, 10, 21)),
+    "OTJ": DEqConfig(start_date=dt.date(2024, 4, 16), end_date=dt.date(2025, 11, 4)),
+    "MKM": DEqConfig(start_date=dt.date(2024, 2, 6), end_date=dt.date(2024, 4, 16)),
+    "LCI": DEqConfig(start_date=dt.date(2023, 11, 14), end_date=dt.date(2024, 2, 6)),
+    "WOE": DEqConfig(start_date=dt.date(2023, 9, 5), end_date=dt.date(2025, 9, 23)),
+    "LTR": DEqConfig(start_date=dt.date(2023, 6, 20), end_date=dt.date(2023, 9, 5)),
+    "MOM": DEqConfig(start_date=dt.date(2023, 4, 18), end_date=dt.date(2023, 6, 20)),
+}
