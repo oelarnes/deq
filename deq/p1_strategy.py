@@ -9,7 +9,7 @@ import polars as pl
 from spells import summon, ColName, ColSpec
 from spells.log import make_verbose
 from spells.extension import context_cols
-from spells.config import all_sets
+from deq.set_config import p1_sets
 from spells.utils import wavg
 
 from deq.main import deq_bias_set_context, BASIC_LANDS, ext
@@ -333,7 +333,7 @@ def p1_skill_control_df():
     to be used by the group below, we want the opposite of that. So subtract.
     """
     res = p1_strat_analysis(
-        all_sets, "pick_equity", card_parity=True, luck_control=True
+        p1_sets, "pick_equity", card_parity=True, luck_control=True
     )
     return res.df.select(
         [
@@ -470,7 +470,7 @@ def all_metrics_analysis(
     metric_context: pl.DataFrame | None = None,
     extra_ext: dict[str, ColSpec] | None = None,
 ):
-    sets = all_sets if sets is None else sets
+    sets = p1_sets if sets is None else sets
 
     if metrics is None:
         metrics = METRICS
@@ -540,7 +540,7 @@ def set_by_set_results(
             sets=[set_],
             deq_days=deq_days,
         )
-        for set_ in all_sets
+        for set_ in p1_sets
     }
 
     return results
@@ -687,7 +687,7 @@ def draft_count_table(
 ):
     p1_results_filter = {"$and": [P1P1, results_filter]} if results_filter else P1P1
     df = summon(
-        sets if sets else all_sets,
+        sets if sets else p1_sets,
         [ColName.NUM_DRAFTS],
         group_by=[],
         filter_spec = {

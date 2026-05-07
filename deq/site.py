@@ -5,7 +5,8 @@ import random
 import shutil
 from pathlib import Path
 
-from deq.main import config, daily_deq
+from deq.main import daily_deq
+from deq.set_config import config
 
 
 def load_html_template(template_path="deq_site_template.html"):
