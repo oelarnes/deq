@@ -342,6 +342,25 @@ def test_empty_color_sets_zeroes_bias_adj(blb_data) -> None:  # noqa: ARG001
         )
 
 
+def test_no_top_data_falls_back_to_all(blb_no_top_data) -> None:  # noqa: ARG001
+    """When the top cohort has no game data, synthesis must not null-propagate.
+
+    Regression test for the pct_top=0 / pct_gp_top=null bug: 0*null evaluates
+    to null in Polars, which previously zeroed deq for sets like OM1.
+    """
+    df = live_deq(BLB_SET, BLB_START, BLB_END, color_sets=BLB_COLOR_SETS).sort("name")
+
+    assert (df["pct_top"] == 0).all(), "all cards should have pct_top=0 with no top game data"
+
+    # Every card with a non-null mwr must also have a non-null deq
+    has_mwr = df.filter(pl.col("mwr").is_not_null() & pl.col("mwr").is_finite())
+    null_deq = has_mwr.filter(pl.col("deq").is_null() | pl.col("deq").is_nan())
+    assert null_deq.is_empty(), (
+        f"deq is null for {null_deq.height} card(s) with valid mwr: "
+        f"{null_deq['name'].to_list()}"
+    )
+
+
 def _fmt_val(x: float | None, sig: int = 5) -> str:
     if x is None:
         return "None"
