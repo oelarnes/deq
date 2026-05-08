@@ -95,7 +95,8 @@ button.doc-button.expanded {
     }
 }
 
-#dataTable.embargo-active .col-embargo {
+#dataTable.embargo-active .col-embargo,
+#modal.embargo-active .col-embargo {
     display: none;
 }
 

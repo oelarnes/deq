@@ -66,7 +66,8 @@ def write_set_json(deq_data) -> Path:
         "cards": (
             deq_data.df.select(
                 "deq_grade", "name", "color", "rarity",
-                "deq", "npr", "pct_top", "image_url",
+                "deq", "mwr", "pick_equity", "deq_bias_adj", "deq_meta_adj",
+                "npr", "pct_top", "image_url",
             )
             .fill_nan(None)
             .sort("deq", descending=True, nulls_last=True)

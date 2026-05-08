@@ -112,6 +112,10 @@ function openModal(idx) {
     modalImage.alt = card.name;
     document.getElementById('modalGrade').textContent = card.deq_grade;
     document.getElementById('modalDeq').textContent = deqFormat(card.deq);
+    document.getElementById('modalMwr').textContent = deqFormat(card.mwr);
+    document.getElementById('modalPickEquity').textContent = deqFormat(card.pick_equity);
+    document.getElementById('modalBiasAdj').textContent = deqFormat(card.deq_bias_adj);
+    document.getElementById('modalMetaAdj').textContent = deqFormat(card.deq_meta_adj);
     document.getElementById('modalNpr').textContent = nprFormat(card.npr);
     document.getElementById('modalPctTop').textContent = pctFormat(card.pct_top);
     modalPrev.disabled = idx <= 0;
@@ -344,6 +348,7 @@ async function loadSet(setCode) {
     document.getElementById('endDate').textContent = data.end_date;
     document.title = `${data.set_code} DEq: Estimated Draft Equity`;
     document.getElementById('dataTable').classList.toggle('embargo-active', !!data.embargoed);
+    document.getElementById('modal').classList.toggle('embargo-active', !!data.embargoed);
     deq_table = data.cards;
     searchInput.value = '';
     renderTable(sortData(deq_table));

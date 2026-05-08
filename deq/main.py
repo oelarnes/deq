@@ -697,9 +697,7 @@ def live_deq(
         deq_df = (
             card_df.with_columns(deq_col("deck_small_sample"))
             .with_columns(deq_col("ata_adj"), deq_col("gp_wr_17l"))
-            .with_columns(
-                deq_col("pick_equity"),
-            )
+            .with_columns(deq_col("mwr"), deq_col("pick_equity"))
             .with_columns(
                 deq_col("deq_bias_adj"),
                 deq_col("meta_regression_factor"),
@@ -724,6 +722,8 @@ def live_deq(
         "pick_equity",
         "deq_bias_adj",
     ]
+    additive_components = ["mwr", "pick_equity", "deq_bias_adj", "deq_meta_adj"]
+
     deq_df = (
         raw_deq_by_cohort["top"]
         .rename({metric: f"{metric}_top" for metric in component_metrics})
@@ -738,19 +738,45 @@ def live_deq(
             on="name",
         )
         .with_columns(
-            pl.when(pl.col("deq_top").is_finite())
+            pl.when(pl.col("mwr_top").is_not_null() & pl.col("mwr_top").is_finite())
             .then(pl.col("deck") / (ALL_WEIGHT + pl.col("deck")))
             .otherwise(pl.lit(0))
             .alias("pct_top"),
         )
         .with_columns(
-            pl.when(pl.col("pct_top") > 0)
-            .then(
-                pl.col("pct_top") * pl.col("deq_top")
-                + (1 - pl.col("pct_top")) * pl.col("deq_all")
-            )
-            .otherwise(pl.col("deq_all"))
-            .alias("deq"),
+            # blended GP%: weighted average of top/all deck inclusion rates
+            (
+                pl.col("pct_top") * pl.col("pct_gp_top")
+                + (1 - pl.col("pct_top")) * pl.col("pct_gp_all")
+            ).alias("pct_gp"),
+        )
+        .with_columns(
+            # blend each additive component, weighted by GP% contribution per group
+            *[
+                pl.when(pl.col("pct_gp") > 0)
+                .then(
+                    (
+                        pl.col("pct_top") * pl.col("pct_gp_top") * pl.col(f"{m}_top")
+                        + (1 - pl.col("pct_top")) * pl.col("pct_gp_all") * pl.col(f"{m}_all")
+                    )
+                    / pl.col("pct_gp")
+                )
+                .otherwise(pl.col(f"{m}_all"))
+                .alias(m)
+                for m in additive_components
+            ],
+        )
+        .with_columns(
+            # reassemble DEq from blended components
+            (
+                pl.col("pct_gp")
+                * (
+                    pl.col("mwr")
+                    + pl.col("pick_equity")
+                    + pl.col("deq_bias_adj")
+                    + pl.col("deq_meta_adj")
+                )
+            ).alias("deq"),
         )
         .with_columns(deq_col("deq_grade"))
     )
