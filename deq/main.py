@@ -744,9 +744,9 @@ def live_deq(
             .alias("pct_top"),
         )
         .with_columns(
-            # blended GP%: weighted average of top/all deck inclusion rates
+            # blended GP%: fill_null(0) on the _top term for same reason as components below
             (
-                pl.col("pct_top") * pl.col("pct_gp_top")
+                (pl.col("pct_top") * pl.col("pct_gp_top")).fill_null(0.0)
                 + (1 - pl.col("pct_top")) * pl.col("pct_gp_all")
             ).alias("pct_gp"),
         )
