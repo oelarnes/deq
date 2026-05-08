@@ -10,7 +10,7 @@ from spells.columns import agg_col
 from spells.cache import ad_hoc_dir
 from spells.draft_data import CardDataFileSpec
 from spells.card_data_files import deck_color_df
-from deq.set_config import DEqConfig, config, p1_sets  # noqa: F401
+from deq.set_config import config
 
 BASIC_LANDS = ["Plains", "Island", "Swamp", "Mountain", "Forest"]
 
@@ -145,10 +145,11 @@ def deq_col_specs(
                 )
             )
         ),
+        f"mwr{suffix}": agg_col(
+            pl.col("gp_wr_17l") - pl.col("gp_wr_mean")
+        ),
         f"deq_base{suffix}": agg_col((
-                pl.col("gp_wr_17l")
-                - pl.col("gp_wr_mean")
-                + pl.col(f"pick_equity{suffix}")
+                pl.col(f"mwr{suffix}") + pl.col(f"pick_equity{suffix}")
             )
             * pl.col(ColName.PCT_GP),
         ),
@@ -620,7 +621,11 @@ def live_deq(
         else:
             deck_counts_df = pl.DataFrame(
                 {ColName.NAME: [], ColName.MAIN_COLORS: [], ColName.DECK: []},
-                schema={ColName.NAME: pl.String, ColName.MAIN_COLORS: pl.String, ColName.DECK: pl.Int64},
+                schema={
+                    ColName.NAME: pl.String,
+                    ColName.MAIN_COLORS: pl.String,
+                    ColName.DECK: pl.Int64,
+                },
             )
 
         other_counts_df = (
@@ -633,7 +638,9 @@ def live_deq(
             .select(
                 ColName.NAME,
                 pl.lit("other").alias(ColName.MAIN_COLORS),
-                (pl.col("num_gp_all") - pl.col(ColName.DECK).fill_null(0)).alias(ColName.DECK),
+                (pl.col("num_gp_all") - pl.col(ColName.DECK).fill_null(0)).alias(
+                    ColName.DECK
+                ),
             )
         )
 
@@ -660,10 +667,7 @@ def live_deq(
             pl.lit(gp_wr_mean).alias(ColName.GP_WR_MEAN)
         )
 
-        card_df = card_df.with_columns(
-            deq_col("ata_17l"),
-            deq_col("alsa_17l")
-        )
+        card_df = card_df.with_columns(deq_col("ata_17l"), deq_col("alsa_17l"))
 
         # ata fallback for top.
         if player_cohort == "top" and "all" in raw_deq_by_cohort:
@@ -685,7 +689,6 @@ def live_deq(
                     .then(pl.col("alsa_fallback"))
                     .otherwise(pl.col("alsa"))
                     .alias("alsa_new"),
-
                 )
                 .drop("ata_17l", "ata_fallback", "alsa_17l", "alsa_fallback")
                 .rename({"ata_new": "ata_17l", "alsa_new": "alsa_17l"})
@@ -698,14 +701,12 @@ def live_deq(
                 deq_col("pick_equity"),
             )
             .with_columns(
-                deq_col("deq_base"),
                 deq_col("deq_bias_adj"),
                 deq_col("meta_regression_factor"),
             )
             .with_columns(
                 deq_col("deq_meta_adj"),
             )
-            .with_columns(deq_col("deq"))
             .with_columns(deq_col("pick_rate_logit_seen"))
             .with_columns(
                 pl.lit("N/A").alias("npr")
@@ -716,11 +717,24 @@ def live_deq(
         raw_deq_by_cohort[player_cohort] = deq_df
 
     ALL_WEIGHT = 1000
+    component_metrics = [
+        ColName.PCT_GP,
+        "mwr",
+        "deq_meta_adj",
+        "pick_equity",
+        "deq_bias_adj",
+    ]
     deq_df = (
         raw_deq_by_cohort["top"]
-        .rename({"deq": "deq_top"})
+        .rename({metric: f"{metric}_top" for metric in component_metrics})
         .join(
-            raw_deq_by_cohort["all"].select("name", pl.col("deq").alias("deq_all")),
+            raw_deq_by_cohort["all"].select(
+                "name",
+                *[
+                    pl.col(metric).alias(f"{metric}_all")
+                    for metric in component_metrics
+                ],
+            ),
             on="name",
         )
         .with_columns(
@@ -770,7 +784,10 @@ def daily_deq(
             key
             for key, cfg in config.items()
             if cfg.start_date < dt.date.today()
-            and (cfg.end_date is None or cfg.end_date >= dt.date.today() - dt.timedelta(days=1))
+            and (
+                cfg.end_date is None
+                or cfg.end_date >= dt.date.today() - dt.timedelta(days=1)
+            )
         ][0]
         if set_code is None
         else set_code
@@ -816,14 +833,14 @@ def daily_deq(
     while not accept:
         print(f"Trying start_date {start_date.isoformat()}")
         num_games = deck_color_df(
-            set_code,
-            start_date=start_date,
-            end_date=end_date,
-            player_cohort="top"
+            set_code, start_date=start_date, end_date=end_date, player_cohort="top"
         )["num_games"].sum()
 
         if num_games >= gp_top_min_games:
-            if not cfg.cube and (start_date - cfg.start_date).days + 1 >= max_format_day_start:
+            if (
+                not cfg.cube
+                and (start_date - cfg.start_date).days + 1 >= max_format_day_start
+            ):
                 accept = True
                 start_date = cfg.start_date + dt.timedelta(
                     days=max_format_day_start - 1
