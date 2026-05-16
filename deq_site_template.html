@@ -105,6 +105,10 @@ DEq is not affiliated with 17Lands.
                         <th data-sort="name">Name <span class="sort-ind"></span></th>
                         <th data-sort="color">Color <span class="sort-ind"></span></th>
                         <th class="col-hidden" data-sort="rarity">Rarity <span class="sort-ind"></span></th>
+                        <th class="col-hidden col-embargo" data-sort="mwr">MWR <span class="sort-ind"></span><button class="col-info" data-col-desc="<strong>Marginal Win Rate.</strong> GP win rate versus the set mean.">?</button></th>
+                        <th class="col-hidden col-embargo" data-sort="pick_equity">PEq <span class="sort-ind"></span><button class="col-info" data-col-desc="<strong>Pick Equity.</strong> Estimated opportunity cost measured in win rate at observed ATA.">?</button></th>
+                        <th class="col-hidden col-embargo" data-sort="adj">Adj <span class="sort-ind"></span><button class="col-info" data-col-desc="<strong>Adjustment.</strong> Sum of bias and meta corrections applied to win rate.">?</button></th>
+                        <th class="col-hidden" data-sort="pct_gp">% GP <span class="sort-ind"></span><button class="col-info" data-col-desc="Fraction of games in which this card was drawn and played.">?</button></th>
                         <th class="col-hidden">% Top <button class="col-info" data-col-desc="Share of DEq derived from top-player data, based on sample size.">?</button></th>
                         <th class="col-hidden" data-sort="npr">NPR <span class="sort-ind"></span><button class="col-info" data-col-desc="<strong>Normalized Pick Rate.</strong> Top-player pick preference; each +1.0 means twice as likely to be taken from a fresh pack.">?</button></th>
                     </tr>
@@ -144,34 +148,6 @@ DEq is not affiliated with 17Lands.
                     </tr>
                     <tr class="stat-desc" id="desc-deq">
                         <td colspan="2"><strong>Estimated Draft Equity.</strong> Expected win-rate gain from picking this card over a basic land.</td>
-                    </tr>
-                    <tr class="stat-item col-embargo">
-                        <td class="stat-label" data-desc="desc-mwr">W <span class="stat-info">?</span></td>
-                        <td class="stat-value" id="modalMwr"></td>
-                    </tr>
-                    <tr class="stat-desc col-embargo" id="desc-mwr">
-                        <td colspan="2"><strong>Win Rate Contribution.</strong> GP win rate above the set baseline, scaled by played-card rate.</td>
-                    </tr>
-                    <tr class="stat-item col-embargo">
-                        <td class="stat-label" data-desc="desc-pick-equity">K <span class="stat-info">?</span></td>
-                        <td class="stat-value" id="modalPickEquity"></td>
-                    </tr>
-                    <tr class="stat-desc col-embargo" id="desc-pick-equity">
-                        <td colspan="2"><strong>Pick Equity.</strong> Expected win-rate gain from your position in the pack based on card availability and pick order.</td>
-                    </tr>
-                    <tr class="stat-item col-embargo">
-                        <td class="stat-label" data-desc="desc-bias-adj">B <span class="stat-info">?</span></td>
-                        <td class="stat-value" id="modalBiasAdj"></td>
-                    </tr>
-                    <tr class="stat-desc col-embargo" id="desc-bias-adj">
-                        <td colspan="2"><strong>Bias Adjustment.</strong> Corrects for the selection bias inherent in GIH win rate.</td>
-                    </tr>
-                    <tr class="stat-item col-embargo">
-                        <td class="stat-label" data-desc="desc-meta-adj">M <span class="stat-info">?</span></td>
-                        <td class="stat-value" id="modalMetaAdj"></td>
-                    </tr>
-                    <tr class="stat-desc col-embargo" id="desc-meta-adj">
-                        <td colspan="2"><strong>Meta Adjustment.</strong> Corrects for drafting patterns in the current metagame.</td>
                     </tr>
                     <tr class="stat-item">
                         <td class="stat-label" data-desc="desc-npr">NPR <span class="stat-info">?</span></td>
