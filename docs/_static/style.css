@@ -93,6 +93,10 @@ button.doc-button.expanded {
     .col-hidden {
         display: table-cell;
     }
+    .table-container {
+        max-width: 100%;
+        overflow-x: auto;
+    }
 }
 
 #dataTable.embargo-active .col-embargo {

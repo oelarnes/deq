@@ -58,8 +58,12 @@ function sortKey(row, col) {
         case 'name':    return row.name;
         case 'color':   return colorSortKey(row.color);
         case 'rarity':  return RARITY_ORDER[row.rarity] ?? -1;
-        case 'npr':     return row.npr;
-        default:        return null;
+        case 'npr':          return row.npr;
+        case 'pct_gp':       return row.pct_gp;
+        case 'mwr':          return row.mwr;
+        case 'pick_equity':  return row.pick_equity;
+        case 'adj':          return row.adj;
+        default:             return null;
     }
 }
 
@@ -210,7 +214,7 @@ function renderTable(data) {
     noResults.style.display = 'none';
 
     tbody.innerHTML = (openColDesc
-        ? `<tr class="col-desc-row"><td colspan="7">${openColDesc}</td></tr>`
+        ? `<tr class="col-desc-row"><td colspan="11">${openColDesc}</td></tr>`
         : ''
     ) + data.map((row, i) => `
         <tr>
@@ -219,6 +223,10 @@ function renderTable(data) {
             <td class="name-cell" data-idx="${i}">${row.name}</td>
             <td>${row.color}</td>
             <td class="col-hidden">${row.rarity}</td>
+            <td class="col-hidden col-embargo">${deqFormat(row.mwr)}</td>
+            <td class="col-hidden col-embargo">${deqFormat(row.pick_equity)}</td>
+            <td class="col-hidden col-embargo">${deqFormat(row.adj)}</td>
+            <td class="col-hidden">${pctFormat(row.pct_gp)}</td>
             <td class="col-hidden">${pctFormat(row.pct_top)}</td>
             <td class="col-hidden">${nprFormat(row.npr)}</td>
         </tr>

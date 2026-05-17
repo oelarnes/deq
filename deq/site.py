@@ -5,6 +5,8 @@ import random
 import shutil
 from pathlib import Path
 
+import polars as pl
+
 from deq.main import daily_deq
 from deq.set_config import config
 
@@ -66,7 +68,9 @@ def write_set_json(deq_data) -> Path:
         "cards": (
             deq_data.df.select(
                 "deq_grade", "name", "color", "rarity",
-                "deq", "npr", "pct_top", "image_url",
+                "deq", "mwr", "pick_equity",
+                (pl.col("deq_bias_adj") + pl.col("deq_meta_adj")).alias("adj"),
+                "npr", "pct_top", "pct_gp", "image_url",
             )
             .fill_nan(None)
             .sort("deq", descending=True, nulls_last=True)
