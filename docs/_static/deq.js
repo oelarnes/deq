@@ -107,6 +107,9 @@ const modal = document.getElementById('modal');
 const modalClose = document.getElementById('modalClose');
 const modalPrev = document.getElementById('modalPrev');
 const modalNext = document.getElementById('modalNext');
+const modalBody = document.querySelector('.modal-body');
+const modalToggle = document.getElementById('modalToggle');
+const modalToggleBack = document.getElementById('modalToggleBack');
 let openModalIdx = -1;
 
 function openModal(idx) {
@@ -118,6 +121,11 @@ function openModal(idx) {
     document.getElementById('modalDeq').textContent = deqFormat(card.deq);
     document.getElementById('modalNpr').textContent = nprFormat(card.npr);
     document.getElementById('modalPctTop').textContent = pctFormat(card.pct_top);
+    document.getElementById('modalMwr').textContent = deqFormat(card.mwr);
+    document.getElementById('modalPeq').textContent = deqFormat(card.pick_equity);
+    document.getElementById('modalAdj').textContent = deqFormat(card.adj);
+    document.getElementById('modalPctGp').textContent = pctFormat(card.pct_gp);
+    modalBody.classList.remove('show-stats');
     modalPrev.disabled = idx <= 0;
     modalNext.disabled = idx >= currentRenderedData.length - 1;
     modal.classList.add('active');
@@ -130,7 +138,8 @@ function closeModal() {
 modalClose.addEventListener('click', closeModal);
 modalPrev.addEventListener('click', () => openModal(openModalIdx - 1));
 modalNext.addEventListener('click', () => openModal(openModalIdx + 1));
-
+modalToggle.addEventListener('click', () => modalBody.classList.add('show-stats'));
+modalToggleBack.addEventListener('click', () => modalBody.classList.remove('show-stats'));
 modal.addEventListener('click', function(e) {
     if (e.target === modal) closeModal();
 });
@@ -162,16 +171,6 @@ document.getElementById('tableBody').addEventListener('click', function(e) {
     const cell = e.target.closest('.name-cell');
     if (!cell) return;
     openModal(parseInt(cell.dataset.idx, 10));
-});
-
-document.querySelector('.modal-stats').addEventListener('click', function(e) {
-    const label = e.target.closest('.stat-label');
-    if (!label) return;
-    const desc = document.getElementById(label.dataset.desc);
-    if (!desc) return;
-    const isOpen = desc.classList.contains('open');
-    document.querySelectorAll('.stat-desc.open').forEach(el => el.classList.remove('open'));
-    if (!isOpen) desc.classList.add('open');
 });
 
 // Formatters
@@ -352,6 +351,7 @@ async function loadSet(setCode) {
     document.getElementById('endDate').textContent = data.end_date;
     document.title = `${data.set_code} DEq: Estimated Draft Equity`;
     document.getElementById('dataTable').classList.toggle('embargo-active', !!data.embargoed);
+    modal.classList.toggle('embargo-active', !!data.embargoed);
     deq_table = data.cards;
     searchInput.value = '';
     renderTable(sortData(deq_table));
