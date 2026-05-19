@@ -50,7 +50,7 @@ Convey the **composition of the metric** — how the component values combine to
 ### Navigation
 Navigation between cards (left/right) and between panels (card ↔ stat, via toggle or swipe) must be **visually apparent** with consistent design language:
 - Left/right swipe → prev/next card (already implemented)
-- **Up/down swipe → toggle stat panel** (swipe up: show stat; swipe down: show card)
+- Panel toggle is button-only; no vertical swipe (conflicts with browser pull-to-reload)
 - Toggle buttons must follow the same visual style as the swipe direction they represent
 - On desktop, the left/right nav buttons (‹ ›) remain; panel toggle is not needed
 
@@ -60,7 +60,7 @@ Navigation between cards (left/right) and between panels (card ↔ stat, via tog
 2. **Aspect ratios**: Card `745/1040`, Stat `745/1040`, Info `2/1` — all enforced via `aspect-ratio` on position-relative containers with `position: absolute; inset: 0` children
 3. **Toggle**: "Stats"/"Card" buttons overlay their respective panels at bottom-left; add/remove `.show-stats` on `.modal-body`; hidden on desktop
 4. **Left/right swipe**: navigates prev/next card — do not break
-5. **Up/down swipe**: swipe up → show stat panel (add `.show-stats`); swipe down → show card panel (remove `.show-stats`); implemented in the same `touchend` handler as left/right
+5. **Panel toggle**: toggle buttons only; no vertical swipe (conflicts with browser scroll/reload gestures)
 5. **Desktop**: card on left (`flex: 1`), stat+info stacked on right (`flex: 1`), no toggle buttons, everything always visible
 
 ## Design iteration notes
