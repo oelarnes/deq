@@ -7,6 +7,17 @@ const GRADE_ORDER = ['N/A', 'F', 'D-', 'D', 'D+', 'C-', 'C', 'C+', 'B-', 'B', 'B
 const RARITY_ORDER = { common: 0, uncommon: 1, rare: 2, mythic: 3 };
 const WUBRG = { W: 0, U: 1, B: 2, R: 3, G: 4 };
 
+const METRIC_INFO = {
+    'DEq':        'Estimated Draft Equity — expected win-rate gain from picking this card over a basic land.',
+    'MWR':        'Marginal Win Rate — GP win rate versus the set mean.',
+    'PEq':        'Pick Equity — estimated opportunity cost in win rate at the observed ATA.',
+    'Adj':        'Adjustment — correction for selection bias and expected metagame drift.',
+    'Played DEq': 'Sum of components before scaling by % GP — the expected marginal win-rate when registered.',
+    '% GP':       'Games Played % — fraction of drafted games where this card is in the main deck.',
+    'NPR':        'Normalized Pick Rate — top-player pick preference; each +1.0 means twice as likely to be taken from a fresh pack.',
+    '% Top':      'Share of DEq derived from top-player data, based on sample size.',
+};
+
 function colorSortKey(color) {
     if (!color) return -1;
     let val = 0;
@@ -112,20 +123,47 @@ const modalToggle = document.getElementById('modalToggle');
 const modalToggleBack = document.getElementById('modalToggleBack');
 let openModalIdx = -1;
 
-function openModal(idx) {
+function openModal(idx, preserveToggle = false) {
     const card = currentRenderedData[idx];
     openModalIdx = idx;
     modalImage.src = card.image_url || '';
     modalImage.alt = card.name;
-    document.getElementById('modalGrade').textContent = card.deq_grade;
-    document.getElementById('modalDeq').textContent = deqFormat(card.deq);
+
+    document.getElementById('modalCardName').textContent = card.name;
+    document.getElementById('modalCardColor').innerHTML = colorPipsHtml(card.color);
+    document.getElementById('modalCardRarity').innerHTML = rarityPipHtml(card.rarity);
+
+    const gradeEl = document.getElementById('modalGrade');
+    gradeEl.textContent = card.deq_grade;
+    gradeEl.className = 'info-grade ' + gradeColorClass(card.deq_grade);
+
+    const deqEl = document.getElementById('modalDeq');
+    deqEl.textContent = deqFormat(card.deq);
+    deqEl.className = 'info-deq-value ' + signClass(card.deq);
+
     document.getElementById('modalNpr').textContent = nprFormat(card.npr);
     document.getElementById('modalPctTop').textContent = pctFormat(card.pct_top);
-    document.getElementById('modalMwr').textContent = deqFormat(card.mwr);
-    document.getElementById('modalPeq').textContent = deqFormat(card.pick_equity);
-    document.getElementById('modalAdj').textContent = deqFormat(card.adj);
     document.getElementById('modalPctGp').textContent = pctFormat(card.pct_gp);
-    modalBody.classList.remove('show-stats');
+
+    const setComp = (id, val) => {
+        const el = document.getElementById(id);
+        el.textContent = deqFormatAbs(val);
+        el.className = 'calc-value ' + signClass(val);
+    };
+    setComp('modalMwr', card.mwr);
+    document.getElementById('modalPeqOp').textContent = (typeof card.pick_equity === 'number' && card.pick_equity < 0) ? '−' : '+';
+    setComp('modalPeq', card.pick_equity);
+    document.getElementById('modalAdjOp').textContent = (typeof card.adj === 'number' && card.adj < 0) ? '−' : '+';
+    setComp('modalAdj', card.adj);
+
+    const playedDeq = (typeof card.mwr === 'number' && typeof card.pick_equity === 'number' && typeof card.adj === 'number')
+        ? card.mwr + card.pick_equity + card.adj : null;
+    const playedDeqEl = document.getElementById('modalPlayedDeq');
+    playedDeqEl.textContent = playedDeq !== null ? deqFormat(playedDeq) : 'N/A';
+    playedDeqEl.className = 'calc-value ' + (playedDeq !== null ? signClass(playedDeq) : '');
+
+    if (!preserveToggle) modalBody.classList.remove('show-stats');
+    showTooltip('DEq');
     modalPrev.disabled = idx <= 0;
     modalNext.disabled = idx >= currentRenderedData.length - 1;
     modal.classList.add('active');
@@ -136,12 +174,19 @@ function closeModal() {
 }
 
 modalClose.addEventListener('click', closeModal);
-modalPrev.addEventListener('click', () => openModal(openModalIdx - 1));
-modalNext.addEventListener('click', () => openModal(openModalIdx + 1));
+modalPrev.addEventListener('click', () => openModal(openModalIdx - 1, true));
+modalNext.addEventListener('click', () => openModal(openModalIdx + 1, true));
 modalToggle.addEventListener('click', () => modalBody.classList.add('show-stats'));
 modalToggleBack.addEventListener('click', () => modalBody.classList.remove('show-stats'));
 modal.addEventListener('click', function(e) {
     if (e.target === modal) closeModal();
+});
+
+modal.addEventListener('click', function(e) {
+    const btn = e.target.closest('.tip-btn[data-metric]');
+    if (!btn) return;
+    e.stopPropagation();
+    showTooltip(btn.dataset.metric);
 });
 
 let touchStartX = 0, touchStartY = 0;
@@ -155,16 +200,16 @@ modal.addEventListener('touchend', e => {
     const dx = e.changedTouches[0].clientX - touchStartX;
     const dy = e.changedTouches[0].clientY - touchStartY;
     if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
-        if (dx < 0 && !modalNext.disabled) openModal(openModalIdx + 1);
-        if (dx > 0 && !modalPrev.disabled) openModal(openModalIdx - 1);
+        if (dx < 0 && !modalNext.disabled) openModal(openModalIdx + 1, true);
+        if (dx > 0 && !modalPrev.disabled) openModal(openModalIdx - 1, true);
     }
 }, { passive: true });
 
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') closeModal();
     if (!modal.classList.contains('active')) return;
-    if (e.key === 'ArrowLeft' && !modalPrev.disabled) openModal(openModalIdx - 1);
-    if (e.key === 'ArrowRight' && !modalNext.disabled) openModal(openModalIdx + 1);
+    if (e.key === 'ArrowLeft' && !modalPrev.disabled) openModal(openModalIdx - 1, true);
+    if (e.key === 'ArrowRight' && !modalNext.disabled) openModal(openModalIdx + 1, true);
 });
 
 document.getElementById('tableBody').addEventListener('click', function(e) {
@@ -172,6 +217,38 @@ document.getElementById('tableBody').addEventListener('click', function(e) {
     if (!cell) return;
     openModal(parseInt(cell.dataset.idx, 10));
 });
+
+function showTooltip(metric) {
+    document.getElementById('tooltipName').textContent = metric;
+    document.getElementById('tooltipText').textContent = METRIC_INFO[metric] || '';
+}
+
+function colorPipsHtml(color) {
+    if (!color) return '<span class="color-pip pip-C"></span>C';
+    return color.split('').map(c => `<span class="color-pip pip-${c}"></span>`).join('') + color;
+}
+
+function rarityPipHtml(rarity) {
+    if (!rarity) return '';
+    const label = rarity.charAt(0).toUpperCase() + rarity.slice(1);
+    return `<span class="rarity-pip pip-${rarity}"></span>${label}`;
+}
+
+// Grade and sign color helpers
+function gradeColorClass(grade) {
+    if (!grade || grade === 'N/A') return '';
+    if (grade === 'A+') return 'grade-aplus';
+    if (grade.startsWith('A')) return 'grade-a';
+    if (grade.startsWith('B')) return 'grade-b';
+    if (grade.startsWith('D')) return 'grade-d';
+    if (grade === 'F') return 'grade-f';
+    return '';
+}
+
+function signClass(num) {
+    if (typeof num !== 'number') return '';
+    return num > 0 ? 'val-pos' : num < 0 ? 'val-neg' : '';
+}
 
 // Formatters
 function deqFormat(num) {
@@ -181,6 +258,14 @@ function deqFormat(num) {
         maximumFractionDigits: 2,
         signDisplay: 'always',
     }) : "N/A"
+}
+
+function deqFormatAbs(num) {
+    return typeof num === 'number' ? Math.abs(num).toLocaleString('en-US', {
+        style: 'percent',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    }) : 'N/A';
 }
 
 function nprFormat(num) {

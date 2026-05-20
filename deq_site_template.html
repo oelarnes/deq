@@ -139,45 +139,64 @@ DEq is not affiliated with 17Lands.
                 </div>
                 <div class="modal-data-panel">
                     <div class="modal-metrics-container">
-                        <table class="modal-metrics-view" id="modalMetricsView">
-                            <tr>
-                                <td class="mv-label">NPR</td>
-                                <td class="mv-value" id="modalNpr"></td>
-                            </tr>
-                            <tr>
-                                <td class="mv-label">% Top</td>
-                                <td class="mv-value" id="modalPctTop"></td>
-                            </tr>
-                            <tr class="col-embargo">
-                                <td class="mv-label">MWR</td>
-                                <td class="mv-value" id="modalMwr"></td>
-                            </tr>
-                            <tr class="col-embargo">
-                                <td class="mv-label">PEq</td>
-                                <td class="mv-value" id="modalPeq"></td>
-                            </tr>
-                            <tr class="col-embargo">
-                                <td class="mv-label">Adj</td>
-                                <td class="mv-value" id="modalAdj"></td>
-                            </tr>
-                            <tr>
-                                <td class="mv-label">% GP</td>
-                                <td class="mv-value" id="modalPctGp"></td>
-                            </tr>
-                        </table>
+                        <div class="stat-panel">
+                            <div class="stat-card-header">
+                                <div class="stat-card-name" id="modalCardName"></div>
+                                <div class="stat-card-meta">
+                                    <span id="modalCardColor"></span><span class="stat-sep">·</span><span id="modalCardRarity"></span>
+                                </div>
+                            </div>
+                            <div class="stat-top-info">
+                                <span>NPR <button class="tip-btn" data-metric="NPR" title="Normalized Pick Rate: top-player pick preference on a log scale; +1.0 means twice as likely to be taken from a fresh pack.">?</button> <span id="modalNpr"></span></span>
+                                <span class="stat-sep">·</span>
+                                <span>% Top <button class="tip-btn" data-metric="% Top" title="Share of DEq derived from top-player data, based on sample size.">?</button> <span id="modalPctTop"></span></span>
+                            </div>
+                            <div class="stat-tooltip-area">
+                                <div class="tooltip-metric-name" id="tooltipName"></div>
+                                <div class="tooltip-text" id="tooltipText"></div>
+                            </div>
+                            <div class="stat-calc">
+                                <div class="calc-row col-embargo">
+                                    <span class="calc-label">MWR <button class="tip-btn" data-metric="MWR" title="Marginal Win Rate: GP win rate vs. the set mean.">?</button></span>
+                                    <span class="calc-op"></span>
+                                    <span class="calc-value" id="modalMwr"></span>
+                                </div>
+                                <div class="calc-row col-embargo">
+                                    <span class="calc-label">PEq <button class="tip-btn" data-metric="PEq" title="Pick Equity: estimated opportunity cost in win rate at the observed ATA.">?</button></span>
+                                    <span class="calc-op" id="modalPeqOp"></span>
+                                    <span class="calc-value" id="modalPeq"></span>
+                                </div>
+                                <div class="calc-row col-embargo">
+                                    <span class="calc-label">Adj <button class="tip-btn" data-metric="Adj" title="Adjustment: correction for selection bias and expected metagame drift.">?</button></span>
+                                    <span class="calc-op" id="modalAdjOp"></span>
+                                    <span class="calc-value" id="modalAdj"></span>
+                                </div>
+                                <div class="calc-tally col-embargo"></div>
+                                <div class="calc-row calc-subtotal col-embargo">
+                                    <span class="calc-label">Played DEq <button class="tip-btn" data-metric="Played DEq" title="Sum of components before scaling by % GP.">?</button></span>
+                                    <span class="calc-op"></span>
+                                    <span class="calc-value" id="modalPlayedDeq"></span>
+                                </div>
+                                <div class="calc-row">
+                                    <span class="calc-label">% GP <button class="tip-btn" data-metric="% GP" title="Fraction of games where the drafted card is registered in the main deck.">?</button></span>
+                                    <span class="calc-op">×</span>
+                                    <span class="calc-value" id="modalPctGp"></span>
+                                </div>
+                                <div class="calc-tally"></div>
+                            </div>
+                        </div>
                         <button class="modal-toggle-back" id="modalToggleBack" type="button">Card</button>
                     </div>
                     <div class="modal-stats-container">
-                        <table class="modal-stats">
-                            <tr class="stat-item">
-                                <td class="stat-label">DEq</td>
-                                <td class="stat-value" id="modalDeq"></td>
-                            </tr>
-                            <tr class="stat-item">
-                                <td class="stat-label">Grade</td>
-                                <td class="stat-value" id="modalGrade"></td>
-                            </tr>
-                        </table>
+                        <div class="info-panel">
+                            <div class="info-grade-area">
+                                <span class="info-grade" id="modalGrade"></span>
+                            </div>
+                            <div class="info-deq-area">
+                                <span class="info-deq-value" id="modalDeq"></span>
+                                <span class="info-deq-label">DEq</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
