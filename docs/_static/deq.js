@@ -1,6 +1,7 @@
 let deq_table = [];
 let currentRenderedData = [];
 let sortState = { col: 'deq', dir: 'desc' };
+let currentSetCode = '';
 
 // Grade ordered worst→best so desc sort puts A+ first
 const GRADE_ORDER = ['N/A', 'F', 'D-', 'D', 'D+', 'C-', 'C', 'C+', 'B-', 'B', 'B+', 'A-', 'A', 'A+'];
@@ -8,13 +9,13 @@ const RARITY_ORDER = { common: 0, uncommon: 1, rare: 2, mythic: 3 };
 const WUBRG = { W: 0, U: 1, B: 2, R: 3, G: 4 };
 
 const METRIC_INFO = {
-    'DEq':        'Estimated Draft Equity — expected win-rate gain from picking this card over a basic land.',
-    'MWR':        'Marginal Win Rate — GP win rate versus the set mean.',
-    'PEq':        'Pick Equity — estimated opportunity cost in win rate at the observed ATA.',
-    'Adj':        'Adjustment — correction for selection bias and expected metagame drift.',
-    'Played DEq': 'Sum of components before scaling by % GP — the expected marginal win-rate when registered.',
-    '% GP':       'Games Played % — fraction of drafted games where this card is in the main deck.',
-    'NPR':        'Normalized Pick Rate — top-player pick preference; each +1.0 means twice as likely to be taken from a fresh pack.',
+    'DEq':        'Estimated Draft Equity: expected win-rate gain from picking this card over a basic land.',
+    'MWR':        'Marginal Win Rate: GP win rate versus the set mean.',
+    'PEq':        'Pick Equity: estimated opportunity cost in win rate at the observed ATA.',
+    'Adj':        'Adjustment: correction for selection bias and expected metagame drift.',
+    'Played DEq': 'Sum of components before scaling by % GP, representing the expected marginal win-rate when registered.',
+    '% GP':       'Games Played %: fraction of drafted games where this card is in the main deck.',
+    'NPR':        'Normalized Pick Rate: top-player pick preference; each +1.0 means twice as likely to be taken from a fresh pack.',
     '% Top':      'Share of DEq derived from top-player data, based on sample size.',
 };
 
@@ -130,6 +131,7 @@ function openModal(idx, preserveToggle = false) {
     modalImage.alt = card.name;
 
     document.getElementById('modalCardName').textContent = card.name;
+    document.getElementById('modalCardSet').textContent = currentSetCode;
     document.getElementById('modalCardColor').innerHTML = colorPipsHtml(card.color);
     document.getElementById('modalCardRarity').innerHTML = rarityPipHtml(card.rarity);
 
@@ -139,7 +141,7 @@ function openModal(idx, preserveToggle = false) {
 
     const deqEl = document.getElementById('modalDeq');
     deqEl.textContent = deqFormat(card.deq);
-    deqEl.className = 'info-deq-value ' + signClass(card.deq);
+    deqEl.className = 'info-deq-value ' + gradeColorClass(card.deq_grade);
 
     document.getElementById('modalNpr').textContent = nprFormat(card.npr);
     document.getElementById('modalPctTop').textContent = pctFormat(card.pct_top);
@@ -179,10 +181,7 @@ modalNext.addEventListener('click', () => openModal(openModalIdx + 1, true));
 modalToggle.addEventListener('click', () => modalBody.classList.add('show-stats'));
 modalToggleBack.addEventListener('click', () => modalBody.classList.remove('show-stats'));
 modal.addEventListener('click', function(e) {
-    if (e.target === modal) closeModal();
-});
-
-modal.addEventListener('click', function(e) {
+    if (e.target === modal) { closeModal(); return; }
     const btn = e.target.closest('.tip-btn[data-metric]');
     if (!btn) return;
     e.stopPropagation();
@@ -236,13 +235,14 @@ function rarityPipHtml(rarity) {
 
 // Grade and sign color helpers
 function gradeColorClass(grade) {
-    if (!grade || grade === 'N/A') return '';
-    if (grade === 'A+') return 'grade-aplus';
-    if (grade.startsWith('A')) return 'grade-a';
-    if (grade.startsWith('B')) return 'grade-b';
-    if (grade.startsWith('D')) return 'grade-d';
-    if (grade === 'F') return 'grade-f';
-    return '';
+    const map = {
+        'A+': 'grade-aplus',  'A': 'grade-a',      'A-': 'grade-aminus',
+        'B+': 'grade-bplus',  'B': 'grade-b',      'B-': 'grade-bminus',
+        'C+': 'grade-cplus',  'C': 'grade-c',      'C-': 'grade-cminus',
+        'D+': 'grade-dplus',  'D': 'grade-d',      'D-': 'grade-dminus',
+        'F':  'grade-f',
+    };
+    return map[grade] || '';
 }
 
 function signClass(num) {
@@ -252,12 +252,12 @@ function signClass(num) {
 
 // Formatters
 function deqFormat(num) {
-    return typeof(num) === "number" ? num.toLocaleString('en-US', {
+    return typeof num === 'number' ? num.toLocaleString('en-US', {
         style: 'percent',
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
         signDisplay: 'always',
-    }) : "N/A"
+    }) : 'N/A';
 }
 
 function deqFormatAbs(num) {
@@ -269,18 +269,18 @@ function deqFormatAbs(num) {
 }
 
 function nprFormat(num) {
-    return typeof(num) == "number" ? num.toLocaleString('en-US', {
+    return typeof num === 'number' ? num.toLocaleString('en-US', {
         minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    }) : "N/A"
+        maximumFractionDigits: 2,
+    }) : 'N/A';
 }
 
 function pctFormat(num) {
-    return typeof(num) == "number" ? num.toLocaleString('en-US', {
-        style: "percent",
+    return typeof num === 'number' ? num.toLocaleString('en-US', {
+        style: 'percent',
         minimumFractionDigits: 1,
-        maximumFractionDigits: 1
-    }) : "N/A"
+        maximumFractionDigits: 1,
+    }) : 'N/A';
 }
 
 // Table rendering
@@ -434,6 +434,7 @@ async function loadSet(setCode) {
     const data = await response.json();
     document.getElementById('startDate').textContent = data.start_date;
     document.getElementById('endDate').textContent = data.end_date;
+    currentSetCode = data.set_code;
     document.title = `${data.set_code} DEq: Estimated Draft Equity`;
     document.getElementById('dataTable').classList.toggle('embargo-active', !!data.embargoed);
     modal.classList.toggle('embargo-active', !!data.embargoed);

@@ -13,35 +13,32 @@
     <link rel="stylesheet" type="text/css" href="_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css" />
     <link rel="stylesheet" type="text/css" href="_static/sphinx-thebe.css" />
     <link rel="stylesheet" type="text/css" href="_static/sphinx-design.min.css" />
-    <link rel="stylesheet" type="text/css" href="_static/.ipynb_checkpoints/style-checkpoint.css" />
     <link rel="stylesheet" type="text/css" href="_static/style.css?v={version}" />
     <link rel="icon" href="_static/deq.png"/>
 </head>
 <body>
     <div class="deq-container">
-        <div class="header">
-            <div class="deq-logo">DEq</div>
-        </div>
+        <div class="deq-logo">DEq</div>
 
         <div class="info-table-container">
             <table class="info-table">
-                <tr class="info-header-row">
+                <tr>
                     <th>Set</th>
                     <th>Start</th>
                     <th>End</th>
                     <th>?</th>
                 </tr>
-                <tr class="info-value-row">
-                    <td class="cell-content dropdown" id="dropdown">
+                <tr>
+                    <td id="dropdown">
                         <select name="set-code" id="link-select">
                             {select_elements}
                         </select>
                     </td>
                     <td>
-                        <div class="cell-content" id="startDate"> {start_date} </div>
+                        <div id="startDate"> {start_date} </div>
                     </td>
                     <td>
-                        <div class="cell-content" id="endDate"> {end_date} </div>
+                        <div id="endDate"> {end_date} </div>
                     </td>
                     <td>
                         <button class="doc-button" id="docButton"><span>▼</span></button>
@@ -143,13 +140,13 @@ DEq is not affiliated with 17Lands.
                             <div class="stat-card-header">
                                 <div class="stat-card-name" id="modalCardName"></div>
                                 <div class="stat-card-meta">
-                                    <span id="modalCardColor"></span><span class="stat-sep">·</span><span id="modalCardRarity"></span>
+                                    <span id="modalCardSet"></span><span class="stat-sep">·</span><span id="modalCardColor"></span><span class="stat-sep">·</span><span id="modalCardRarity"></span>
                                 </div>
                             </div>
                             <div class="stat-top-info">
-                                <span>NPR <button class="tip-btn" data-metric="NPR" title="Normalized Pick Rate: top-player pick preference on a log scale; +1.0 means twice as likely to be taken from a fresh pack.">?</button> <span id="modalNpr"></span></span>
+                                <span>NPR <button class="tip-btn" data-metric="NPR" title="Normalized Pick Rate: top-player pick preference; each +1.0 means twice as likely to be taken from a fresh pack.">?</button> <span id="modalNpr" class="stat-top-value"></span></span>
                                 <span class="stat-sep">·</span>
-                                <span>% Top <button class="tip-btn" data-metric="% Top" title="Share of DEq derived from top-player data, based on sample size.">?</button> <span id="modalPctTop"></span></span>
+                                <span>% Top <button class="tip-btn" data-metric="% Top" title="Share of DEq derived from top-player data, based on sample size.">?</button> <span id="modalPctTop" class="stat-top-value"></span></span>
                             </div>
                             <div class="stat-tooltip-area">
                                 <div class="tooltip-metric-name" id="tooltipName"></div>
@@ -157,7 +154,7 @@ DEq is not affiliated with 17Lands.
                             </div>
                             <div class="stat-calc">
                                 <div class="calc-row col-embargo">
-                                    <span class="calc-label">MWR <button class="tip-btn" data-metric="MWR" title="Marginal Win Rate: GP win rate vs. the set mean.">?</button></span>
+                                    <span class="calc-label">MWR <button class="tip-btn" data-metric="MWR" title="Marginal Win Rate: GP win rate versus the set mean.">?</button></span>
                                     <span class="calc-op"></span>
                                     <span class="calc-value" id="modalMwr"></span>
                                 </div>
@@ -173,12 +170,12 @@ DEq is not affiliated with 17Lands.
                                 </div>
                                 <div class="calc-tally col-embargo"></div>
                                 <div class="calc-row calc-subtotal col-embargo">
-                                    <span class="calc-label">Played DEq <button class="tip-btn" data-metric="Played DEq" title="Sum of components before scaling by % GP.">?</button></span>
+                                    <span class="calc-label">Played DEq <button class="tip-btn" data-metric="Played DEq" title="Sum of components before scaling by % GP, representing the expected marginal win-rate when registered.">?</button></span>
                                     <span class="calc-op"></span>
                                     <span class="calc-value" id="modalPlayedDeq"></span>
                                 </div>
                                 <div class="calc-row">
-                                    <span class="calc-label">% GP <button class="tip-btn" data-metric="% GP" title="Fraction of games where the drafted card is registered in the main deck.">?</button></span>
+                                    <span class="calc-label">% GP <button class="tip-btn" data-metric="% GP" title="Games Played %: fraction of drafted games where this card is in the main deck.">?</button></span>
                                     <span class="calc-op">×</span>
                                     <span class="calc-value" id="modalPctGp"></span>
                                 </div>
@@ -189,12 +186,12 @@ DEq is not affiliated with 17Lands.
                     </div>
                     <div class="modal-stats-container">
                         <div class="info-panel">
-                            <div class="info-grade-area">
+                            <div class="info-grade-inset">
                                 <span class="info-grade" id="modalGrade"></span>
                             </div>
-                            <div class="info-deq-area">
+                            <div class="info-score-inset">
+                                <span class="info-score-label">DEq <button class="tip-btn" data-metric="DEq" title="Estimated Draft Equity: expected win-rate gain from picking this card over a basic land.">?</button></span>
                                 <span class="info-deq-value" id="modalDeq"></span>
-                                <span class="info-deq-label">DEq</span>
                             </div>
                         </div>
                     </div>
