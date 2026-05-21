@@ -347,9 +347,9 @@ function renderTable(data) {
             <td class="name-cell" data-idx="${i}">${row.name}</td>
             <td>${row.color}</td>
             <td class="col-hidden">${row.rarity}</td>
-            <td class="col-hidden col-embargo ${signClass(row.mwr)}">${deqFormat(row.mwr)}</td>
-            <td class="col-hidden col-embargo">${deqFormat(row.pick_equity)}</td>
-            <td class="col-hidden col-embargo ${signClass(row.adj)}">${deqFormat(row.adj)}</td>
+            <td class="col-hidden col-embargo">${deqFormat(row.mwr)}</td>
+            <td class="col-hidden col-embargo">${deqFormatAbs(row.pick_equity)}</td>
+            <td class="col-hidden col-embargo">${deqFormat(row.adj)}</td>
             <td class="col-hidden col-embargo">${pctFormat(row.pct_gp)}</td>
             <td class="col-hidden">${pctFormat(row.pct_top)}</td>
             <td class="col-hidden">${nprFormat(row.npr)}</td>
