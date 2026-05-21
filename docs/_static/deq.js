@@ -185,7 +185,9 @@ function openModal(idx, preserveToggle = false) {
             el.textContent = deqFormatAbs(val);
             el.className = 'calc-value ' + signClass(val);
         };
-        setComp('modalMwr', card.mwr);
+        const mwrEl = document.getElementById('modalMwr');
+        mwrEl.textContent = deqFormat(card.mwr);
+        mwrEl.className = 'calc-value ' + signClass(card.mwr);
         document.getElementById('modalPeqOp').textContent = (typeof card.pick_equity === 'number' && card.pick_equity < 0) ? '−' : '+';
         setComp('modalPeq', card.pick_equity);
         document.getElementById('modalAdjOp').textContent = (typeof card.adj === 'number' && card.adj < 0) ? '−' : '+';
@@ -345,9 +347,9 @@ function renderTable(data) {
             <td class="name-cell" data-idx="${i}">${row.name}</td>
             <td>${row.color}</td>
             <td class="col-hidden">${row.rarity}</td>
-            <td class="col-hidden col-embargo">${deqFormat(row.mwr)}</td>
+            <td class="col-hidden col-embargo ${signClass(row.mwr)}">${deqFormat(row.mwr)}</td>
             <td class="col-hidden col-embargo">${deqFormat(row.pick_equity)}</td>
-            <td class="col-hidden col-embargo">${deqFormat(row.adj)}</td>
+            <td class="col-hidden col-embargo ${signClass(row.adj)}">${deqFormat(row.adj)}</td>
             <td class="col-hidden col-embargo">${pctFormat(row.pct_gp)}</td>
             <td class="col-hidden">${pctFormat(row.pct_top)}</td>
             <td class="col-hidden">${nprFormat(row.npr)}</td>
