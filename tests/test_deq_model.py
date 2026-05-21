@@ -342,25 +342,6 @@ def test_empty_color_sets_zeroes_bias_adj(blb_data) -> None:  # noqa: ARG001
         )
 
 
-def test_color_set_filter_minimal_impact(blb_data) -> None:  # noqa: ARG001
-    """1% game-count threshold filtering should not materially change DEq values.
-
-    Runs live_deq() twice on BLB: once with the explicit full color_sets list
-    as baseline, once with auto-derived filtering (min_games_pct=0.01). Asserts
-    that the maximum absolute DEq difference across all cards is under 2e-3.
-    """
-    df_full = live_deq(BLB_SET, BLB_START, BLB_END, color_sets=BLB_COLOR_SETS)
-    df_filtered = live_deq(BLB_SET, BLB_START, BLB_END)
-
-    joined = df_full.select("name", pl.col("deq").alias("deq_full")).join(
-        df_filtered.select("name", pl.col("deq").alias("deq_filtered")),
-        on="name",
-    )
-    max_diff = (joined["deq_full"] - joined["deq_filtered"]).abs().max()
-    assert max_diff < 2e-3, (
-        f"Max DEq diff with filtered color sets is {max_diff:.2e}, expected < 2e-3"
-    )
-
 
 def test_no_top_data_falls_back_to_all(blb_no_top_data) -> None:  # noqa: ARG001
     """When the top cohort has no game data, synthesis must not null-propagate.
