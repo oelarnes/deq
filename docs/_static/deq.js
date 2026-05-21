@@ -9,14 +9,24 @@ const RARITY_ORDER = { common: 0, uncommon: 1, rare: 2, mythic: 3 };
 const WUBRG = { W: 0, U: 1, B: 2, R: 3, G: 4 };
 
 const METRIC_INFO = {
-    'DEq':        'Estimated Draft Equity: expected win-rate gain from picking this card over a basic land.',
+    'DEq':        'Estimated Draft Equity: Expected win-rate gain from picking this card over a basic land.',
     'MWR':        'Marginal Win Rate: GP win rate versus the set mean.',
-    'PEq':        'Pick Equity: estimated opportunity cost in win rate at the observed ATA.',
-    'Adj':        'Adjustment: correction for selection bias and expected metagame drift.',
+    'PEq':        'Pick Equity: Estimated opportunity cost in win rate at the observed ATA.',
+    'Adj':        'Adjustment: Correction for selection bias and expected metagame drift.',
     'Played DEq': 'Sum of components before scaling by % GP, representing the expected marginal win-rate when registered.',
-    '% GP':       'Games Played %: fraction of drafted games where this card is in the main deck.',
-    'NPR':        'Normalized Pick Rate: top-player pick preference; each +1.0 means twice as likely to be taken from a fresh pack.',
-    '% Top':      'Share of DEq derived from top-player data, based on sample size.',
+    '% GP':       'Play Rate: The rate at which this card was included in the deck (when available in the card pool).',
+    'NPR':        'Normalized Pick Rate: Top-player pick preference; each +1.0 means twice as likely to be taken from a fresh pack.',
+    '% Top':      'Share of DEq and component metrics derived from top-player data, based on sample size.',
+};
+
+const COL_DESC = {
+    'grade':       'A+ to F letter grade, using fixed DEq increments.',
+    'deq':         '<strong>Estimated Draft Equity:</strong> Expected win-rate gain from picking this card over a basic land.',
+    'mwr':         '<strong>Marginal Win Rate:</strong> GP win rate versus the set mean.',
+    'pick_equity': '<strong>Pick Equity:</strong> Estimated opportunity cost measured in win rate at the observed ATA.',
+    'adj':         '<strong>Adjustment:</strong> Correction for selection bias due to deck strength and expected drift in the metagame.',
+    'pct_top':     'Share of DEq and component metrics derived from top-player data, based on sample size.',
+    'npr':         '<strong>Normalized Pick Rate:</strong> Top-player pick preference; each +1.0 means twice as likely to be taken from a fresh pack.',
 };
 
 function colorSortKey(color) {
@@ -53,6 +63,10 @@ document.addEventListener('click', function(event) {
 
 // Column description row (shown as first tbody row when a ? is active)
 let openColDesc = null;
+
+document.querySelectorAll('.col-info[data-col]').forEach(btn => {
+    btn.dataset.colDesc = COL_DESC[btn.dataset.col] || '';
+});
 
 document.querySelectorAll('.col-info').forEach(btn => {
     btn.addEventListener('click', function(e) {
@@ -116,7 +130,7 @@ document.querySelector('#dataTable thead').addEventListener('click', function(e)
 
 // Modal
 const modal = document.getElementById('modal');
-const modalClose = document.getElementById('modalClose');
+const modalImage = document.getElementById('modalImage');
 const modalPrev = document.getElementById('modalPrev');
 const modalNext = document.getElementById('modalNext');
 const modalBody = document.querySelector('.modal-body');
@@ -141,7 +155,6 @@ function openModal(idx, preserveToggle = false) {
 
     const deqEl = document.getElementById('modalDeq');
     deqEl.textContent = deqFormat(card.deq);
-    deqEl.className = 'info-deq-value ' + gradeColorClass(card.deq_grade);
 
     document.getElementById('modalNpr').textContent = nprFormat(card.npr);
     document.getElementById('modalPctTop').textContent = pctFormat(card.pct_top);
@@ -175,17 +188,20 @@ function closeModal() {
     modal.classList.remove('active');
 }
 
-modalClose.addEventListener('click', closeModal);
 modalPrev.addEventListener('click', () => openModal(openModalIdx - 1, true));
 modalNext.addEventListener('click', () => openModal(openModalIdx + 1, true));
 modalToggle.addEventListener('click', () => modalBody.classList.add('show-stats'));
 modalToggleBack.addEventListener('click', () => modalBody.classList.remove('show-stats'));
+document.getElementById('infoDeqTitle').addEventListener('click', () => {
+    modalBody.classList.add('show-stats');
+    showTooltip('DEq');
+});
 modal.addEventListener('click', function(e) {
     if (e.target === modal) { closeModal(); return; }
-    const btn = e.target.closest('.tip-btn[data-metric]');
-    if (!btn) return;
+    const el = e.target.closest('.tip-label[data-metric]');
+    if (!el) return;
     e.stopPropagation();
-    showTooltip(btn.dataset.metric);
+    showTooltip(el.dataset.metric);
 });
 
 let touchStartX = 0, touchStartY = 0;
@@ -219,7 +235,14 @@ document.getElementById('tableBody').addEventListener('click', function(e) {
 
 function showTooltip(metric) {
     document.getElementById('tooltipName').textContent = metric;
-    document.getElementById('tooltipText').textContent = METRIC_INFO[metric] || '';
+    const info = METRIC_INFO[metric] || '';
+    const textEl = document.getElementById('tooltipText');
+    const sep = info.indexOf(': ');
+    if (sep !== -1) {
+        textEl.innerHTML = `<strong>${info.slice(0, sep)}:</strong> ${info.slice(sep + 2)}`;
+    } else {
+        textEl.textContent = info;
+    }
 }
 
 function colorPipsHtml(color) {

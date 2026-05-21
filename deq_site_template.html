@@ -97,17 +97,17 @@ DEq is not affiliated with 17Lands.
             <table id="dataTable">
                 <thead>
                     <tr>
-                        <th>Grade <button class="col-info" data-col-desc="A+ to F letter grade, using fixed DEq increments.">?</button></th>
-                        <th data-sort="deq">DEq <span class="sort-ind">▼</span><button class="col-info" data-col-desc="<strong>Estimated Draft Equity.</strong> Expected win-rate gain from picking this card over a basic land.">?</button></th>
+                        <th>Grade <button class="col-info" data-col="grade">?</button></th>
+                        <th data-sort="deq">DEq <span class="sort-ind">▼</span><button class="col-info" data-col="deq">?</button></th>
                         <th data-sort="name">Name <span class="sort-ind"></span></th>
                         <th data-sort="color">Color <span class="sort-ind"></span></th>
                         <th class="col-hidden" data-sort="rarity">Rarity <span class="sort-ind"></span></th>
-                        <th class="col-hidden col-embargo" data-sort="mwr">MWR <span class="sort-ind"></span><button class="col-info" data-col-desc="<strong>Marginal Win Rate.</strong> GP win rate versus the set mean.">?</button></th>
-                        <th class="col-hidden col-embargo" data-sort="pick_equity">PEq <span class="sort-ind"></span><button class="col-info" data-col-desc="<strong>Pick Equity.</strong> Estimated opportunity cost measured in win rate at observed ATA.">?</button></th>
-                        <th class="col-hidden col-embargo" data-sort="adj">Adj <span class="sort-ind"></span><button class="col-info" data-col-desc="<strong>Adjustment.</strong> Correction for selection bias due to deck strength and expected drift in the metagame.">?</button></th>
+                        <th class="col-hidden col-embargo" data-sort="mwr">MWR <span class="sort-ind"></span><button class="col-info" data-col="mwr">?</button></th>
+                        <th class="col-hidden col-embargo" data-sort="pick_equity">PEq <span class="sort-ind"></span><button class="col-info" data-col="pick_equity">?</button></th>
+                        <th class="col-hidden col-embargo" data-sort="adj">Adj <span class="sort-ind"></span><button class="col-info" data-col="adj">?</button></th>
                         <th class="col-hidden" data-sort="pct_gp">% GP <span class="sort-ind"></span></th>
-                        <th class="col-hidden">% Top <button class="col-info" data-col-desc="Share of DEq derived from top-player data, based on sample size.">?</button></th>
-                        <th class="col-hidden" data-sort="npr">NPR <span class="sort-ind"></span><button class="col-info" data-col-desc="<strong>Normalized Pick Rate.</strong> Top-player pick preference; each +1.0 means twice as likely to be taken from a fresh pack.">?</button></th>
+                        <th class="col-hidden">% Top <button class="col-info" data-col="pct_top">?</button></th>
+                        <th class="col-hidden" data-sort="npr">NPR <span class="sort-ind"></span><button class="col-info" data-col="npr">?</button></th>
                     </tr>
                 </thead>
                 <tbody id="tableBody"></tbody>
@@ -126,7 +126,6 @@ DEq is not affiliated with 17Lands.
         <div class="modal-content">
             <button class="modal-nav" id="modalPrev">&#8249;</button>
             <button class="modal-nav" id="modalNext">&#8250;</button>
-            <button class="modal-close" id="modalClose">&times;</button>
             <div class="modal-body">
                 <div class="modal-left">
                     <div class="modal-image-container">
@@ -144,9 +143,9 @@ DEq is not affiliated with 17Lands.
                                 </div>
                             </div>
                             <div class="stat-top-info">
-                                <span>NPR <button class="tip-btn" data-metric="NPR" title="Normalized Pick Rate: top-player pick preference; each +1.0 means twice as likely to be taken from a fresh pack.">?</button> <span id="modalNpr" class="stat-top-value"></span></span>
+                                <span><span class="tip-label" data-metric="NPR">NPR</span> <span id="modalNpr" class="stat-top-value"></span></span>
                                 <span class="stat-sep">·</span>
-                                <span>% Top <button class="tip-btn" data-metric="% Top" title="Share of DEq derived from top-player data, based on sample size.">?</button> <span id="modalPctTop" class="stat-top-value"></span></span>
+                                <span><span class="tip-label" data-metric="% Top">% Top</span> <span id="modalPctTop" class="stat-top-value"></span></span>
                             </div>
                             <div class="stat-tooltip-area">
                                 <div class="tooltip-metric-name" id="tooltipName"></div>
@@ -154,33 +153,34 @@ DEq is not affiliated with 17Lands.
                             </div>
                             <div class="stat-calc">
                                 <div class="calc-row col-embargo">
-                                    <span class="calc-label">MWR <button class="tip-btn" data-metric="MWR" title="Marginal Win Rate: GP win rate versus the set mean.">?</button></span>
+                                    <span class="calc-label tip-label" data-metric="MWR">MWR</span>
                                     <span class="calc-op"></span>
                                     <span class="calc-value" id="modalMwr"></span>
                                 </div>
                                 <div class="calc-row col-embargo">
-                                    <span class="calc-label">PEq <button class="tip-btn" data-metric="PEq" title="Pick Equity: estimated opportunity cost in win rate at the observed ATA.">?</button></span>
+                                    <span class="calc-label tip-label" data-metric="PEq">PEq</span>
                                     <span class="calc-op" id="modalPeqOp"></span>
                                     <span class="calc-value" id="modalPeq"></span>
                                 </div>
                                 <div class="calc-row col-embargo">
-                                    <span class="calc-label">Adj <button class="tip-btn" data-metric="Adj" title="Adjustment: correction for selection bias and expected metagame drift.">?</button></span>
+                                    <span class="calc-label tip-label" data-metric="Adj">Adj</span>
                                     <span class="calc-op" id="modalAdjOp"></span>
                                     <span class="calc-value" id="modalAdj"></span>
                                 </div>
                                 <div class="calc-tally col-embargo"></div>
                                 <div class="calc-row calc-subtotal col-embargo">
-                                    <span class="calc-label">Played DEq <button class="tip-btn" data-metric="Played DEq" title="Sum of components before scaling by % GP, representing the expected marginal win-rate when registered.">?</button></span>
+                                    <span class="calc-label tip-label" data-metric="Played DEq">Played DEq</span>
                                     <span class="calc-op"></span>
                                     <span class="calc-value" id="modalPlayedDeq"></span>
                                 </div>
                                 <div class="calc-row">
-                                    <span class="calc-label">% GP <button class="tip-btn" data-metric="% GP" title="Games Played %: fraction of drafted games where this card is in the main deck.">?</button></span>
+                                    <span class="calc-label tip-label" data-metric="% GP">% GP</span>
                                     <span class="calc-op">×</span>
                                     <span class="calc-value" id="modalPctGp"></span>
                                 </div>
                                 <div class="calc-tally"></div>
                             </div>
+                            <div class="stat-credit">underlying metrics courtesy <a href="https://17lands.com/card_data">17Lands</a></div>
                         </div>
                         <button class="modal-toggle-back" id="modalToggleBack" type="button">Card</button>
                     </div>
@@ -190,7 +190,10 @@ DEq is not affiliated with 17Lands.
                                 <span class="info-grade" id="modalGrade"></span>
                             </div>
                             <div class="info-score-inset">
-                                <span class="info-score-label">DEq <button class="tip-btn" data-metric="DEq" title="Estimated Draft Equity: expected win-rate gain from picking this card over a basic land.">?</button></span>
+                                <div class="info-score-label" id="infoDeqTitle">
+                                    <span class="info-deq-title">DEq</span>
+                                    <span class="info-score-credit">by MagicFlea</span>
+                                </div>
                                 <span class="info-deq-value" id="modalDeq"></span>
                             </div>
                         </div>
