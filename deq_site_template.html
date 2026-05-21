@@ -105,7 +105,7 @@ DEq is not affiliated with 17Lands.
                         <th class="col-hidden col-embargo" data-sort="mwr">MWR <span class="sort-ind"></span><button class="col-info" data-col="mwr">?</button></th>
                         <th class="col-hidden col-embargo" data-sort="pick_equity">PEq <span class="sort-ind"></span><button class="col-info" data-col="pick_equity">?</button></th>
                         <th class="col-hidden col-embargo" data-sort="adj">Adj <span class="sort-ind"></span><button class="col-info" data-col="adj">?</button></th>
-                        <th class="col-hidden" data-sort="pct_gp">% GP <span class="sort-ind"></span></th>
+                        <th class="col-hidden col-embargo" data-sort="pct_gp">% GP <span class="sort-ind"></span></th>
                         <th class="col-hidden">% Top <button class="col-info" data-col="pct_top">?</button></th>
                         <th class="col-hidden" data-sort="npr">NPR <span class="sort-ind"></span><button class="col-info" data-col="npr">?</button></th>
                     </tr>
@@ -150,6 +150,7 @@ DEq is not affiliated with 17Lands.
                             <div class="stat-tooltip-area">
                                 <div class="tooltip-metric-name" id="tooltipName"></div>
                                 <div class="tooltip-text" id="tooltipText"></div>
+                                <div class="stat-embargo-note">Note: Underlying metric values are available on <a href="https://17lands.com/card_data">17Lands.com</a> during the early days of the format.</div>
                             </div>
                             <div class="stat-calc">
                                 <div class="calc-row col-embargo">
@@ -173,9 +174,9 @@ DEq is not affiliated with 17Lands.
                                     <span class="calc-op"></span>
                                     <span class="calc-value" id="modalPlayedDeq"></span>
                                 </div>
-                                <div class="calc-row">
+                                <div class="calc-row col-embargo">
                                     <span class="calc-label tip-label" data-metric="% GP">% GP</span>
-                                    <span class="calc-op">×</span>
+                                    <span class="calc-op" id="modalPctGpOp">×</span>
                                     <span class="calc-value" id="modalPctGp"></span>
                                 </div>
                                 <div class="calc-tally"></div>

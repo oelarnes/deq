@@ -10,7 +10,7 @@ const WUBRG = { W: 0, U: 1, B: 2, R: 3, G: 4 };
 
 const METRIC_INFO = {
     'DEq':        'Estimated Draft Equity: Expected win-rate gain from picking this card over a basic land.',
-    'MWR':        'Marginal Win Rate: GP win rate versus the set mean.',
+    'MWR':        'Marginal Win Rate: GP WR versus the set mean.',
     'PEq':        'Pick Equity: Estimated opportunity cost in win rate at the observed ATA.',
     'Adj':        'Adjustment: Correction for selection bias and expected metagame drift.',
     'Played DEq': 'Sum of components before scaling by % GP, representing the expected marginal win-rate when registered.',
@@ -137,6 +137,7 @@ const modalBody = document.querySelector('.modal-body');
 const modalToggle = document.getElementById('modalToggle');
 const modalToggleBack = document.getElementById('modalToggleBack');
 let openModalIdx = -1;
+let isEmbargoed = false;
 
 function openModal(idx, preserveToggle = false) {
     const card = currentRenderedData[idx];
@@ -160,22 +161,34 @@ function openModal(idx, preserveToggle = false) {
     document.getElementById('modalPctTop').textContent = pctFormat(card.pct_top);
     document.getElementById('modalPctGp').textContent = pctFormat(card.pct_gp);
 
-    const setComp = (id, val) => {
-        const el = document.getElementById(id);
-        el.textContent = deqFormatAbs(val);
-        el.className = 'calc-value ' + signClass(val);
-    };
-    setComp('modalMwr', card.mwr);
-    document.getElementById('modalPeqOp').textContent = (typeof card.pick_equity === 'number' && card.pick_equity < 0) ? '−' : '+';
-    setComp('modalPeq', card.pick_equity);
-    document.getElementById('modalAdjOp').textContent = (typeof card.adj === 'number' && card.adj < 0) ? '−' : '+';
-    setComp('modalAdj', card.adj);
+    if (isEmbargoed) {
+        ['modalMwr', 'modalPeq', 'modalAdj', 'modalPlayedDeq', 'modalPctGp'].forEach(id => {
+            const el = document.getElementById(id);
+            el.textContent = '—';
+            el.className = 'calc-value';
+        });
+        document.getElementById('modalPeqOp').textContent = '';
+        document.getElementById('modalAdjOp').textContent = '';
+        document.getElementById('modalPctGpOp').textContent = '';
+    } else {
+        const setComp = (id, val) => {
+            const el = document.getElementById(id);
+            el.textContent = deqFormatAbs(val);
+            el.className = 'calc-value ' + signClass(val);
+        };
+        setComp('modalMwr', card.mwr);
+        document.getElementById('modalPeqOp').textContent = (typeof card.pick_equity === 'number' && card.pick_equity < 0) ? '−' : '+';
+        setComp('modalPeq', card.pick_equity);
+        document.getElementById('modalAdjOp').textContent = (typeof card.adj === 'number' && card.adj < 0) ? '−' : '+';
+        setComp('modalAdj', card.adj);
 
-    const playedDeq = (typeof card.mwr === 'number' && typeof card.pick_equity === 'number' && typeof card.adj === 'number')
-        ? card.mwr + card.pick_equity + card.adj : null;
-    const playedDeqEl = document.getElementById('modalPlayedDeq');
-    playedDeqEl.textContent = playedDeq !== null ? deqFormat(playedDeq) : 'N/A';
-    playedDeqEl.className = 'calc-value ' + (playedDeq !== null ? signClass(playedDeq) : '');
+        const playedDeq = (typeof card.mwr === 'number' && typeof card.pick_equity === 'number' && typeof card.adj === 'number')
+            ? card.mwr + card.pick_equity + card.adj : null;
+        const playedDeqEl = document.getElementById('modalPlayedDeq');
+        playedDeqEl.textContent = playedDeq !== null ? deqFormat(playedDeq) : 'N/A';
+        playedDeqEl.className = 'calc-value ' + (playedDeq !== null ? signClass(playedDeq) : '');
+        document.getElementById('modalPctGpOp').textContent = '×';
+    }
 
     if (!preserveToggle) modalBody.classList.remove('show-stats');
     showTooltip('DEq');
@@ -333,7 +346,7 @@ function renderTable(data) {
             <td class="col-hidden col-embargo">${deqFormat(row.mwr)}</td>
             <td class="col-hidden col-embargo">${deqFormat(row.pick_equity)}</td>
             <td class="col-hidden col-embargo">${deqFormat(row.adj)}</td>
-            <td class="col-hidden">${pctFormat(row.pct_gp)}</td>
+            <td class="col-hidden col-embargo">${pctFormat(row.pct_gp)}</td>
             <td class="col-hidden">${pctFormat(row.pct_top)}</td>
             <td class="col-hidden">${nprFormat(row.npr)}</td>
         </tr>
@@ -459,8 +472,9 @@ async function loadSet(setCode) {
     document.getElementById('endDate').textContent = data.end_date;
     currentSetCode = data.set_code;
     document.title = `${data.set_code} DEq: Estimated Draft Equity`;
-    document.getElementById('dataTable').classList.toggle('embargo-active', !!data.embargoed);
-    modal.classList.toggle('embargo-active', !!data.embargoed);
+    isEmbargoed = !!data.embargoed;
+    document.getElementById('dataTable').classList.toggle('embargo-active', isEmbargoed);
+    modal.classList.toggle('embargo-active', isEmbargoed);
     deq_table = data.cards;
     searchInput.value = '';
     renderTable(sortData(deq_table));

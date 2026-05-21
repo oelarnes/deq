@@ -468,8 +468,16 @@ th[data-sort]:hover {
 .val-pos { color: #4ade80; }
 .val-neg { color: #f87171; }
 
-#modal.embargo-active .col-embargo {
+.stat-embargo-note {
     display: none;
+    font-size: 0.78em;
+    color: var(--pst-color-text-muted);
+    font-style: italic;
+    line-height: 1.4;
+}
+
+#modal.embargo-active .stat-embargo-note {
+    display: block;
 }
 
 /* Info panel */
