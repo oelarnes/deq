@@ -498,9 +498,8 @@ def live_deq(
     meta_decay: float = META_DECAY,
     max_deq_days: int = MAX_DEQ_DAYS,
     color_sets: list[str] | None = None,
+    min_games_pct: float = 0.01,
 ) -> pl.DataFrame:
-    if color_sets is None:
-        color_sets = COLOR_SETS
     format = "PickTwoDraft" if config[set_code].is_pick_two else "PremierDraft"
 
     set_context = {
@@ -521,7 +520,7 @@ def live_deq(
             sample_decay=sample_decay,
             max_deq_days=max_deq_days,
             is_pick_two=config[set_code].is_pick_two,
-            color_sets=color_sets,
+            color_sets=color_sets if color_sets is not None else COLOR_SETS,
         ),
     }
 
@@ -561,10 +560,19 @@ def live_deq(
             - gp_wr_mean
         )
 
+        if color_sets is not None:
+            active_colors = color_sets
+        else:
+            total_games = dc_df[ColName.NUM_GAMES].sum()
+            active_colors = (
+                dc_df.filter(pl.col(ColName.NUM_GAMES) >= min_games_pct * total_games)
+                [ColName.MAIN_COLORS].to_list()
+            )
+
         excess_wr_df = pl.concat(
             [
                 (
-                    dc_df.filter(~pl.col(ColName.MAIN_COLORS).is_in(color_sets))
+                    dc_df.filter(~pl.col(ColName.MAIN_COLORS).is_in(active_colors))
                     .select(ColName.NUM_GAMES, ColName.NUM_WON)
                     .sum()
                     .select(
@@ -573,7 +581,7 @@ def live_deq(
                     )
                 ),
                 (
-                    dc_df.filter(pl.col(ColName.MAIN_COLORS).is_in(color_sets)).select(
+                    dc_df.filter(pl.col(ColName.MAIN_COLORS).is_in(active_colors)).select(
                         gp_wr_excess, ColName.MAIN_COLORS
                     )
                 ),
@@ -604,7 +612,7 @@ def live_deq(
             ),
         )
 
-        if color_sets:
+        if active_colors:
             deck_counts_df = summon(
                 set_code,
                 columns=[ColName.DECK],
@@ -613,7 +621,7 @@ def live_deq(
                     set_code=set_code,
                     format=format,
                     player_cohort=player_cohort,
-                    deck_colors=color_sets,
+                    deck_colors=active_colors,
                     start_date=start_date,
                     end_date=end_date,
                 ),
