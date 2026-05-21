@@ -342,6 +342,7 @@ def test_empty_color_sets_zeroes_bias_adj(blb_data) -> None:  # noqa: ARG001
         )
 
 
+
 def test_no_top_data_falls_back_to_all(blb_no_top_data) -> None:  # noqa: ARG001
     """When the top cohort has no game data, synthesis must not null-propagate.
 
