@@ -151,7 +151,7 @@ function openModal(idx, preserveToggle = false) {
     document.getElementById('modalCardRarity').innerHTML = rarityPipHtml(card.rarity);
 
     const gradeEl = document.getElementById('modalGrade');
-    gradeEl.textContent = card.deq_grade;
+    gradeEl.textContent = card.deq_grade === 'N/A' ? '—' : card.deq_grade;
     gradeEl.className = 'info-grade ' + gradeColorClass(card.deq_grade);
 
     const deqEl = document.getElementById('modalDeq');
