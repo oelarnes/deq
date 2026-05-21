@@ -520,7 +520,8 @@ def live_deq(
             sample_decay=sample_decay,
             max_deq_days=max_deq_days,
             is_pick_two=config[set_code].is_pick_two,
-            color_sets=color_sets if color_sets is not None else COLOR_SETS,
+            # gp_bias_weight ColSpec is unused here; bias adj is computed via direct join below
+            color_sets=[],
         ),
     }
 
