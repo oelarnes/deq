@@ -498,7 +498,7 @@ def live_deq(
     meta_decay: float = META_DECAY,
     max_deq_days: int = MAX_DEQ_DAYS,
     color_sets: list[str] | None = None,
-    min_games_pct: float = 0.01,
+    min_games_pct: float = 0.005,
 ) -> pl.DataFrame:
     format = "PickTwoDraft" if config[set_code].is_pick_two else "PremierDraft"
 
