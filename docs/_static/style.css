@@ -154,7 +154,7 @@ th[data-sort]:hover {
     color: var(--pst-color-text-muted);
     text-align: left;
     padding: 4px 8px;
-    background: var(--pst-color-surface);
+    background: #2a2e33;
     border-bottom: 1px solid var(--pst-color-border);
 }
 
