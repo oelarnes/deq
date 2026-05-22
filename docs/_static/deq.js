@@ -466,9 +466,264 @@ function filterData(searchTerm) {
 
 // Search
 const searchInput = document.getElementById('searchInput');
+const searchChips = document.getElementById('searchChips');
+const searchContainer = document.querySelector('.search-container');
 let searchTimeout;
 
+// Parse search text — find first c: and r: token; everything else is name remainder.
+// Chip system owns these canonical tokens; on write-back they're placed at the front.
+function parseSearchTokens(text) {
+    const tokens = splitTokens(text);
+    let colorToken = null, rarityToken = null;
+    let colorSeen = false, raritySeen = false;
+    const nameTokens = [];
+    for (const t of tokens) {
+        const lower = t.toLowerCase();
+        if (!colorSeen && lower.startsWith('c:')) {
+            colorSeen = true;
+            const v = lower.slice(2);
+            if (v.length > 0) colorToken = v;
+        } else if (!raritySeen && lower.startsWith('r:')) {
+            raritySeen = true;
+            const v = lower.slice(2);
+            if (v.length > 0) rarityToken = v;
+        } else {
+            nameTokens.push(t.includes(' ') ? `"${t}"` : t);
+        }
+    }
+    return { nameRemainder: nameTokens.join(' '), colorToken, rarityToken };
+}
+
+function reconstructSearch({ nameRemainder, colorToken, rarityToken }) {
+    const parts = [];
+    if (colorToken) parts.push(`c:${colorToken}`);
+    if (rarityToken) parts.push(`r:${rarityToken}`);
+    if (nameRemainder) parts.push(nameRemainder);
+    return parts.join(' ');
+}
+
+const WUBRG_LETTERS = ['W', 'U', 'B', 'R', 'G'];
+const SPECIAL_COLORS = ['C', 'M'];
+const RARITY_LETTERS = ['C', 'U', 'R', 'M'];
+
+function sortWUBRG(letters) {
+    const ORDER = { w: 0, u: 1, b: 2, r: 3, g: 4 };
+    return letters.toLowerCase().split('').sort((a, b) => (ORDER[a] ?? 5) - (ORDER[b] ?? 5)).join('');
+}
+
+function isPairPattern(token) {
+    const parts = token.split('/');
+    if (parts.length !== 3) return false;
+    const [a, b, ab] = parts;
+    if (a.length !== 1 || b.length !== 1 || ab.length !== 2) return false;
+    return ab.split('').sort().join('') === (a + b).split('').sort().join('');
+}
+
+// Matches w*/b* — two single-letter wildcards OR'd, representing a color pair
+function isWildcardPairPattern(token) {
+    const parts = token.split('/');
+    return parts.length === 2 && parts.every(p => p.length === 2 && p.endsWith('*'));
+}
+
+// Returns { mainRow, wideRow } — wideRow is empty [] when not applicable.
+function generateColorChips(colorToken) {
+    if (!colorToken) {
+        return {
+            mainRow: [...WUBRG_LETTERS, ...SPECIAL_COLORS].map(c => ({
+                label: c, kind: 'add', group: 'color', newValue: c.toLowerCase(),
+            })),
+            wideRow: [],
+        };
+    }
+
+    // w*/b* — show -* to downgrade to pair pattern w/b/wb, × to clear
+    if (isWildcardPairPattern(colorToken)) {
+        const [a, b] = colorToken.split('/').map(p => p.slice(0, -1));
+        const combo = sortWUBRG(a + b);
+        return {
+            mainRow: [
+                { label: `${a.toUpperCase()}/${b.toUpperCase()}*`, kind: 'active', group: 'color', newValue: null },
+                { label: '-*', kind: 'add', group: 'color', newValue: `${a}/${b}/${combo}` },
+            ],
+            wideRow: [],
+        };
+    }
+
+    // w/b/wb — pair pattern: show wildcard upgrade, no wide row
+    if (isPairPattern(colorToken)) {
+        const [a, b] = colorToken.split('/').slice(0, 2);
+        const displayLabel = `${a.toUpperCase()}/${b.toUpperCase()}`;
+        const wcVersion = `${a}*/${b}*`;
+        return {
+            mainRow: [
+                { label: displayLabel, kind: 'active', group: 'color', newValue: null },
+                { label: `${displayLabel}*`, kind: 'add', group: 'color', newValue: wcVersion },
+            ],
+            wideRow: [],
+        };
+    }
+
+    // Arbitrary OR (user-typed fallback: w/b, w/u/b, etc.)
+    if (colorToken.includes('/')) {
+        const parts = colorToken.split('/');
+        return {
+            mainRow: parts.map(p => {
+                const remaining = parts.filter(x => x !== p);
+                return {
+                    label: p.toUpperCase(), kind: 'active', group: 'color',
+                    newValue: remaining.length > 0 ? remaining.join('/') : null,
+                };
+            }),
+            wideRow: [],
+        };
+    }
+
+    // Wildcard: w*, wu*, etc.
+    if (colorToken.endsWith('*')) {
+        const base = colorToken.slice(0, -1);
+        const mainRow = [
+            { label: colorToken.toUpperCase(), kind: 'active', group: 'color', newValue: null },
+            { label: '-*', kind: 'add', group: 'color', newValue: base || null },
+        ];
+        for (const c of WUBRG_LETTERS) {
+            const cL = c.toLowerCase();
+            if (!base.includes(cL)) {
+                mainRow.push({ label: `+${c}*`, kind: 'add', group: 'color', newValue: `${sortWUBRG(base + cL)}*` });
+            }
+        }
+        // Wide row only makes sense from a single-color wildcard (w*)
+        const wideRow = [];
+        if (base.length === 1) {
+            for (const c of WUBRG_LETTERS) {
+                const cL = c.toLowerCase();
+                if (cL !== base) {
+                    wideRow.push({ label: `/${c}`, kind: 'add', group: 'color', newValue: `${base}*/${cL}*` });
+                }
+            }
+        }
+        return { mainRow, wideRow };
+    }
+
+    // c, m — just remove, no expansion
+    if (colorToken === 'c' || colorToken === 'm') {
+        return {
+            mainRow: [{ label: colorToken.toUpperCase(), kind: 'active', group: 'color', newValue: null }],
+            wideRow: [],
+        };
+    }
+
+    // Single or multi exact: w, wu, wub, etc.
+    const isSingle = colorToken.length === 1;
+    const mainRow = [
+        { label: colorToken.toUpperCase(), kind: 'active', group: 'color', newValue: null },
+        { label: `${colorToken.toUpperCase()}*`, kind: 'add', group: 'color', newValue: `${colorToken}*` },
+    ];
+    for (const c of WUBRG_LETTERS) {
+        const cL = c.toLowerCase();
+        if (!colorToken.includes(cL)) {
+            mainRow.push({ label: `+${c}`, kind: 'add', group: 'color', newValue: sortWUBRG(colorToken + cL) });
+        }
+    }
+
+    // Wide row only for single-color exact (w → /u, /b, /r, /g each → w/x/wx)
+    const wideRow = [];
+    if (isSingle) {
+        for (const c of WUBRG_LETTERS) {
+            const cL = c.toLowerCase();
+            if (cL !== colorToken) {
+                const combo = sortWUBRG(colorToken + cL);
+                wideRow.push({ label: `/${c}`, kind: 'add', group: 'color', newValue: `${colorToken}/${cL}/${combo}` });
+            }
+        }
+    }
+    return { mainRow, wideRow };
+}
+
+function generateRarityChips(rarityToken) {
+    if (!rarityToken) {
+        return RARITY_LETTERS.map(r => ({
+            label: r, kind: 'add', group: 'rarity', newValue: r.toLowerCase(),
+        }));
+    }
+    const chips = [];
+    if (rarityToken.includes('/')) {
+        const parts = rarityToken.split('/');
+        for (const p of parts) {
+            const remaining = parts.filter(x => x !== p);
+            chips.push({
+                label: p.toUpperCase(), kind: 'active', group: 'rarity',
+                newValue: remaining.length > 0 ? remaining.join('/') : null,
+            });
+        }
+        for (const r of RARITY_LETTERS) {
+            const rL = r.toLowerCase();
+            if (!parts.includes(rL)) {
+                chips.push({ label: `+${r}`, kind: 'add', group: 'rarity', newValue: `${rarityToken}/${rL}` });
+            }
+        }
+    } else {
+        chips.push({ label: rarityToken.toUpperCase(), kind: 'active', group: 'rarity', newValue: null });
+        for (const r of RARITY_LETTERS) {
+            const rL = r.toLowerCase();
+            if (!rarityToken.startsWith(rL)) {
+                chips.push({ label: `+${r}`, kind: 'add', group: 'rarity', newValue: `${rarityToken}/${rL}` });
+            }
+        }
+    }
+    return chips;
+}
+
+function chipHtml(chip) {
+    const display = chip.kind === 'active' ? `${chip.label} ×` : chip.label;
+    const value = chip.newValue === null ? '' : chip.newValue;
+    const clear = chip.newValue === null ? '1' : '0';
+    return `<button type="button" class="chip chip-${chip.kind}" data-group="${chip.group}" data-value="${value}" data-clear="${clear}">${display}</button>`;
+}
+
+function renderChips() {
+    const { colorToken, rarityToken } = parseSearchTokens(searchInput.value);
+    const { mainRow, wideRow } = generateColorChips(colorToken);
+    const rarityChips = generateRarityChips(rarityToken);
+    const rows = [`<div class="chip-row">${mainRow.map(chipHtml).join('')}</div>`];
+    if (wideRow.length > 0) {
+        rows.push(`<div class="chip-row chip-row-wide">${wideRow.map(chipHtml).join('')}</div>`);
+    }
+    rows.push(`<div class="chip-row">${rarityChips.map(chipHtml).join('')}</div>`);
+    searchChips.innerHTML = rows.join('');
+}
+
+function updateChipsVisibility() {
+    const focused = document.activeElement === searchInput;
+    const hasValue = searchInput.value.trim().length > 0;
+    searchContainer.classList.toggle('chips-visible', focused || hasValue);
+}
+
+function applyChip(group, newValue) {
+    const parsed = parseSearchTokens(searchInput.value);
+    if (group === 'color') parsed.colorToken = newValue;
+    else parsed.rarityToken = newValue;
+    searchInput.value = reconstructSearch(parsed);
+    renderChips();
+    updateChipsVisibility();
+    renderTable(sortData(filterData(searchInput.value)));
+}
+
+// Prevent chip clicks from blurring the input
+searchChips.addEventListener('mousedown', e => {
+    if (e.target.closest('.chip')) e.preventDefault();
+});
+
+searchChips.addEventListener('click', e => {
+    const btn = e.target.closest('.chip');
+    if (!btn) return;
+    const group = btn.dataset.group;
+    const newValue = btn.dataset.clear === '1' ? null : btn.dataset.value;
+    applyChip(group, newValue);
+});
+
 searchInput.addEventListener('input', function() {
+    renderChips();
+    updateChipsVisibility();
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(() => {
         renderTable(sortData(filterData(this.value)));
@@ -477,11 +732,15 @@ searchInput.addEventListener('input', function() {
 
 searchInput.addEventListener('focus', function() {
     this.style.transform = 'translateY(-2px)';
+    updateChipsVisibility();
 });
 
 searchInput.addEventListener('blur', function() {
     this.style.transform = 'translateY(0)';
+    updateChipsVisibility();
 });
+
+renderChips();
 
 // Set switching
 const linkSelect = document.getElementById('link-select');
@@ -498,6 +757,7 @@ async function loadSet(setCode) {
     modal.classList.toggle('embargo-active', isEmbargoed);
     deq_table = data.cards;
     searchInput.value = '';
+    renderChips();
     renderTable(sortData(deq_table));
     searchInput.focus();
 }

@@ -72,6 +72,9 @@ button.doc-button.expanded {
 }
 
 .search-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     margin-bottom: 1rem;
 }
 
@@ -82,6 +85,64 @@ button.doc-button.expanded {
     width: 300px;
     font-size: 16px;
     text-align: center;
+}
+
+.search-chips {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    max-width: 100%;
+    padding: 6px 4px 0;
+    box-sizing: border-box;
+}
+
+.search-container.chips-visible .search-chips {
+    display: flex;
+}
+
+.chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px;
+    max-width: 100%;
+}
+
+.chip {
+    flex-shrink: 0;
+    padding: 3px 8px;
+    border-radius: 1em;
+    font: inherit;
+    font-size: 0.8em;
+    font-weight: 600;
+    cursor: pointer;
+    line-height: 1.2;
+    white-space: nowrap;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.chip-add {
+    background: transparent;
+    border: 1px solid var(--pst-color-border);
+    color: var(--pst-color-text-base);
+    opacity: 0.7;
+}
+
+.chip-add:hover {
+    opacity: 1;
+    border-color: var(--pst-color-primary);
+}
+
+.chip-active {
+    background: var(--pst-color-primary);
+    border: 1px solid var(--pst-color-primary);
+    color: var(--pst-color-background);
+}
+
+.chip-active:hover {
+    background: var(--pst-color-accent);
+    border-color: var(--pst-color-accent);
 }
 
 .col-hidden {
@@ -519,7 +580,7 @@ th[data-sort]:hover {
     justify-content: center;
     flex-shrink: 0;
     padding: 4px 10px;
-    background: #4a4f58;
+    background: var(--pst-color-surface);
     border-radius: 3px;
     box-shadow: 0 3px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
     cursor: pointer;
