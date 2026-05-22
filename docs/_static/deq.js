@@ -536,53 +536,60 @@ function generateColorChips(colorToken) {
         };
     }
 
-    // w*/b* — show -* to downgrade to pair pattern w/b/wb, × to clear
-    if (isWildcardPairPattern(colorToken)) {
-        const [a, b] = colorToken.split('/').map(p => p.slice(0, -1));
-        const combo = sortWUBRG(a + b);
+    // Any state containing colorless uses simplified OR mode (commutative — no * or + options)
+    if (colorToken.split('/').includes('c')) {
+        // Normalize: WUBRG parts first, c last — so c→/W and w→/C reach identical state
+        const WUBRG_ORDER = { w: 0, u: 1, b: 2, r: 3, g: 4 };
+        const parts = colorToken.split('/').sort((a, b) => (WUBRG_ORDER[a] ?? 99) - (WUBRG_ORDER[b] ?? 99));
+        const nonCParts = parts.filter(p => p !== 'c');
+        const mainRow = parts.map(p => {
+            const remaining = parts.filter(x => x !== p);
+            return {
+                label: p.toUpperCase(), kind: 'active', group: 'color',
+                newValue: remaining.length > 0 ? remaining.join('/') : null,
+                manaColor: p.length === 1 ? p : null,
+            };
+        });
+        // Expand only when non-c component is a single color; pair pattern + c is terminal
+        const wideRow = nonCParts.length <= 1
+            ? WUBRG_LETTERS
+                .filter(c => !parts.includes(c.toLowerCase()))
+                .map(c => {
+                    const cL = c.toLowerCase();
+                    let newValue;
+                    if (nonCParts.length === 0) {
+                        newValue = `${cL}/c`;
+                    } else {
+                        const base = nonCParts[0];
+                        const combo = sortWUBRG(base + cL);
+                        newValue = `${combo[0]}/${combo[1]}/${combo}/c`;
+                    }
+                    return { label: `/${c}`, kind: 'add', group: 'color', newValue, manaColor: cL };
+                })
+            : [];
+        return { mainRow, wideRow };
+    }
+
+    // m — no expansion
+    if (colorToken === 'm') {
         return {
-            mainRow: [
-                { label: `${a.toUpperCase()}/${b.toUpperCase()}*`, kind: 'active', group: 'color', newValue: null },
-                { label: '-*', kind: 'add', group: 'color', newValue: `${a}/${b}/${combo}` },
-            ],
+            mainRow: [{ label: 'M', kind: 'active', group: 'color', newValue: null, manaColor: 'm' }],
             wideRow: [],
         };
     }
 
-    // w/b/wb — pair pattern: show wildcard upgrade, no wide row
+    let mainRow, wideRow;
+
+    // Slash path: w/b/wb — active label only, /C available, no *
     if (isPairPattern(colorToken)) {
         const [a, b] = colorToken.split('/').slice(0, 2);
-        const displayLabel = `${a.toUpperCase()}/${b.toUpperCase()}`;
-        const wcVersion = `${a}*/${b}*`;
-        return {
-            mainRow: [
-                { label: displayLabel, kind: 'active', group: 'color', newValue: null },
-                { label: `${displayLabel}*`, kind: 'add', group: 'color', newValue: wcVersion },
-            ],
-            wideRow: [],
-        };
-    }
+        mainRow = [{ label: `${a.toUpperCase()}/${b.toUpperCase()}`, kind: 'active', group: 'color', newValue: null }];
+        wideRow = [{ label: '/C', kind: 'add', group: 'color', newValue: `${colorToken}/c`, manaColor: 'c' }];
 
-    // Arbitrary OR (user-typed fallback: w/b, w/u/b, etc.)
-    if (colorToken.includes('/')) {
-        const parts = colorToken.split('/');
-        return {
-            mainRow: parts.map(p => {
-                const remaining = parts.filter(x => x !== p);
-                return {
-                    label: p.toUpperCase(), kind: 'active', group: 'color',
-                    newValue: remaining.length > 0 ? remaining.join('/') : null,
-                    manaColor: p.length === 1 ? p : null,
-                };
-            }),
-            wideRow: [],
-        };
-    }
-
-    // Wildcard: w*, wu*, etc.
-    if (colorToken.endsWith('*')) {
+    // Wildcard path: w*, wu*, etc. — restricted, no slash options, no /C
+    } else if (colorToken.endsWith('*')) {
         const base = colorToken.slice(0, -1);
-        const mainRow = [
+        mainRow = [
             { label: colorToken.toUpperCase(), kind: 'active', group: 'color', newValue: null, manaColor: base.length === 1 ? base : null },
             { label: '-*', kind: 'add', group: 'color', newValue: base || null },
         ];
@@ -592,51 +599,48 @@ function generateColorChips(colorToken) {
                 mainRow.push({ label: `+${c}*`, kind: 'add', group: 'color', newValue: `${sortWUBRG(base + cL)}*`, manaColor: cL });
             }
         }
-        // Wide row only makes sense from a single-color wildcard (w*)
-        const wideRow = [];
-        if (base.length === 1) {
-            for (const c of WUBRG_LETTERS) {
-                const cL = c.toLowerCase();
-                if (cL !== base) {
-                    wideRow.push({ label: `/${c}`, kind: 'add', group: 'color', newValue: `${base}*/${cL}*`, manaColor: cL });
-                }
-            }
-        }
-        return { mainRow, wideRow };
-    }
+        wideRow = [];
 
-    // c, m — just remove, no expansion
-    if (colorToken === 'c' || colorToken === 'm') {
-        return {
-            mainRow: [{ label: colorToken.toUpperCase(), kind: 'active', group: 'color', newValue: null, manaColor: colorToken }],
-            wideRow: [],
-        };
-    }
+    // Arbitrary OR fallback (user-typed: w/b, w/u/b, w*/b*, etc.)
+    } else if (colorToken.includes('/')) {
+        const parts = colorToken.split('/');
+        mainRow = parts.map(p => {
+            const remaining = parts.filter(x => x !== p);
+            return {
+                label: p.toUpperCase(), kind: 'active', group: 'color',
+                newValue: remaining.length > 0 ? remaining.join('/') : null,
+                manaColor: p.length === 1 ? p : null,
+            };
+        });
+        wideRow = [];
 
-    // Single or multi exact: w, wu, wub, etc.
-    const isSingle = colorToken.length === 1;
-    const mainRow = [
-        { label: colorToken.toUpperCase(), kind: 'active', group: 'color', newValue: null, manaColor: isSingle ? colorToken : null },
-        { label: `${colorToken.toUpperCase()}*`, kind: 'add', group: 'color', newValue: `${colorToken}*`, manaColor: isSingle ? colorToken : null },
-    ];
-    for (const c of WUBRG_LETTERS) {
-        const cL = c.toLowerCase();
-        if (!colorToken.includes(cL)) {
-            mainRow.push({ label: `+${c}`, kind: 'add', group: 'color', newValue: sortWUBRG(colorToken + cL), manaColor: cL });
-        }
-    }
-
-    // Wide row only for single-color exact (w → /u, /b, /r, /g each → w/x/wx)
-    const wideRow = [];
-    if (isSingle) {
+    // Exact path: single w or multi wb, wub, etc.
+    } else {
+        const isSingle = colorToken.length === 1;
+        mainRow = [
+            { label: colorToken.toUpperCase(), kind: 'active', group: 'color', newValue: null, manaColor: isSingle ? colorToken : null },
+            { label: `${colorToken.toUpperCase()}*`, kind: 'add', group: 'color', newValue: `${colorToken}*`, manaColor: isSingle ? colorToken : null },
+        ];
         for (const c of WUBRG_LETTERS) {
             const cL = c.toLowerCase();
-            if (cL !== colorToken) {
-                const combo = sortWUBRG(colorToken + cL);
-                wideRow.push({ label: `/${c}`, kind: 'add', group: 'color', newValue: `${colorToken}/${cL}/${combo}`, manaColor: cL });
+            if (!colorToken.includes(cL)) {
+                mainRow.push({ label: `+${c}`, kind: 'add', group: 'color', newValue: sortWUBRG(colorToken + cL), manaColor: cL });
             }
         }
+        // Single exact: wide row for slash path; multi exact: terminal (no wide row, no /C)
+        wideRow = [];
+        if (isSingle) {
+            for (const c of WUBRG_LETTERS) {
+                const cL = c.toLowerCase();
+                if (cL !== colorToken) {
+                    const combo = sortWUBRG(colorToken + cL);
+                    wideRow.push({ label: `/${c}`, kind: 'add', group: 'color', newValue: `${colorToken}/${cL}/${combo}`, manaColor: cL });
+                }
+            }
+            wideRow.push({ label: '/C', kind: 'add', group: 'color', newValue: `${colorToken}/c`, manaColor: 'c' });
+        }
     }
+
     return { mainRow, wideRow };
 }
 
