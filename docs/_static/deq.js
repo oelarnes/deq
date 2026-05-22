@@ -9,15 +9,15 @@ const RARITY_ORDER = { common: 0, uncommon: 1, rare: 2, mythic: 3 };
 const WUBRG = { W: 0, U: 1, B: 2, R: 3, G: 4 };
 
 const METRIC_INFO = {
-    'Grade':      'A+ to F letter grade, using fixed DEq increments.',
-    'DEq':        'Estimated Draft Equity: Expected win-rate gain from picking this card over a basic land.',
-    'MWR':        'Marginal Win Rate: GP WR versus the set mean.',
-    'PEq':        'Pick Equity: Estimated opportunity cost in win rate at the observed ATA.',
-    'Adj':        'Adjustment: Correction for selection bias and expected metagame drift.',
-    'Played DEq': 'Sum of components before scaling by % GP, representing the expected marginal win-rate when registered.',
-    '% GP':       'Play Rate: The rate at which this card was included in the deck (when available in the card pool).',
-    'NPR':        'Normalized Pick Rate: Top-player pick preference; each +1.0 means twice as likely to be taken from a fresh pack.',
-    '% Top':      'Share of DEq and component metrics derived from top-player data, based on sample size.',
+    'Grade':      '<strong>Grade:</strong> A+ to F letter grade, using fixed DEq increments.',
+    'DEq':        '<strong>Estimated Draft Equity:</strong> Expected win-rate gain from picking this card over a basic land.',
+    'MWR':        '<strong>Marginal Win Rate:</strong> GP WR versus the set mean.',
+    'PEq':        '<strong>Pick Equity:</strong> Estimated opportunity cost in win rate at the observed ATA.',
+    'Adj':        '<strong>Adjustment:</strong> Correction for selection bias and expected metagame drift.',
+    'Played DEq': '<strong>Played DEq:</strong> Sum of components before scaling by % GP, representing the expected marginal win-rate when registered.',
+    '% GP':       '<strong>Play Rate:</strong> The rate at which this card was included in the deck (when available in the card pool).',
+    'NPR':        '<strong>Normalized Pick Rate:</strong> Top-player pick preference; each +1.0 means twice as likely to be taken from a fresh pack.',
+    '% Top':      '<strong>% Top:</strong> Share of DEq and component metrics derived from top-player data, based on sample size.',
 };
 
 const COL_METRIC = {
@@ -29,14 +29,6 @@ const COL_METRIC = {
     'pct_top':     '% Top',
     'npr':         'NPR',
 };
-
-function metricHtml(metric) {
-    const info = METRIC_INFO[metric] || '';
-    const sep = info.indexOf(': ');
-    return sep !== -1
-        ? `<strong>${info.slice(0, sep)}:</strong> ${info.slice(sep + 2)}`
-        : info;
-}
 
 function colorSortKey(color) {
     if (!color) return -1;
@@ -74,7 +66,7 @@ document.addEventListener('click', function(event) {
 let openColDesc = null;
 
 document.querySelectorAll('.col-info[data-col]').forEach(btn => {
-    btn.dataset.colDesc = metricHtml(COL_METRIC[btn.dataset.col] || '') || '';
+    btn.dataset.colDesc = METRIC_INFO[COL_METRIC[btn.dataset.col]] || '';
 });
 
 document.querySelectorAll('.col-info').forEach(btn => {
@@ -284,7 +276,7 @@ document.getElementById('tableBody').addEventListener('click', function(e) {
 
 function showTooltip(metric) {
     document.getElementById('tooltipName').textContent = metric;
-    document.getElementById('tooltipText').innerHTML = metricHtml(metric);
+    document.getElementById('tooltipText').innerHTML = METRIC_INFO[metric] || '';
 }
 
 function colorPipsHtml(color) {
