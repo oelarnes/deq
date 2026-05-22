@@ -580,7 +580,7 @@ th[data-sort]:hover {
     justify-content: center;
     flex-shrink: 0;
     padding: 4px 10px;
-    background: #4a4f58;
+    background: var(--pst-color-surface);
     border-radius: 3px;
     box-shadow: 0 3px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
     cursor: pointer;
