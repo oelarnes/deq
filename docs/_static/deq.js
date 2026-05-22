@@ -391,7 +391,6 @@ function colorFilter(row) {
 function wildCardMatch(item, color) {
     if (item.includes('*')) {
         const others = item.replaceAll('*', '');
-        if (others.length === 0) return false;
         return others.toLowerCase().split('').every(char => {
             return color.toLowerCase().includes(char);
         });
