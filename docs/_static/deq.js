@@ -530,7 +530,7 @@ function generateColorChips(colorToken) {
     if (!colorToken) {
         return {
             mainRow: [...WUBRG_LETTERS, ...SPECIAL_COLORS].map(c => ({
-                label: c, kind: 'add', group: 'color', newValue: c.toLowerCase(),
+                label: c, kind: 'add', group: 'color', newValue: c.toLowerCase(), manaColor: c.toLowerCase(),
             })),
             wideRow: [],
         };
@@ -572,6 +572,7 @@ function generateColorChips(colorToken) {
                 return {
                     label: p.toUpperCase(), kind: 'active', group: 'color',
                     newValue: remaining.length > 0 ? remaining.join('/') : null,
+                    manaColor: p.length === 1 ? p : null,
                 };
             }),
             wideRow: [],
@@ -582,13 +583,13 @@ function generateColorChips(colorToken) {
     if (colorToken.endsWith('*')) {
         const base = colorToken.slice(0, -1);
         const mainRow = [
-            { label: colorToken.toUpperCase(), kind: 'active', group: 'color', newValue: null },
+            { label: colorToken.toUpperCase(), kind: 'active', group: 'color', newValue: null, manaColor: base.length === 1 ? base : null },
             { label: '-*', kind: 'add', group: 'color', newValue: base || null },
         ];
         for (const c of WUBRG_LETTERS) {
             const cL = c.toLowerCase();
             if (!base.includes(cL)) {
-                mainRow.push({ label: `+${c}*`, kind: 'add', group: 'color', newValue: `${sortWUBRG(base + cL)}*` });
+                mainRow.push({ label: `+${c}*`, kind: 'add', group: 'color', newValue: `${sortWUBRG(base + cL)}*`, manaColor: cL });
             }
         }
         // Wide row only makes sense from a single-color wildcard (w*)
@@ -597,7 +598,7 @@ function generateColorChips(colorToken) {
             for (const c of WUBRG_LETTERS) {
                 const cL = c.toLowerCase();
                 if (cL !== base) {
-                    wideRow.push({ label: `/${c}`, kind: 'add', group: 'color', newValue: `${base}*/${cL}*` });
+                    wideRow.push({ label: `/${c}`, kind: 'add', group: 'color', newValue: `${base}*/${cL}*`, manaColor: cL });
                 }
             }
         }
@@ -607,7 +608,7 @@ function generateColorChips(colorToken) {
     // c, m — just remove, no expansion
     if (colorToken === 'c' || colorToken === 'm') {
         return {
-            mainRow: [{ label: colorToken.toUpperCase(), kind: 'active', group: 'color', newValue: null }],
+            mainRow: [{ label: colorToken.toUpperCase(), kind: 'active', group: 'color', newValue: null, manaColor: colorToken }],
             wideRow: [],
         };
     }
@@ -615,13 +616,13 @@ function generateColorChips(colorToken) {
     // Single or multi exact: w, wu, wub, etc.
     const isSingle = colorToken.length === 1;
     const mainRow = [
-        { label: colorToken.toUpperCase(), kind: 'active', group: 'color', newValue: null },
-        { label: `${colorToken.toUpperCase()}*`, kind: 'add', group: 'color', newValue: `${colorToken}*` },
+        { label: colorToken.toUpperCase(), kind: 'active', group: 'color', newValue: null, manaColor: isSingle ? colorToken : null },
+        { label: `${colorToken.toUpperCase()}*`, kind: 'add', group: 'color', newValue: `${colorToken}*`, manaColor: isSingle ? colorToken : null },
     ];
     for (const c of WUBRG_LETTERS) {
         const cL = c.toLowerCase();
         if (!colorToken.includes(cL)) {
-            mainRow.push({ label: `+${c}`, kind: 'add', group: 'color', newValue: sortWUBRG(colorToken + cL) });
+            mainRow.push({ label: `+${c}`, kind: 'add', group: 'color', newValue: sortWUBRG(colorToken + cL), manaColor: cL });
         }
     }
 
@@ -632,17 +633,20 @@ function generateColorChips(colorToken) {
             const cL = c.toLowerCase();
             if (cL !== colorToken) {
                 const combo = sortWUBRG(colorToken + cL);
-                wideRow.push({ label: `/${c}`, kind: 'add', group: 'color', newValue: `${colorToken}/${cL}/${combo}` });
+                wideRow.push({ label: `/${c}`, kind: 'add', group: 'color', newValue: `${colorToken}/${cL}/${combo}`, manaColor: cL });
             }
         }
     }
     return { mainRow, wideRow };
 }
 
+const RARITY_NAMES = { c: 'common', u: 'uncommon', r: 'rare', m: 'mythic' };
+
 function generateRarityChips(rarityToken) {
     if (!rarityToken) {
         return RARITY_LETTERS.map(r => ({
             label: r, kind: 'add', group: 'rarity', newValue: r.toLowerCase(),
+            rarityCode: RARITY_NAMES[r.toLowerCase()],
         }));
     }
     const chips = [];
@@ -653,20 +657,21 @@ function generateRarityChips(rarityToken) {
             chips.push({
                 label: p.toUpperCase(), kind: 'active', group: 'rarity',
                 newValue: remaining.length > 0 ? remaining.join('/') : null,
+                rarityCode: RARITY_NAMES[p],
             });
         }
         for (const r of RARITY_LETTERS) {
             const rL = r.toLowerCase();
             if (!parts.includes(rL)) {
-                chips.push({ label: `+${r}`, kind: 'add', group: 'rarity', newValue: `${rarityToken}/${rL}` });
+                chips.push({ label: `+${r}`, kind: 'add', group: 'rarity', newValue: `${rarityToken}/${rL}`, rarityCode: RARITY_NAMES[rL] });
             }
         }
     } else {
-        chips.push({ label: rarityToken.toUpperCase(), kind: 'active', group: 'rarity', newValue: null });
+        chips.push({ label: rarityToken.toUpperCase(), kind: 'active', group: 'rarity', newValue: null, rarityCode: RARITY_NAMES[rarityToken[0]] });
         for (const r of RARITY_LETTERS) {
             const rL = r.toLowerCase();
             if (!rarityToken.startsWith(rL)) {
-                chips.push({ label: `+${r}`, kind: 'add', group: 'rarity', newValue: `${rarityToken}/${rL}` });
+                chips.push({ label: `+${r}`, kind: 'add', group: 'rarity', newValue: `${rarityToken}/${rL}`, rarityCode: RARITY_NAMES[rL] });
             }
         }
     }
@@ -677,7 +682,9 @@ function chipHtml(chip) {
     const display = chip.kind === 'active' ? `${chip.label} ×` : chip.label;
     const value = chip.newValue === null ? '' : chip.newValue;
     const clear = chip.newValue === null ? '1' : '0';
-    return `<button type="button" class="chip chip-${chip.kind}" data-group="${chip.group}" data-value="${value}" data-clear="${clear}">${display}</button>`;
+    const colorAttr = chip.manaColor ? ` data-color="${chip.manaColor}"` : '';
+    const rarityAttr = chip.rarityCode ? ` data-rarity="${chip.rarityCode}"` : '';
+    return `<button type="button" class="chip chip-${chip.kind}"${colorAttr}${rarityAttr} data-group="${chip.group}" data-value="${value}" data-clear="${clear}">${display}</button>`;
 }
 
 function renderChips() {
