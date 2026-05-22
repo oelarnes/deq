@@ -145,10 +145,13 @@ const modalNext = document.getElementById('modalNext');
 const modalBody = document.querySelector('.modal-body');
 const modalToggle = document.getElementById('modalToggle');
 const modalToggleBack = document.getElementById('modalToggleBack');
+const modalContent = document.querySelector('.modal-content');
 let openModalIdx = -1;
 let isEmbargoed = false;
 
 function openModal(idx, preserveToggle = false) {
+    modalContent.style.transition = '';
+    modalContent.style.transform = '';
     const card = currentRenderedData[idx];
     openModalIdx = idx;
     modalImage.src = card.image_url || '';
@@ -228,20 +231,42 @@ modal.addEventListener('click', function(e) {
     showTooltip(el.dataset.metric);
 });
 
-let touchStartX = 0, touchStartY = 0;
+let touchStartX = 0, touchStartY = 0, swipeLocked = false, swipeIsHorizontal = false;
 
 modal.addEventListener('touchstart', e => {
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
+    swipeLocked = false;
+    swipeIsHorizontal = false;
+    modalContent.style.transition = 'none';
+}, { passive: true });
+
+modal.addEventListener('touchmove', e => {
+    const dx = e.touches[0].clientX - touchStartX;
+    const dy = e.touches[0].clientY - touchStartY;
+    if (!swipeLocked) {
+        swipeLocked = true;
+        swipeIsHorizontal = Math.abs(dx) > Math.abs(dy);
+    }
+    if (!swipeIsHorizontal) return;
+    const atEdge = (dx > 0 && modalPrev.disabled) || (dx < 0 && modalNext.disabled);
+    const tx = Math.sign(dx) * Math.min(Math.abs(dx), atEdge ? 10 : 20);
+    modalContent.style.transform = `translateX(${tx}px)`;
 }, { passive: true });
 
 modal.addEventListener('touchend', e => {
+    if (!swipeIsHorizontal) return;
     const dx = e.changedTouches[0].clientX - touchStartX;
-    const dy = e.changedTouches[0].clientY - touchStartY;
-    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
-        if (dx < 0 && !modalNext.disabled) openModal(openModalIdx + 1, true);
-        if (dx > 0 && !modalPrev.disabled) openModal(openModalIdx - 1, true);
+    if (Math.abs(dx) > 50) {
+        if (dx < 0 && !modalNext.disabled) { openModal(openModalIdx + 1, true); return; }
+        if (dx > 0 && !modalPrev.disabled) { openModal(openModalIdx - 1, true); return; }
     }
+    modalContent.style.transition = 'transform 0.2s ease';
+    modalContent.style.transform = 'translateX(0)';
+    modalContent.addEventListener('transitionend', () => {
+        modalContent.style.transition = '';
+        modalContent.style.transform = '';
+    }, { once: true });
 }, { passive: true });
 
 document.addEventListener('keydown', function(e) {

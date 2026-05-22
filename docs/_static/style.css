@@ -197,6 +197,7 @@ th[data-sort]:hover {
     overflow-y: auto;
     position: relative;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    font-size: 1.1em;
 }
 
 .modal-nav {
@@ -511,33 +512,26 @@ th[data-sort]:hover {
     line-height: 1;
 }
 
-.info-score-inset {
-    flex: 1;
-    display: flex;
-    align-items: stretch;
-    background: var(--pst-color-background);
-    border-radius: 3px;
-    padding: 0;
-    box-shadow: inset 0 2px 4px rgba(0,0,0,0.5), inset 0 -1px 2px rgba(0,0,0,0.2);
-    overflow: hidden;
-}
-
-.info-score-label {
+.info-title-badge {
     display: flex;
     flex-direction: column;
-    align-items: flex-end;
+    align-items: center;
     justify-content: center;
-    font-size: 0.85em;
-    color: var(--pst-color-text-muted);
     flex-shrink: 0;
-    padding: 4px 8px;
-    position: relative;
+    padding: 4px 10px;
+    background: #4a4f58;
+    border-radius: 3px;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
     cursor: pointer;
+    color: var(--pst-color-text-muted);
 }
 
 .info-deq-title {
     font-size: 1.9em;
+    font-weight: 600;
     line-height: 1;
+    color: #d0d4db;
+    text-shadow: 0 -1px 2px rgba(0,0,0,0.6);
     text-decoration: underline;
     text-underline-offset: 3px;
 }
@@ -547,22 +541,22 @@ th[data-sort]:hover {
     opacity: 0.45;
 }
 
-.info-score-label::after {
-    content: '';
-    position: absolute;
-    right: 0;
-    top: 6px;
-    bottom: 6px;
-    width: 1px;
-    background: var(--pst-color-border);
-}
-
-.info-deq-value {
+.info-score-inset {
     flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 2.1em;
+    background: var(--pst-color-background);
+    border-radius: 3px;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.5), inset 0 -1px 2px rgba(0,0,0,0.2);
+    overflow: hidden;
+}
+
+.info-deq-value {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.9em;
     font-weight: 400;
     color: var(--pst-color-text-base);
     padding: 0 10px;
@@ -585,7 +579,12 @@ th[data-sort]:hover {
 /* Desktop layout: card image left, metrics+info right */
 @media (min-width: 620px) {
     .modal-content {
-        max-width: min(680px, 95vw);
+        max-width: min(850px, 95vw);
+        font-size: 1.25em;
+    }
+
+    .modal-nav {
+        font-size: 30px;
     }
 
     .modal-body {
