@@ -62,21 +62,6 @@ document.addEventListener('click', function(event) {
     }
 });
 
-// Column description row (shown as first tbody row when a ? is active)
-let openColDesc = null;
-
-document.querySelectorAll('.col-info[data-col]').forEach(btn => {
-    btn.dataset.colDesc = METRIC_INFO[COL_METRIC[btn.dataset.col]] || '';
-});
-
-document.querySelectorAll('.col-info').forEach(btn => {
-    btn.addEventListener('click', function(e) {
-        e.stopImmediatePropagation();
-        const text = this.dataset.colDesc;
-        openColDesc = openColDesc === text ? null : text;
-        renderTable(sortData(filterData(searchInput.value)));
-    });
-});
 
 // Sorting
 function sortKey(row, col) {
@@ -124,7 +109,6 @@ document.querySelector('#dataTable thead').addEventListener('click', function(e)
         sortState.col = col;
         sortState.dir = (col === 'name' || col === 'color' || col === 'rarity') ? 'asc' : 'desc';
     }
-    openColDesc = null;
     updateSortIndicators();
     renderTable(sortData(filterData(searchInput.value)));
 });
@@ -354,10 +338,7 @@ function renderTable(data) {
 
     noResults.style.display = 'none';
 
-    tbody.innerHTML = (openColDesc
-        ? `<tr class="col-desc-row"><td colspan="11">${openColDesc}</td></tr>`
-        : ''
-    ) + data.map((row, i) => `
+    tbody.innerHTML = data.map((row, i) => `
         <tr>
             <td>${row.deq_grade}</td>
             <td>${deqFormat(row.deq)}</td>
@@ -667,7 +648,7 @@ function generateRarityChips(rarityToken) {
         for (const r of RARITY_LETTERS) {
             const rL = r.toLowerCase();
             if (!parts.includes(rL)) {
-                chips.push({ label: `+${r}`, kind: 'add', group: 'rarity', newValue: `${rarityToken}/${rL}`, rarityCode: RARITY_NAMES[rL] });
+                chips.push({ label: `/${r}`, kind: 'add', group: 'rarity', newValue: `${rarityToken}/${rL}`, rarityCode: RARITY_NAMES[rL] });
             }
         }
     } else {
@@ -675,7 +656,7 @@ function generateRarityChips(rarityToken) {
         for (const r of RARITY_LETTERS) {
             const rL = r.toLowerCase();
             if (!rarityToken.startsWith(rL)) {
-                chips.push({ label: `+${r}`, kind: 'add', group: 'rarity', newValue: `${rarityToken}/${rL}`, rarityCode: RARITY_NAMES[rL] });
+                chips.push({ label: `/${r}`, kind: 'add', group: 'rarity', newValue: `${rarityToken}/${rL}`, rarityCode: RARITY_NAMES[rL] });
             }
         }
     }
