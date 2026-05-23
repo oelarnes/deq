@@ -37,18 +37,26 @@ body {
 }
 
 .doc-button {
-    border: 1px solid var(--pst-color-border);
-    background-color: var(--pst-color-border-muted);
-    text-align: left;
-    padding: 4px 8px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1.5px solid rgba(255, 255, 255, 0.75);
+    color: #fff;
+    padding: 5px 12px;
+    border-radius: 1em;
+    font: inherit;
+    font-size: 0.85em;
+    font-weight: 600;
     cursor: pointer;
-    transition: all 0.3s ease;
+    line-height: 1.2;
+    white-space: nowrap;
+    transition: background 0.2s, border-color 0.2s;
     margin-bottom: 1rem;
-    display: inline;
 }
 
+.doc-button:hover { background: rgba(0, 0, 0, 0.55); border-color: rgba(255, 255, 255, 1); }
+
 button.doc-button.expanded {
-    outline: var(--pst-color-accent) solid .1875rem;
+    background: rgba(255, 255, 255, 0.15);
+    border-color: #fff;
 }
 
 .doc-text {
@@ -225,31 +233,6 @@ th[data-sort]:hover {
     opacity: 0.6;
 }
 
-.col-info {
-    background: none;
-    border: none;
-    font: inherit;
-    font-size: 0.75em;
-    opacity: 0.5;
-    cursor: pointer;
-    padding: 4px 3px;
-    vertical-align: middle;
-    color: inherit;
-}
-
-.col-info:hover {
-    opacity: 1;
-}
-
-.col-desc-row td {
-    font-style: italic;
-    font-size: 0.9em;
-    color: var(--pst-color-text-muted);
-    text-align: left;
-    padding: 4px 8px;
-    background: var(--pst-color-background);
-    border-bottom: 1px solid var(--pst-color-border);
-}
 
 .name-cell {
     cursor: pointer;
