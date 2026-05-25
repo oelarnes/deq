@@ -537,12 +537,38 @@ function generateColorChips(colorToken) {
         };
     }
 
-    // Any state containing colorless uses simplified OR mode (commutative — no * or + options)
+    // Any state containing colorless: normalize c to last position
     if (colorToken.split('/').includes('c')) {
-        // Normalize: WUBRG parts first, c last — so c→/W and w→/C reach identical state
         const WUBRG_ORDER = { w: 0, u: 1, b: 2, r: 3, g: 4 };
         const parts = colorToken.split('/').sort((a, b) => (WUBRG_ORDER[a] ?? 99) - (WUBRG_ORDER[b] ?? 99));
         const nonCParts = parts.filter(p => p !== 'c');
+        const nonCToken = nonCParts.join('/');
+        const singles = nonCParts.filter(p => p.length === 1);
+
+        // Pair+c or triple+c: show combo as single label chip + C ×, commutes with WUBRG depth
+        if (isPairPattern(nonCToken) || isTripleCombo(nonCToken)) {
+            const displayLabel = sortWUBRG(singles.join('')).toUpperCase().split('').join('/');
+            const canonicalNonC = isTripleCombo(nonCToken)
+                ? tripleComboToken(...sortWUBRG(singles.join('')).split(''))
+                : nonCToken;
+            const mainRow = [
+                { label: displayLabel, kind: 'active', group: 'color', newValue: 'c', manaColor: null },
+                { label: 'C', kind: 'active', group: 'color', newValue: canonicalNonC, manaColor: 'c' },
+            ];
+            // Pair+c can expand to triple+c; triple+c is terminal
+            const wideRow = isPairPattern(nonCToken)
+                ? WUBRG_LETTERS
+                    .filter(c => !singles.includes(c.toLowerCase()))
+                    .map(c => ({
+                        label: `/${c}`, kind: 'add', group: 'color',
+                        newValue: `${tripleComboToken(singles[0], singles[1], c.toLowerCase())}/c`,
+                        manaColor: c.toLowerCase(),
+                    }))
+                : [];
+            return { mainRow, wideRow };
+        }
+
+        // Empty or single: each part is its own chip, expand with remaining WUBRG
         const mainRow = parts.map(p => {
             const remaining = parts.filter(x => x !== p);
             return {
@@ -551,23 +577,15 @@ function generateColorChips(colorToken) {
                 manaColor: p.length === 1 ? p : null,
             };
         });
-        // Expand only when non-c component is a single color; pair pattern + c is terminal
-        const wideRow = nonCParts.length <= 1
-            ? WUBRG_LETTERS
-                .filter(c => !parts.includes(c.toLowerCase()))
-                .map(c => {
-                    const cL = c.toLowerCase();
-                    let newValue;
-                    if (nonCParts.length === 0) {
-                        newValue = `${cL}/c`;
-                    } else {
-                        const base = nonCParts[0];
-                        const combo = sortWUBRG(base + cL);
-                        newValue = `${combo[0]}/${combo[1]}/${combo}/c`;
-                    }
-                    return { label: `/${c}`, kind: 'add', group: 'color', newValue, manaColor: cL };
-                })
-            : [];
+        const wideRow = WUBRG_LETTERS
+            .filter(c => !parts.includes(c.toLowerCase()))
+            .map(c => {
+                const cL = c.toLowerCase();
+                const newValue = nonCParts.length === 0
+                    ? `${cL}/c`
+                    : (() => { const combo = sortWUBRG(nonCParts[0] + cL); return `${combo[0]}/${combo[1]}/${combo}/c`; })();
+                return { label: `/${c}`, kind: 'add', group: 'color', newValue, manaColor: cL };
+            });
         return { mainRow, wideRow };
     }
 
@@ -594,12 +612,12 @@ function generateColorChips(colorToken) {
         }
         wideRow.push({ label: '/C', kind: 'add', group: 'color', newValue: `${colorToken}/c`, manaColor: 'c' });
 
-    // Triple combo: w/u/b/wu/ub/wb/wub — terminal, single active label
+    // Triple combo: w/u/b/wu/ub/wb/wub — /C available, then terminal
     } else if (isTripleCombo(colorToken)) {
         const singles = colorToken.split('/').filter(p => p.length === 1);
         const displayLabel = sortWUBRG(singles.join('')).toUpperCase().split('').join('/');
         mainRow = [{ label: displayLabel, kind: 'active', group: 'color', newValue: null }];
-        wideRow = [];
+        wideRow = [{ label: '/C', kind: 'add', group: 'color', newValue: `${colorToken}/c`, manaColor: 'c' }];
 
     // Wildcard path: w*, wu*, etc. — restricted, no slash options, no /C
     } else if (colorToken.endsWith('*')) {
