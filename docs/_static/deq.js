@@ -506,6 +506,26 @@ function isWildcardPairPattern(token) {
     return parts.length === 2 && parts.every(p => p.length === 2 && p.endsWith('*'));
 }
 
+// Canonical 3-color combinatorial: a/b/c/ab/bc/ac/abc
+function tripleComboToken(a, b, c) {
+    const sorted = sortWUBRG(a + b + c);
+    const [x, y, z] = sorted;
+    return `${x}/${y}/${z}/${x}${y}/${y}${z}/${x}${z}/${sorted}`;
+}
+
+function isTripleCombo(token) {
+    const parts = token.split('/');
+    if (parts.length !== 7) return false;
+    const singles = parts.filter(p => p.length === 1);
+    if (singles.length !== 3) return false;
+    const pairs = parts.filter(p => p.length === 2);
+    if (pairs.length !== 3) return false;
+    const triples = parts.filter(p => p.length === 3);
+    if (triples.length !== 1) return false;
+    const singleSet = new Set(singles);
+    return [...pairs, ...triples].every(p => p.split('').every(c => singleSet.has(c)));
+}
+
 // Returns { mainRow, wideRow } — wideRow is empty [] when not applicable.
 function generateColorChips(colorToken) {
     if (!colorToken) {
@@ -561,11 +581,25 @@ function generateColorChips(colorToken) {
 
     let mainRow, wideRow;
 
-    // Slash path: w/b/wb — active label only, /C available, no *
+    // Slash path: w/b/wb — active label only, no *. Wide row: remaining WUBRG → triple combo, plus /C, /M
     if (isPairPattern(colorToken)) {
         const [a, b] = colorToken.split('/').slice(0, 2);
         mainRow = [{ label: `${a.toUpperCase()}/${b.toUpperCase()}`, kind: 'active', group: 'color', newValue: null }];
-        wideRow = [{ label: '/C', kind: 'add', group: 'color', newValue: `${colorToken}/c`, manaColor: 'c' }];
+        wideRow = [];
+        for (const c of WUBRG_LETTERS) {
+            const cL = c.toLowerCase();
+            if (cL !== a && cL !== b) {
+                wideRow.push({ label: `/${c}`, kind: 'add', group: 'color', newValue: tripleComboToken(a, b, cL), manaColor: cL });
+            }
+        }
+        wideRow.push({ label: '/C', kind: 'add', group: 'color', newValue: `${colorToken}/c`, manaColor: 'c' });
+
+    // Triple combo: w/u/b/wu/ub/wb/wub — terminal, single active label
+    } else if (isTripleCombo(colorToken)) {
+        const singles = colorToken.split('/').filter(p => p.length === 1);
+        const displayLabel = sortWUBRG(singles.join('')).toUpperCase().split('').join('/');
+        mainRow = [{ label: displayLabel, kind: 'active', group: 'color', newValue: null }];
+        wideRow = [];
 
     // Wildcard path: w*, wu*, etc. — restricted, no slash options, no /C
     } else if (colorToken.endsWith('*')) {
@@ -743,7 +777,7 @@ async function loadSet(setCode) {
     document.getElementById('startDate').textContent = data.start_date;
     document.getElementById('endDate').textContent = data.end_date;
     currentSetCode = data.set_code;
-    document.title = `${data.set_code} DEq: Estimated Draft Equity`;
+    document.title = 'DEq: Estimated Draft Equity';
     isEmbargoed = !!data.embargoed;
     document.getElementById('dataTable').classList.toggle('embargo-active', isEmbargoed);
     modal.classList.toggle('embargo-active', isEmbargoed);
