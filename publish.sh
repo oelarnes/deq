@@ -3,8 +3,8 @@ git stash
 git checkout main
 git pull
 
-jupyter-book clean -a docs
-jupyter-book build docs
+.venv/bin/jupyter-book clean -a docs
+.venv/bin/jupyter-book build docs
 
 cp docs/_images/* docs/_build/html/_images
 .venv/bin/python deq/site.py
