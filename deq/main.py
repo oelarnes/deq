@@ -29,6 +29,7 @@ META_DECAY = 0.95
 MAX_DEQ_DAYS = 25
 GRADE_C_MINUS_MAX = -0.001
 GRADE_NOTCH_INCREMENT = 0.0075
+DEQ_BAYES_GAMES = 1000
 
 SAMPLE_THRESHOLD = 500
 BAYES_GAMES = 150
@@ -723,7 +724,6 @@ def live_deq(
         )
         raw_deq_by_cohort[player_cohort] = deq_df
 
-    ALL_WEIGHT = 1000
     component_metrics = [
         ColName.PCT_GP,
         "mwr",
@@ -748,7 +748,7 @@ def live_deq(
         )
         .with_columns(
             pl.when(pl.col("mwr_top").is_not_null() & pl.col("mwr_top").is_finite())
-            .then(pl.col("deck") / (ALL_WEIGHT + pl.col("deck")))
+            .then(pl.col("deck") / (DEQ_BAYES_GAMES + pl.col("deck")))
             .otherwise(pl.lit(0))
             .alias("pct_top"),
         )
