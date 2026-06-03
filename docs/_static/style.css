@@ -48,16 +48,14 @@ body {
     cursor: pointer;
     line-height: 1.2;
     white-space: nowrap;
-    transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+    transition: background 0.2s, border-color 0.2s;
     margin-bottom: 1rem;
 }
 
 .doc-button:hover { background: rgba(0, 0, 0, 0.55); border-color: rgba(255, 255, 255, 1); }
 
 button.doc-button.expanded {
-    background: rgba(255, 255, 255, 0.15);
-    border-color: #fff;
-    box-shadow: 0 0 0 3px var(--pst-color-accent);
+    border-color: var(--pst-color-accent);
 }
 
 .doc-text {
