@@ -44,7 +44,7 @@ config = {
     "ECL": DEqConfig(start_date=dt.date(2026, 1, 20), end_date=dt.date(2026, 3, 2)),
     "TLA": DEqConfig(start_date=dt.date(2025, 11, 18), end_date=dt.date(2026, 1, 20)),
     "Cube+-+Powered": DEqConfig(
-        start_date=dt.date(2025, 10, 28), end_date=dt.date(2026, 4, 21), cube=True
+        start_date=dt.date(2025, 10, 28), end_date=dt.date(2026, 6, 23), cube=True
     ),
     "OM1": DEqConfig(
         start_date=dt.date(2025, 9, 23),
