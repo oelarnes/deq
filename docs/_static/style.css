@@ -55,8 +55,8 @@ body {
 .doc-button:hover { background: rgba(0, 0, 0, 0.55); border-color: rgba(255, 255, 255, 1); }
 
 button.doc-button.expanded {
-    background: rgba(255, 255, 255, 0.15);
-    border-color: #fff;
+    border-width: 3px;
+    border-color: var(--pst-color-accent);
 }
 
 .doc-text {
