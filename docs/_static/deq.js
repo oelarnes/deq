@@ -398,7 +398,7 @@ function nameFilter(row) {
 }
 
 function splitTokens(searchTerm) {
-    const quoteSplit = searchTerm.split(/"|"|"/).reduce(
+    const quoteSplit = searchTerm.split(/"|“|”/).reduce(
         (allTerms, term, index) => {
             if (index % 2) {
                 const lastTerm = allTerms.pop()
