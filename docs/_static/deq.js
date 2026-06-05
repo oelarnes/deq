@@ -392,40 +392,63 @@ function rarityFilter(row) {
     }
 }
 
+// The three double-quote varieties: straight (U+0022), left curly (U+201C), right curly (U+201D)
+const QUOTE_CHARS = /["“”]/;
+const QUOTE_CHARS_G = /["“”]/g;
+
+function stripQuotes(s) {
+    return s.replace(QUOTE_CHARS_G, '').trim();
+}
+
+// Split a predicate value on / for OR, but only on / that lies OUTSIDE quotes —
+// so // inside a quoted split-card name is left intact.
+function splitOnUnquotedSlash(value) {
+    const parts = [];
+    let current = '';
+    let inQuote = false;
+    for (const ch of value) {
+        if (QUOTE_CHARS.test(ch)) {
+            inQuote = !inQuote;
+            current += ch;
+        } else if (ch === '/' && !inQuote) {
+            parts.push(current);
+            current = '';
+        } else {
+            current += ch;
+        }
+    }
+    parts.push(current);
+    return parts;
+}
+
 function nameFilter(row) {
     return term => {
-        // Split on single / only — // is always part of a split card name, never an OR separator
-        const orSplit = term.split(/(?<!\/)\/(?!\/)/).map(s => s.trim()).filter(s => s.length > 0);
+        const orSplit = splitOnUnquotedSlash(term).map(stripQuotes).filter(s => s.length > 0);
         return orSplit.length === 0 || orSplit.some(
             item => row.name.toLowerCase().includes(item)
         )
     }
 }
 
+// Tokenize on unquoted whitespace. Quote characters are PRESERVED in the token so
+// later stages (prefix categorization, / OR-splitting) see phrase boundaries;
+// quotes are only stripped at the final value-matching step.
 function splitTokens(searchTerm) {
-    // Correct parse order: quoted groups first (atomic), then space = AND boundary.
-    // Quotes are stripped; their content is concatenated with any adjacent non-space chars.
     const tokens = [];
     let current = '';
-    let i = 0;
-    while (i < searchTerm.length) {
-        const ch = searchTerm[i];
-        if (/[“””]/.test(ch)) {
-            i++;
-            while (i < searchTerm.length && !/[“””]/.test(searchTerm[i])) {
-                current += searchTerm[i++];
-            }
-            if (i < searchTerm.length) i++; // consume closing quote
-        } else if (ch === ' ') {
-            if (current.trim()) tokens.push(current.trim());
+    let inQuote = false;
+    for (const ch of searchTerm) {
+        if (QUOTE_CHARS.test(ch)) {
+            inQuote = !inQuote;
+            current += ch;
+        } else if (/\s/.test(ch) && !inQuote) {
+            if (current.length) tokens.push(current);
             current = '';
-            i++;
         } else {
             current += ch;
-            i++;
         }
     }
-    if (current.trim()) tokens.push(current.trim());
+    if (current.length) tokens.push(current);
     return tokens;
 }
 
@@ -481,7 +504,8 @@ function parseSearchTokens(text) {
             const v = lower.slice(2);
             if (v.length > 0) rarityToken = v;
         } else {
-            nameTokens.push(t.includes(' ') ? `"${t}"` : t);
+            // Token already retains its own quotes if it was a phrase
+            nameTokens.push(t);
         }
     }
     return { nameRemainder: nameTokens.join(' '), colorToken, rarityToken };
