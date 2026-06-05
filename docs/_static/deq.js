@@ -111,6 +111,7 @@ document.querySelector('#dataTable thead').addEventListener('click', function(e)
     }
     updateSortIndicators();
     renderTable(sortData(filterData(searchInput.value)));
+    updateURL();
 });
 
 // Modal
@@ -125,7 +126,7 @@ const modalContent = document.querySelector('.modal-content');
 let openModalIdx = -1;
 let isEmbargoed = false;
 
-function openModal(idx, preserveToggle = false) {
+function openModal(idx, preserveToggle = false, skipURLUpdate = false) {
     modalContent.style.transition = '';
     modalContent.style.transform = '';
     const card = currentRenderedData[idx];
@@ -185,10 +186,13 @@ function openModal(idx, preserveToggle = false) {
     modalPrev.disabled = idx <= 0;
     modalNext.disabled = idx >= currentRenderedData.length - 1;
     modal.classList.add('active');
+    if (!skipURLUpdate) updateURL();
 }
 
 function closeModal() {
     modal.classList.remove('active');
+    openModalIdx = -1;
+    updateURL();
 }
 
 modalPrev.addEventListener('click', () => openModal(openModalIdx - 1, true));
@@ -750,6 +754,7 @@ function applyChip(group, newValue) {
     renderChips();
     updateChipsVisibility();
     renderTable(sortData(filterData(searchInput.value)));
+    updateURL();
 }
 
 // Prevent chip clicks from blurring the input
@@ -771,6 +776,7 @@ searchInput.addEventListener('input', function() {
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(() => {
         renderTable(sortData(filterData(this.value)));
+        updateURL();
     }, 150);
 });
 
@@ -786,6 +792,25 @@ searchInput.addEventListener('blur', function() {
 
 renderChips();
 
+// URL state
+function buildURLParams() {
+    const params = new URLSearchParams();
+    if (currentSetCode) params.set('set', currentSetCode);
+    if (searchInput.value.trim()) params.set('q', searchInput.value.trim());
+    if (sortState.col !== 'deq' || sortState.dir !== 'desc') {
+        params.set('sort', `${sortState.col}:${sortState.dir}`);
+    }
+    if (openModalIdx >= 0 && currentRenderedData[openModalIdx]) {
+        params.set('card', currentRenderedData[openModalIdx].name);
+    }
+    return params;
+}
+
+function updateURL() {
+    const qs = buildURLParams().toString();
+    history.replaceState(null, '', qs ? `${location.pathname}?${qs}` : location.pathname);
+}
+
 // Set switching
 const linkSelect = document.getElementById('link-select');
 
@@ -800,9 +825,12 @@ async function loadSet(setCode) {
     document.getElementById('dataTable').classList.toggle('embargo-active', isEmbargoed);
     modal.classList.toggle('embargo-active', isEmbargoed);
     deq_table = data.cards;
+    openModalIdx = -1;
+    modal.classList.remove('active');
     searchInput.value = '';
     renderChips();
     renderTable(sortData(deq_table));
+    updateURL();
     searchInput.focus();
 }
 
@@ -810,4 +838,42 @@ linkSelect.addEventListener('change', function() {
     loadSet(this.value);
 });
 
-loadSet(linkSelect.value);
+// Init: apply query params then load
+(async function init() {
+    const params = new URLSearchParams(location.search);
+    const setParam = params.get('set');
+    const qParam   = params.get('q');
+    const sortParam = params.get('sort');
+    const cardParam = params.get('card');
+
+    if (sortParam) {
+        const [col, dir] = sortParam.split(':');
+        if (col) {
+            sortState.col = col;
+            sortState.dir = dir || ((col === 'name' || col === 'color' || col === 'rarity') ? 'asc' : 'desc');
+            updateSortIndicators();
+        }
+    }
+
+    if (setParam) {
+        const opt = linkSelect.querySelector(`option[value="${setParam.toUpperCase()}"]`);
+        if (opt) linkSelect.value = setParam.toUpperCase();
+    }
+
+    await loadSet(linkSelect.value);
+
+    if (qParam) {
+        searchInput.value = qParam;
+        renderChips();
+        updateChipsVisibility();
+        renderTable(sortData(filterData(qParam)));
+        updateURL();
+    }
+
+    if (cardParam) {
+        const lower = cardParam.toLowerCase();
+        const idx = currentRenderedData.findIndex(c => c.name.toLowerCase() === lower);
+        if (idx >= 0) openModal(idx, false, true);
+        updateURL();
+    }
+})();
