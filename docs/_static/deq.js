@@ -841,10 +841,11 @@ linkSelect.addEventListener('change', function() {
 // Init: apply query params then load
 (async function init() {
     const params = new URLSearchParams(location.search);
-    const setParam = params.get('set');
-    const qParam   = params.get('q');
+    const setParam  = params.get('set');
+    const qParam    = params.get('q');
     const sortParam = params.get('sort');
     const cardParam = params.get('card');
+    const kParam    = params.get('k');
 
     if (sortParam) {
         const [col, dir] = sortParam.split(':');
@@ -875,5 +876,11 @@ linkSelect.addEventListener('change', function() {
         const idx = currentRenderedData.findIndex(c => c.name.toLowerCase() === lower);
         if (idx >= 0) openModal(idx, false, true);
         updateURL();
+    } else if (kParam) {
+        const k = parseInt(kParam, 10);
+        if (!isNaN(k) && k >= 1 && k <= currentRenderedData.length) {
+            openModal(k - 1, false, true);
+            updateURL();
+        }
     }
 })();
