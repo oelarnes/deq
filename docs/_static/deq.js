@@ -394,8 +394,9 @@ function rarityFilter(row) {
 
 function nameFilter(row) {
     return term => {
-        const orSplit = term.split('/');
-        return orSplit.some(
+        // Split on single / only — // is always part of a split card name, never an OR separator
+        const orSplit = term.split(/(?<!\/)\/(?!\/)/).map(s => s.trim()).filter(s => s.length > 0);
+        return orSplit.length === 0 || orSplit.some(
             item => row.name.toLowerCase().includes(item)
         )
     }
