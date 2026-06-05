@@ -396,35 +396,37 @@ function nameFilter(row) {
     return term => {
         // Split on single / only — // is always part of a split card name, never an OR separator
         const orSplit = term.split(/(?<!\/)\/(?!\/)/).map(s => s.trim()).filter(s => s.length > 0);
-        return orSplit.length === 0 || orSplit.some(item => {
-            if (item.includes('\x00')) {
-                // Quoted term — exact name match
-                return row.name.toLowerCase() === item.replace(/\x00/g, '').trim();
-            }
-            return row.name.toLowerCase().includes(item);
-        })
+        return orSplit.length === 0 || orSplit.some(
+            item => row.name.toLowerCase().includes(item)
+        )
     }
 }
 
 function splitTokens(searchTerm) {
-    const quoteSplit = searchTerm.split(/"|“|”/).reduce(
-        (allTerms, term, index) => {
-            if (index % 2) {
-                const lastTerm = allTerms.pop()
-                // \x00 marks the boundary into quoted content; nameFilter uses it for exact matching
-                return [...allTerms, lastTerm + '\x00' + term].filter(item => item.length > 0)
-            } else {
-                const split = term.split(/\s+/)
-                if (allTerms.length > 0) {
-                    const lastTerm = allTerms.pop()
-                    const firstTerm = split.shift()
-                    return [...allTerms, lastTerm + firstTerm, ...split]
-                }
-                return split
+    // Correct parse order: quoted groups first (atomic), then space = AND boundary.
+    // Quotes are stripped; their content is concatenated with any adjacent non-space chars.
+    const tokens = [];
+    let current = '';
+    let i = 0;
+    while (i < searchTerm.length) {
+        const ch = searchTerm[i];
+        if (/[“””]/.test(ch)) {
+            i++;
+            while (i < searchTerm.length && !/[“””]/.test(searchTerm[i])) {
+                current += searchTerm[i++];
             }
-        }, []
-    )
-    return quoteSplit
+            if (i < searchTerm.length) i++; // consume closing quote
+        } else if (ch === ' ') {
+            if (current.trim()) tokens.push(current.trim());
+            current = '';
+            i++;
+        } else {
+            current += ch;
+            i++;
+        }
+    }
+    if (current.trim()) tokens.push(current.trim());
+    return tokens;
 }
 
 function filterData(searchTerm) {
