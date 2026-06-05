@@ -396,9 +396,13 @@ function nameFilter(row) {
     return term => {
         // Split on single / only — // is always part of a split card name, never an OR separator
         const orSplit = term.split(/(?<!\/)\/(?!\/)/).map(s => s.trim()).filter(s => s.length > 0);
-        return orSplit.length === 0 || orSplit.some(
-            item => row.name.toLowerCase().includes(item)
-        )
+        return orSplit.length === 0 || orSplit.some(item => {
+            if (item.includes('\x00')) {
+                // Quoted term — exact name match
+                return row.name.toLowerCase() === item.replace(/\x00/g, '').trim();
+            }
+            return row.name.toLowerCase().includes(item);
+        })
     }
 }
 
@@ -407,7 +411,8 @@ function splitTokens(searchTerm) {
         (allTerms, term, index) => {
             if (index % 2) {
                 const lastTerm = allTerms.pop()
-                return [...allTerms, lastTerm + term].filter(item => item.length > 0)
+                // \x00 marks the boundary into quoted content; nameFilter uses it for exact matching
+                return [...allTerms, lastTerm + '\x00' + term].filter(item => item.length > 0)
             } else {
                 const split = term.split(/\s+/)
                 if (allTerms.length > 0) {
