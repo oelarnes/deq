@@ -111,6 +111,7 @@ document.querySelector('#dataTable thead').addEventListener('click', function(e)
     }
     updateSortIndicators();
     renderTable(sortData(filterData(searchInput.value)));
+    updateURL();
 });
 
 // Modal
@@ -125,7 +126,7 @@ const modalContent = document.querySelector('.modal-content');
 let openModalIdx = -1;
 let isEmbargoed = false;
 
-function openModal(idx, preserveToggle = false) {
+function openModal(idx, preserveToggle = false, skipURLUpdate = false) {
     modalContent.style.transition = '';
     modalContent.style.transform = '';
     const card = currentRenderedData[idx];
@@ -185,10 +186,13 @@ function openModal(idx, preserveToggle = false) {
     modalPrev.disabled = idx <= 0;
     modalNext.disabled = idx >= currentRenderedData.length - 1;
     modal.classList.add('active');
+    if (!skipURLUpdate) updateURL();
 }
 
 function closeModal() {
     modal.classList.remove('active');
+    openModalIdx = -1;
+    updateURL();
 }
 
 modalPrev.addEventListener('click', () => openModal(openModalIdx - 1, true));
@@ -388,33 +392,64 @@ function rarityFilter(row) {
     }
 }
 
+// The three double-quote varieties: straight (U+0022), left curly (U+201C), right curly (U+201D)
+const QUOTE_CHARS = /["“”]/;
+const QUOTE_CHARS_G = /["“”]/g;
+
+function stripQuotes(s) {
+    return s.replace(QUOTE_CHARS_G, '').trim();
+}
+
+// Split a predicate value on / for OR, but only on / that lies OUTSIDE quotes —
+// so // inside a quoted split-card name is left intact.
+function splitOnUnquotedSlash(value) {
+    const parts = [];
+    let current = '';
+    let inQuote = false;
+    for (const ch of value) {
+        if (QUOTE_CHARS.test(ch)) {
+            inQuote = !inQuote;
+            current += ch;
+        } else if (ch === '/' && !inQuote) {
+            parts.push(current);
+            current = '';
+        } else {
+            current += ch;
+        }
+    }
+    parts.push(current);
+    return parts;
+}
+
 function nameFilter(row) {
     return term => {
-        const orSplit = term.split('/');
-        return orSplit.some(
+        const orSplit = splitOnUnquotedSlash(term).map(stripQuotes).filter(s => s.length > 0);
+        return orSplit.length === 0 || orSplit.some(
             item => row.name.toLowerCase().includes(item)
         )
     }
 }
 
+// Tokenize on unquoted whitespace. Quote characters are PRESERVED in the token so
+// later stages (prefix categorization, / OR-splitting) see phrase boundaries;
+// quotes are only stripped at the final value-matching step.
 function splitTokens(searchTerm) {
-    const quoteSplit = searchTerm.split(/"|“|”/).reduce(
-        (allTerms, term, index) => {
-            if (index % 2) {
-                const lastTerm = allTerms.pop()
-                return [...allTerms, lastTerm + term].filter(item => item.length > 0)
-            } else {
-                const split = term.split(/\s+/)
-                if (allTerms.length > 0) {
-                    const lastTerm = allTerms.pop()
-                    const firstTerm = split.shift()
-                    return [...allTerms, lastTerm + firstTerm, ...split]
-                }
-                return split
-            }
-        }, []
-    )
-    return quoteSplit
+    const tokens = [];
+    let current = '';
+    let inQuote = false;
+    for (const ch of searchTerm) {
+        if (QUOTE_CHARS.test(ch)) {
+            inQuote = !inQuote;
+            current += ch;
+        } else if (/\s/.test(ch) && !inQuote) {
+            if (current.length) tokens.push(current);
+            current = '';
+        } else {
+            current += ch;
+        }
+    }
+    if (current.length) tokens.push(current);
+    return tokens;
 }
 
 function filterData(searchTerm) {
@@ -469,7 +504,8 @@ function parseSearchTokens(text) {
             const v = lower.slice(2);
             if (v.length > 0) rarityToken = v;
         } else {
-            nameTokens.push(t.includes(' ') ? `"${t}"` : t);
+            // Token already retains its own quotes if it was a phrase
+            nameTokens.push(t);
         }
     }
     return { nameRemainder: nameTokens.join(' '), colorToken, rarityToken };
@@ -750,6 +786,7 @@ function applyChip(group, newValue) {
     renderChips();
     updateChipsVisibility();
     renderTable(sortData(filterData(searchInput.value)));
+    updateURL();
 }
 
 // Prevent chip clicks from blurring the input
@@ -771,6 +808,7 @@ searchInput.addEventListener('input', function() {
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(() => {
         renderTable(sortData(filterData(this.value)));
+        updateURL();
     }, 150);
 });
 
@@ -786,6 +824,25 @@ searchInput.addEventListener('blur', function() {
 
 renderChips();
 
+// URL state
+function buildURLParams() {
+    const params = new URLSearchParams();
+    if (currentSetCode) params.set('set', currentSetCode);
+    if (searchInput.value.trim()) params.set('q', searchInput.value.trim());
+    if (sortState.col !== 'deq' || sortState.dir !== 'desc') {
+        params.set('sort', `${sortState.col}:${sortState.dir}`);
+    }
+    if (openModalIdx >= 0 && currentRenderedData[openModalIdx]) {
+        params.set('card', currentRenderedData[openModalIdx].name);
+    }
+    return params;
+}
+
+function updateURL() {
+    const qs = buildURLParams().toString();
+    history.replaceState(null, '', qs ? `${location.pathname}?${qs}` : location.pathname);
+}
+
 // Set switching
 const linkSelect = document.getElementById('link-select');
 
@@ -800,9 +857,12 @@ async function loadSet(setCode) {
     document.getElementById('dataTable').classList.toggle('embargo-active', isEmbargoed);
     modal.classList.toggle('embargo-active', isEmbargoed);
     deq_table = data.cards;
+    openModalIdx = -1;
+    modal.classList.remove('active');
     searchInput.value = '';
     renderChips();
     renderTable(sortData(deq_table));
+    updateURL();
     searchInput.focus();
 }
 
@@ -810,4 +870,49 @@ linkSelect.addEventListener('change', function() {
     loadSet(this.value);
 });
 
-loadSet(linkSelect.value);
+// Init: apply query params then load
+(async function init() {
+    const params = new URLSearchParams(location.search);
+    const setParam  = params.get('set');
+    const qParam    = params.get('q');
+    const sortParam = params.get('sort');
+    const cardParam = params.get('card');
+    const kParam    = params.get('k');
+
+    if (sortParam) {
+        const [col, dir] = sortParam.split(':');
+        if (col) {
+            sortState.col = col;
+            sortState.dir = dir || ((col === 'name' || col === 'color' || col === 'rarity') ? 'asc' : 'desc');
+            updateSortIndicators();
+        }
+    }
+
+    if (setParam) {
+        const opt = linkSelect.querySelector(`option[value="${setParam.toUpperCase()}"]`);
+        if (opt) linkSelect.value = setParam.toUpperCase();
+    }
+
+    await loadSet(linkSelect.value);
+
+    if (qParam) {
+        searchInput.value = qParam;
+        renderChips();
+        updateChipsVisibility();
+        renderTable(sortData(filterData(qParam)));
+        updateURL();
+    }
+
+    if (cardParam) {
+        const lower = cardParam.toLowerCase();
+        const idx = currentRenderedData.findIndex(c => c.name.toLowerCase() === lower);
+        if (idx >= 0) openModal(idx, false, true);
+        updateURL();
+    } else if (kParam) {
+        const k = parseInt(kParam, 10);
+        if (!isNaN(k) && k >= 1 && k <= currentRenderedData.length) {
+            openModal(k - 1, false, true);
+            updateURL();
+        }
+    }
+})();
