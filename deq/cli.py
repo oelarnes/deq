@@ -6,7 +6,7 @@ from urllib.parse import urlencode
 from deq.sample_pack import DEQ_URL, fetch_draft_pick
 
 _17L_DRAFT_BASE = "https://www.17lands.com/draft"
-_SET_CODE_RE = re.compile(r'^[A-Z][A-Z0-9]{1,4}$')
+_SET_CODE_RE = re.compile(r'^[A-Za-z][A-Za-z0-9]{1,5}$')
 
 
 def _normalize_to_url(ref: str, pack: int, pick: int) -> str:

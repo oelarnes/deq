@@ -35,6 +35,12 @@ class TestParseRef:
     def test_set_code_with_digit(self):
         assert _parse_ref("OM1", 1, 1) == {"kind": "set", "set_code": "OM1"}
 
+    def test_pcube_mixed_case(self):
+        assert _parse_ref("PCube", 1, 1) == {"kind": "set", "set_code": "PCube"}
+
+    def test_six_char_set_code(self):
+        assert _parse_ref("Y26SOS", 1, 1) == {"kind": "set", "set_code": "Y26SOS"}
+
     def test_full_url_is_pick(self):
         ref = _parse_ref(f"{_BASE}/1/2", 1, 1)
         assert ref["kind"] == "pick"
