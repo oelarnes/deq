@@ -1,20 +1,20 @@
-"""Tests for DraftPack.deq_query_str and fetch_draft_pick."""
+"""Tests for DraftState.deq_query_str and fetch_draft_pick."""
 
 from __future__ import annotations
 
 import pytest
 
 import deq.sample_pack as sp
-from deq.sample_pack import DraftCard, DraftPack, fetch_draft_pick
+from deq.sample_pack import DraftCard, DraftState, fetch_draft_pick
 
 
 def _card(name: str) -> DraftCard:
     return DraftCard(name=name)
 
 
-class TestDraftPackDeqQueryStr:
-    def _pick(self, *names: str) -> DraftPack:
-        return DraftPack(
+class TestDraftStateDeqQueryStr:
+    def _pick(self, *names: str) -> DraftState:
+        return DraftState(
             set_code="SOS", draft_id="abc", pack_num=1, pick_num=1,
             pick=names[0], pack=[_card(n) for n in names],
         )

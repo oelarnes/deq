@@ -7,7 +7,7 @@ import pytest
 import deq.cli as cli_mod
 import deq.sample_pack as sp
 from deq.cli import _normalize_to_url, _parse_ref, main
-from deq.sample_pack import DraftCard, DraftPack
+from deq.sample_pack import DraftCard, DraftState
 
 _DRAFT_ID = "9b74b1a5ea8349039dc532964dc89c91"
 _BASE = f"https://www.17lands.com/draft/{_DRAFT_ID}"
@@ -69,7 +69,7 @@ class TestParseRef:
 class TestMain:
     @pytest.fixture(autouse=True)
     def _mock_fetch(self, monkeypatch: pytest.MonkeyPatch):
-        pick = DraftPack(
+        pick = DraftState(
             set_code="TLA",
             draft_id=_DRAFT_ID,
             pack_num=1,

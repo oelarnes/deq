@@ -88,8 +88,11 @@ class DraftCard:
 
 
 @dataclass
-class DraftPack:
+class DraftState:
     """Full state at a single pack/pick index of a draft.
+
+    A draft is a succession of these states. The cards up for selection are
+    `pack`, the chosen card is `pick`, and `pool` is what's already drafted.
 
     Required fields are supplied by every builder. The remaining fields are
     only available from richer sources (e.g. spells draft data) and default to
@@ -306,7 +309,7 @@ def get_sample_pack(
     metric_filter: dict | None = None,
     deq_days: int | None = None,
     seed: int | None = None,
-) -> DraftPack:
+) -> DraftState:
     global _seed
 
     if seed is None:
@@ -359,7 +362,7 @@ def get_sample_pack(
             if row[f"pool_{name}"] >= i:
                 pool.append(draft_cards[name])
 
-    return DraftPack(
+    return DraftState(
         set_code=row["expansion"],
         event_type=row["event_type"],
         draft_id=row["draft_id"],
@@ -377,7 +380,7 @@ def get_sample_pack(
     )
 
 
-def fetch_draft_pick(url: str) -> DraftPack:
+def fetch_draft_pick(url: str) -> DraftState:
     parts = urlparse(url).path.strip("/").split("/")
     draft_id = parts[1]
     pack_num = int(parts[2])
@@ -392,7 +395,7 @@ def fetch_draft_pick(url: str) -> DraftPack:
         if p["pack_number"] == pack_num - 1 and p["pick_number"] == pick_num - 1
     )
 
-    return DraftPack(
+    return DraftState(
         set_code=data["expansion"],
         draft_id=draft_id,
         pack_num=pack_num,
