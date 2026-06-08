@@ -4,8 +4,10 @@ from dataclasses import dataclass
 import datetime
 import json
 import functools
+from urllib.parse import urlparse, quote, urlencode
 
 import polars as pl
+import requests
 
 from spells import summon, view_select, ColName, get_names
 from spells.enums import View
@@ -14,8 +16,14 @@ from deq import ext
 from deq.plot import METRIC_LABELS
 from deq.p1_strategy import get_metric_context, TOP_PLAYER
 
+DEQ_URL = "https://magic-flea.com/on-draft/deq.html"
+
 METRIC_CELL_WIDTH = 16
 NAME_CELL_WIDTH = 32
+
+def _deq_url(params: dict, base_url: str = DEQ_URL) -> str:
+    return base_url + "?" + urlencode(params)
+
 
 METRIC_FORMAT_STR = {
     "deq": "+.2%",
@@ -26,6 +34,7 @@ METRIC_FORMAT_STR = {
 @dataclass
 class DraftCard:
     name: str
+    set_code: str
     image_url: str
     attributes: dict
 
@@ -52,6 +61,9 @@ class DraftCard:
                 + "|"
             )
         return f"{pick_text}{self.name + ' ' * (NAME_CELL_WIDTH - len(self.name))}{metric_text}"
+
+    def deq_url(self, base_url: str = DEQ_URL) -> str:
+        return _deq_url({"set": self.set_code, "card": self.name}, base_url)
 
     def to_html(
         self,
@@ -298,6 +310,7 @@ def get_sample_pack(
     draft_cards = {
         name: DraftCard(
             name=name,
+            set_code=set_code,
             image_url=card_context[name][ColName.IMAGE_URL],
             attributes={attr: card_context[name][attr] for attr in metrics},
         )
@@ -328,4 +341,73 @@ def get_sample_pack(
         pick=row["pick"],
         pack=pack,
         pool=pool,
+    )
+
+
+@dataclass
+class DraftPick:
+    set_code: str
+    draft_id: str
+    pack_num: int
+    pick_num: int
+    pick: str
+    pack: list[DraftCard]
+
+    def draft_link(self) -> str:
+        return f"https://www.17lands.com/draft/{self.draft_id}/{self.pack_num}/{self.pick_num}"
+
+    def _pack_search(self) -> str:
+        return "/".join(f'"{c.name}"' for c in self.pack)
+
+    def deq_query_str(
+        self,
+        card_name: str | None = None,
+        color: str | None = None,
+        rarity: str | None = None,
+        sort: str | None = None,
+        asc: bool = False,
+        k: int | None = None,
+        base_url: str = DEQ_URL,
+    ) -> str:
+        q_parts = []
+        if color:
+            q_parts.append(f"c:{color}")
+        if rarity:
+            q_parts.append(f"r:{rarity}")
+        q_parts.append(self._pack_search())
+        params = {"set": self.set_code, "q": " ".join(q_parts)}
+        if card_name is not None:
+            params["card"] = card_name
+        if sort is not None:
+            params["sort"] = f"{sort}:{'asc' if asc else 'desc'}"
+        if k is not None:
+            params["k"] = k
+        return _deq_url(params, base_url)
+
+
+def fetch_draft_pick(url: str) -> DraftPick:
+    parts = urlparse(url).path.strip("/").split("/")
+    draft_id = parts[1]
+    pack_num = int(parts[2])
+    pick_num = int(parts[3])
+
+    data = requests.get(
+        f"https://www.17lands.com/data/draft?draft_id={draft_id}"
+    ).json()
+
+    pick_data = next(
+        p for p in data["picks"]
+        if p["pack_number"] == pack_num - 1 and p["pick_number"] == pick_num - 1
+    )
+
+    return DraftPick(
+        set_code=data["expansion"],
+        draft_id=draft_id,
+        pack_num=pack_num,
+        pick_num=pick_num,
+        pick=pick_data["pick"]["name"],
+        pack=[
+            DraftCard(name=c["name"], set_code=data["expansion"], image_url=c["image_url"], attributes={})
+            for c in pick_data["available"]
+        ],
     )

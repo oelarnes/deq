@@ -22,6 +22,7 @@ license = {text = "MIT"}
 
 [project.scripts]
 deqdaily = "deq.site:main"
+deq = "deq.cli:main"
 
 [build-system]
 requires = ["pdm-backend"]
