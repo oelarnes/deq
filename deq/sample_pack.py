@@ -1,10 +1,10 @@
 from typing import Sequence
 from collections.abc import Set
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import datetime
 import json
 import functools
-from urllib.parse import urlparse, quote, urlencode
+from urllib.parse import urlparse, urlencode
 
 import polars as pl
 import requests
@@ -34,9 +34,11 @@ METRIC_FORMAT_STR = {
 @dataclass
 class DraftCard:
     name: str
-    set_code: str
-    image_url: str
-    attributes: dict
+    image_url: str = ""
+    attributes: dict = field(default_factory=dict)
+    # the card's own printing set, not the draft environment; populated only
+    # when the source provides it (None otherwise)
+    set_code: str | None = None
 
     def metric_label(self, metric: str) -> str:
         label = f"{METRIC_LABELS[metric]}: "
@@ -61,9 +63,6 @@ class DraftCard:
                 + "|"
             )
         return f"{pick_text}{self.name + ' ' * (NAME_CELL_WIDTH - len(self.name))}{metric_text}"
-
-    def deq_url(self, base_url: str = DEQ_URL) -> str:
-        return _deq_url({"set": self.set_code, "card": self.name}, base_url)
 
     def to_html(
         self,
@@ -90,20 +89,27 @@ class DraftCard:
 
 @dataclass
 class DraftPack:
-    set_code: str
-    event_type: str
+    """Full state at a single pack/pick index of a draft.
+
+    Required fields are supplied by every builder. The remaining fields are
+    only available from richer sources (e.g. spells draft data) and default to
+    None when irrelevant to the builder (e.g. a bare 17lands API fetch).
+    """
+
+    set_code: str  # the draft environment / data set code
     draft_id: str
-    pick_num: int
-    pack_num: int
-    draft_date: datetime.date
-    user_n_games_bucket: int
-    user_game_win_rate_bucket: float
-    skill_cohort: int
-    match_wins: int
-    match_losses: int
+    pack_num: int  # 1-indexed, matching the 17lands URL
+    pick_num: int  # 1-indexed, matching the 17lands URL
     pick: str
     pack: list[DraftCard]
-    pool: list[DraftCard]
+    pool: list[DraftCard] | None = None
+    event_type: str | None = None
+    draft_date: datetime.date | None = None
+    user_n_games_bucket: int | None = None
+    user_game_win_rate_bucket: float | None = None
+    skill_cohort: float | None = None
+    match_wins: int | None = None
+    match_losses: int | None = None
 
     def get_pack_list(self, order_by: str = "deq", desc: bool = True):
         return sorted(
@@ -123,7 +129,35 @@ class DraftPack:
         return f"Record: {self.match_wins} - {self.match_losses}"
 
     def draft_link(self) -> str:
-        return f"https://17lands.com/draft/{self.draft_id}"
+        return f"https://www.17lands.com/draft/{self.draft_id}/{self.pack_num}/{self.pick_num}"
+
+    def _pack_search(self) -> str:
+        return "/".join(f'"{c.name}"' for c in self.pack)
+
+    def deq_query_str(
+        self,
+        card_name: str | None = None,
+        color: str | None = None,
+        rarity: str | None = None,
+        sort: str | None = None,
+        asc: bool = False,
+        k: int | None = None,
+        base_url: str = DEQ_URL,
+    ) -> str:
+        q_parts = []
+        if color:
+            q_parts.append(f"c:{color}")
+        if rarity:
+            q_parts.append(f"r:{rarity}")
+        q_parts.append(self._pack_search())
+        params = {"set": self.set_code, "q": " ".join(q_parts)}
+        if card_name is not None:
+            params["card"] = card_name
+        if sort is not None:
+            params["sort"] = f"{sort}:{'asc' if asc else 'desc'}"
+        if k is not None:
+            params["k"] = k
+        return _deq_url(params, base_url)
 
     def pack_pick_str(self) -> str:
         return f"Pack {self.pack_num} Pick {self.pick_num}"
@@ -144,7 +178,7 @@ class DraftPack:
                     star_metrics.add(metric)
             card_lines += c.to_text(is_pick, metrics, star_metrics) + "\n"
 
-        pool_lines = "\n".join([c.to_text(False) for c in self.pool])
+        pool_lines = "\n".join([c.to_text(False) for c in (self.pool or [])])
         return (
             "=" * line_length
             + f"""
@@ -192,7 +226,7 @@ Pool
                     star_metrics.add(metric)
             card_elements += c.to_html(is_pick, metrics, star_metrics) + "\n"
 
-        pool_elements = "\n".join([c.to_html(False) for c in self.pool])
+        pool_elements = "\n".join([c.to_html(False) for c in (self.pool or [])])
 
         frame = (
             """<html lang="en-US">
@@ -310,7 +344,6 @@ def get_sample_pack(
     draft_cards = {
         name: DraftCard(
             name=name,
-            set_code=set_code,
             image_url=card_context[name][ColName.IMAGE_URL],
             attributes={attr: card_context[name][attr] for attr in metrics},
         )
@@ -344,48 +377,7 @@ def get_sample_pack(
     )
 
 
-@dataclass
-class DraftPick:
-    set_code: str
-    draft_id: str
-    pack_num: int
-    pick_num: int
-    pick: str
-    pack: list[DraftCard]
-
-    def draft_link(self) -> str:
-        return f"https://www.17lands.com/draft/{self.draft_id}/{self.pack_num}/{self.pick_num}"
-
-    def _pack_search(self) -> str:
-        return "/".join(f'"{c.name}"' for c in self.pack)
-
-    def deq_query_str(
-        self,
-        card_name: str | None = None,
-        color: str | None = None,
-        rarity: str | None = None,
-        sort: str | None = None,
-        asc: bool = False,
-        k: int | None = None,
-        base_url: str = DEQ_URL,
-    ) -> str:
-        q_parts = []
-        if color:
-            q_parts.append(f"c:{color}")
-        if rarity:
-            q_parts.append(f"r:{rarity}")
-        q_parts.append(self._pack_search())
-        params = {"set": self.set_code, "q": " ".join(q_parts)}
-        if card_name is not None:
-            params["card"] = card_name
-        if sort is not None:
-            params["sort"] = f"{sort}:{'asc' if asc else 'desc'}"
-        if k is not None:
-            params["k"] = k
-        return _deq_url(params, base_url)
-
-
-def fetch_draft_pick(url: str) -> DraftPick:
+def fetch_draft_pick(url: str) -> DraftPack:
     parts = urlparse(url).path.strip("/").split("/")
     draft_id = parts[1]
     pack_num = int(parts[2])
@@ -400,14 +392,14 @@ def fetch_draft_pick(url: str) -> DraftPick:
         if p["pack_number"] == pack_num - 1 and p["pick_number"] == pick_num - 1
     )
 
-    return DraftPick(
+    return DraftPack(
         set_code=data["expansion"],
         draft_id=draft_id,
         pack_num=pack_num,
         pick_num=pick_num,
         pick=pick_data["pick"]["name"],
         pack=[
-            DraftCard(name=c["name"], set_code=data["expansion"], image_url=c["image_url"], attributes={})
+            DraftCard(name=c["name"], image_url=c["image_url"])
             for c in pick_data["available"]
         ],
     )

@@ -1,32 +1,22 @@
-"""Tests for DraftCard.deq_url, DraftPick.deq_query_str, and fetch_draft_pick."""
+"""Tests for DraftPack.deq_query_str and fetch_draft_pick."""
 
 from __future__ import annotations
 
 import pytest
 
 import deq.sample_pack as sp
-from deq.sample_pack import DraftCard, DraftPick, fetch_draft_pick
+from deq.sample_pack import DraftCard, DraftPack, fetch_draft_pick
 
 
-def _card(name: str, set_code: str = "TST") -> DraftCard:
-    return DraftCard(name=name, set_code=set_code, image_url="", attributes={})
+def _card(name: str) -> DraftCard:
+    return DraftCard(name=name)
 
 
-class TestDraftCardDeqUrl:
-    def test_normal_name(self):
-        url = _card("Lightning Bolt", "SOS").deq_url()
-        assert url == "https://magic-flea.com/on-draft/deq.html?set=SOS&card=Lightning+Bolt"
-
-    def test_split_card_encoded(self):
-        url = _card("Fire // Ice", "SOS").deq_url()
-        assert "card=Fire+%2F%2F+Ice" in url
-
-
-class TestDraftPickDeqQueryStr:
-    def _pick(self, *names: str) -> DraftPick:
-        return DraftPick(
+class TestDraftPackDeqQueryStr:
+    def _pick(self, *names: str) -> DraftPack:
+        return DraftPack(
             set_code="SOS", draft_id="abc", pack_num=1, pick_num=1,
-            pick=names[0], pack=[_card(n, "SOS") for n in names],
+            pick=names[0], pack=[_card(n) for n in names],
         )
 
     def test_no_card_name_returns_url_with_set_and_q(self):
@@ -84,7 +74,8 @@ class TestFetchDraftPick:
         assert pick.pick_num == 2
         assert pick.pick == "Lightning Bolt"
         assert [c.name for c in pick.pack] == ["Lightning Bolt", "Counterspell"]
-        assert all(c.set_code == "TLA" for c in pick.pack)
+        # the draft environment is not attached to individual cards
+        assert all(c.set_code is None for c in pick.pack)
 
     def test_draft_link_roundtrips(self, monkeypatch: pytest.MonkeyPatch):
         url = "https://www.17lands.com/draft/abc123/1/2"
