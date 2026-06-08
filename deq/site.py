@@ -85,18 +85,15 @@ def write_set_json(deq_data) -> Path:
 
 
 def write_html(deq_data, version: int) -> Path:
-    title_map = {"Cube+-+Powered": "Cube - Powered"}
-    code_map = {"Cube+-+Powered": "PCube"}
     date_format = "%-d %b %y"
 
     select_elements = "".join(
         f'<option value="{code}"{" selected" if code == deq_data.set_code else ""}>'
-        f'{code_map.get(code, code)}</option>'
+        f'{config[code].alias or code}</option>'
         for code in deq_data.available_sets
     )
 
     html = load_html_template().format(
-        set_code=title_map.get(deq_data.set_code, deq_data.set_code),
         start_date=deq_data.start_date.strftime(date_format),
         end_date=deq_data.end_date.strftime(date_format),
         select_elements=select_elements,

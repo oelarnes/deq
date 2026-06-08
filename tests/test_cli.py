@@ -35,11 +35,25 @@ class TestParseRef:
     def test_set_code_with_digit(self):
         assert _parse_ref("OM1", 1, 1) == {"kind": "set", "set_code": "OM1"}
 
-    def test_pcube_mixed_case(self):
-        assert _parse_ref("PCube", 1, 1) == {"kind": "set", "set_code": "PCube"}
+    def test_set_code_case_insensitive(self):
+        assert _parse_ref("sos", 1, 1) == {"kind": "set", "set_code": "SOS"}
 
-    def test_six_char_set_code(self):
-        assert _parse_ref("Y26SOS", 1, 1) == {"kind": "set", "set_code": "Y26SOS"}
+    def test_alias_maps_to_real_code(self):
+        assert _parse_ref("PCube", 1, 1) == {"kind": "set", "set_code": "Cube+-+Powered"}
+
+    def test_alias_case_insensitive(self):
+        assert _parse_ref("pcube", 1, 1) == {"kind": "set", "set_code": "Cube+-+Powered"}
+
+    def test_full_real_code(self):
+        assert _parse_ref("Cube+-+Powered", 1, 1) == {"kind": "set", "set_code": "Cube+-+Powered"}
+
+    def test_unknown_short_code_errors(self):
+        with pytest.raises(SystemExit):
+            _parse_ref("ZZZ", 1, 1)
+
+    def test_unknown_six_char_code_errors(self):
+        with pytest.raises(SystemExit):
+            _parse_ref("ABCDEF", 1, 1)
 
     def test_full_url_is_pick(self):
         ref = _parse_ref(f"{_BASE}/1/2", 1, 1)
@@ -72,6 +86,11 @@ class TestMain:
         main(["link", "SOS"])
         out = capsys.readouterr().out.strip()
         assert out == "https://magic-flea.com/on-draft/deq.html?set=SOS"
+
+    def test_alias_outputs_real_code_in_url(self, capsys):
+        main(["link", "PCube"])
+        out = capsys.readouterr().out.strip()
+        assert out == "https://magic-flea.com/on-draft/deq.html?set=Cube%2B-%2BPowered"
 
     def test_set_code_with_card_flag(self, capsys):
         main(["link", "SOS", "--card", "Lightning Bolt"])

@@ -4,9 +4,12 @@ import sys
 from urllib.parse import urlencode
 
 from deq.sample_pack import DEQ_URL, fetch_draft_pick
+from deq.set_config import resolve_set_code
 
 _17L_DRAFT_BASE = "https://www.17lands.com/draft"
-_SET_CODE_RE = re.compile(r'^[A-Za-z][A-Za-z0-9]{1,5}$')
+# A short alphanumeric token that fails to resolve is a likely set-code typo
+# (draft ids are 32 hex chars; pick refs contain slashes or "http").
+_SET_CODE_SHAPE = re.compile(r'^[A-Za-z0-9]{1,6}$')
 
 
 def _normalize_to_url(ref: str, pack: int, pick: int) -> str:
@@ -25,11 +28,21 @@ def _normalize_to_url(ref: str, pack: int, pick: int) -> str:
 def _parse_ref(ref: str, pack: int, pick: int) -> dict:
     """Parse the main argument into a typed draft reference.
 
+    If the argument matches a configured set code or alias (case-insensitive),
+    it is canonicalized to the real code. A short alphanumeric token that does
+    not resolve is treated as a set-code typo and is a hard error. Anything
+    else is treated as a draft pick reference (link, draft_id, or
+    draft_id/pack/pick).
+
     Returns {'kind': 'set', 'set_code': str}
          or {'kind': 'pick', 'url': str}.
     """
-    if _SET_CODE_RE.match(ref):
-        return {"kind": "set", "set_code": ref}
+    real = resolve_set_code(ref)
+    if real is not None:
+        return {"kind": "set", "set_code": real}
+    if _SET_CODE_SHAPE.match(ref):
+        print(f"error: unknown set code {ref!r}", file=sys.stderr)
+        sys.exit(1)
     return {"kind": "pick", "url": _normalize_to_url(ref, pack, pick)}
 
 
