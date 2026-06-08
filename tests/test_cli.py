@@ -80,7 +80,7 @@ class TestMain:
                 DraftCard(name="Counterspell"),
             ],
         )
-        monkeypatch.setattr(cli_mod, "fetch_draft_pick", lambda url: pick)
+        monkeypatch.setattr(cli_mod, "fetch_draft_state", lambda url: pick)
 
     def test_set_code_outputs_set_url(self, capsys):
         main(["link", "SOS"])

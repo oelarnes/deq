@@ -3,7 +3,7 @@ import re
 import sys
 from urllib.parse import urlencode
 
-from deq.sample_pack import DEQ_URL, fetch_draft_pick
+from deq.sample_pack import DEQ_URL, fetch_draft_state
 from deq.set_config import resolve_set_code
 
 _17L_DRAFT_BASE = "https://www.17lands.com/draft"
@@ -67,8 +67,8 @@ def _cmd_link(args: argparse.Namespace) -> None:
             params["k"] = args.k
         print(args.base_url + "?" + urlencode(params))
     else:
-        draft_pick = fetch_draft_pick(ref["url"])
-        print(draft_pick.deq_query_str(
+        draft_state = fetch_draft_state(ref["url"])
+        print(draft_state.deq_query_str(
             card_name=args.card,
             color=args.color,
             rarity=args.rarity,

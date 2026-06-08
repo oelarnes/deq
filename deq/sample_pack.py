@@ -380,7 +380,7 @@ def get_sample_pack(
     )
 
 
-def fetch_draft_pick(url: str) -> DraftState:
+def fetch_draft_state(url: str) -> DraftState:
     parts = urlparse(url).path.strip("/").split("/")
     draft_id = parts[1]
     pack_num = int(parts[2])

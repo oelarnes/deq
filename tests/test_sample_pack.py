@@ -1,11 +1,11 @@
-"""Tests for DraftState.deq_query_str and fetch_draft_pick."""
+"""Tests for DraftState.deq_query_str and fetch_draft_state."""
 
 from __future__ import annotations
 
 import pytest
 
 import deq.sample_pack as sp
-from deq.sample_pack import DraftCard, DraftState, fetch_draft_pick
+from deq.sample_pack import DraftCard, DraftState, fetch_draft_state
 
 
 def _card(name: str) -> DraftCard:
@@ -42,8 +42,8 @@ class TestDraftStateDeqQueryStr:
         assert "q=" in url
 
 
-class TestFetchDraftPick:
-    def test_parses_url_and_builds_pick(self, monkeypatch: pytest.MonkeyPatch):
+class TestFetchDraftState:
+    def test_parses_url_and_builds_state(self, monkeypatch: pytest.MonkeyPatch):
         fake_data = {
             "expansion": "TLA",
             "num_seats": 8,
@@ -66,7 +66,7 @@ class TestFetchDraftPick:
 
         monkeypatch.setattr(sp.requests, "get", lambda url: _FakeResp())
 
-        pick = fetch_draft_pick("https://www.17lands.com/draft/abc123/1/2")
+        pick = fetch_draft_state("https://www.17lands.com/draft/abc123/1/2")
 
         assert pick.set_code == "TLA"
         assert pick.draft_id == "abc123"
@@ -94,5 +94,5 @@ class TestFetchDraftPick:
                 return fake_data
 
         monkeypatch.setattr(sp.requests, "get", lambda url: _FakeResp())
-        pick = fetch_draft_pick(url)
+        pick = fetch_draft_state(url)
         assert pick.draft_link() == url
