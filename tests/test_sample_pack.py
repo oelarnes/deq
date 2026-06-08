@@ -15,7 +15,7 @@ def _card(name: str) -> DraftCard:
 class TestDraftStateDeqQueryStr:
     def _pick(self, *names: str) -> DraftState:
         return DraftState(
-            set_code="SOS", draft_id="abc", pack_num=1, pick_num=1,
+            expansion="SOS", draft_id="abc", pack_num=1, pick_num=1,
             pick=names[0], pack=[_card(n) for n in names],
         )
 
@@ -68,7 +68,7 @@ class TestFetchDraftState:
 
         pick = fetch_draft_state("https://www.17lands.com/draft/abc123/1/2")
 
-        assert pick.set_code == "TLA"
+        assert pick.expansion == "TLA"
         assert pick.draft_id == "abc123"
         assert pick.pack_num == 1
         assert pick.pick_num == 2

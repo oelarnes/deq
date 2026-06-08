@@ -70,7 +70,7 @@ class TestMain:
     @pytest.fixture(autouse=True)
     def _mock_fetch(self, monkeypatch: pytest.MonkeyPatch):
         pick = DraftState(
-            set_code="TLA",
+            expansion="TLA",
             draft_id=_DRAFT_ID,
             pack_num=1,
             pick_num=2,

@@ -99,7 +99,9 @@ class DraftState:
     None when irrelevant to the builder (e.g. a bare 17lands API fetch).
     """
 
-    set_code: str  # the draft environment / data set code
+    # the 17lands draft environment code (e.g. SOS); a card's own printing set
+    # is DraftCard.set_code, which can differ (bonus sheets, cube, etc.)
+    expansion: str
     draft_id: str
     pack_num: int  # 1-indexed, matching the 17lands URL
     pick_num: int  # 1-indexed, matching the 17lands URL
@@ -153,7 +155,7 @@ class DraftState:
         if rarity:
             q_parts.append(f"r:{rarity}")
         q_parts.append(self._pack_search())
-        params = {"set": self.set_code, "q": " ".join(q_parts)}
+        params = {"set": self.expansion, "q": " ".join(q_parts)}
         if card_name is not None:
             params["card"] = card_name
         if sort is not None:
@@ -185,7 +187,7 @@ class DraftState:
         return (
             "=" * line_length
             + f"""
-{self.set_code} Sample Pack 
+{self.expansion} Sample Pack
 {self.draft_link()}
 {self.draft_date.isoformat()} - {self.record_str()} - {self.pack_pick_str()} - Skill Cohort: {int(self.skill_cohort)}%
 """
@@ -363,7 +365,7 @@ def get_sample_pack(
                 pool.append(draft_cards[name])
 
     return DraftState(
-        set_code=row["expansion"],
+        expansion=row["expansion"],
         event_type=row["event_type"],
         draft_id=row["draft_id"],
         draft_date=row["draft_date"],
@@ -396,7 +398,7 @@ def fetch_draft_state(url: str) -> DraftState:
     )
 
     return DraftState(
-        set_code=data["expansion"],
+        expansion=data["expansion"],
         draft_id=draft_id,
         pack_num=pack_num,
         pick_num=pick_num,
