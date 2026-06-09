@@ -1,11 +1,13 @@
 from typing import Sequence
 from collections.abc import Set
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import datetime
 import json
 import functools
+from urllib.parse import urlparse, urlencode
 
 import polars as pl
+import requests
 
 from spells import summon, view_select, ColName, get_names
 from spells.enums import View
@@ -14,8 +16,14 @@ from deq import ext
 from deq.plot import METRIC_LABELS
 from deq.p1_strategy import get_metric_context, TOP_PLAYER
 
+DEQ_URL = "https://magic-flea.com/on-draft/deq.html"
+
 METRIC_CELL_WIDTH = 16
 NAME_CELL_WIDTH = 32
+
+def _deq_url(params: dict, base_url: str = DEQ_URL) -> str:
+    return base_url + "?" + urlencode(params)
+
 
 METRIC_FORMAT_STR = {
     "deq": "+.2%",
@@ -26,8 +34,11 @@ METRIC_FORMAT_STR = {
 @dataclass
 class DraftCard:
     name: str
-    image_url: str
-    attributes: dict
+    image_url: str = ""
+    attributes: dict = field(default_factory=dict)
+    # the card's own printing set, not the draft environment; populated only
+    # when the source provides it (None otherwise)
+    set_code: str | None = None
 
     def metric_label(self, metric: str) -> str:
         label = f"{METRIC_LABELS[metric]}: "
@@ -77,21 +88,33 @@ class DraftCard:
 
 
 @dataclass
-class DraftPack:
-    set_code: str
-    event_type: str
+class DraftState:
+    """Full state at a single pack/pick index of a draft.
+
+    A draft is a succession of these states. The cards up for selection are
+    `pack`, the chosen card is `pick`, and `pool` is what's already drafted.
+
+    Required fields are supplied by every builder. The remaining fields are
+    only available from richer sources (e.g. spells draft data) and default to
+    None when irrelevant to the builder (e.g. a bare 17lands API fetch).
+    """
+
+    # the 17lands draft environment code (e.g. SOS); a card's own printing set
+    # is DraftCard.set_code, which can differ (bonus sheets, cube, etc.)
+    expansion: str
     draft_id: str
-    pick_num: int
-    pack_num: int
-    draft_date: datetime.date
-    user_n_games_bucket: int
-    user_game_win_rate_bucket: float
-    skill_cohort: int
-    match_wins: int
-    match_losses: int
+    pack_num: int  # 1-indexed, matching the 17lands URL
+    pick_num: int  # 1-indexed, matching the 17lands URL
     pick: str
     pack: list[DraftCard]
-    pool: list[DraftCard]
+    pool: list[DraftCard] | None = None
+    event_type: str | None = None
+    draft_date: datetime.date | None = None
+    user_n_games_bucket: int | None = None
+    user_game_win_rate_bucket: float | None = None
+    skill_cohort: float | None = None
+    match_wins: int | None = None
+    match_losses: int | None = None
 
     def get_pack_list(self, order_by: str = "deq", desc: bool = True):
         return sorted(
@@ -111,7 +134,35 @@ class DraftPack:
         return f"Record: {self.match_wins} - {self.match_losses}"
 
     def draft_link(self) -> str:
-        return f"https://17lands.com/draft/{self.draft_id}"
+        return f"https://www.17lands.com/draft/{self.draft_id}/{self.pack_num}/{self.pick_num}"
+
+    def _pack_search(self) -> str:
+        return "/".join(f'"{c.name}"' for c in self.pack)
+
+    def deq_query_str(
+        self,
+        card_name: str | None = None,
+        color: str | None = None,
+        rarity: str | None = None,
+        sort: str | None = None,
+        asc: bool = False,
+        k: int | None = None,
+        base_url: str = DEQ_URL,
+    ) -> str:
+        q_parts = []
+        if color:
+            q_parts.append(f"c:{color}")
+        if rarity:
+            q_parts.append(f"r:{rarity}")
+        q_parts.append(self._pack_search())
+        params = {"set": self.expansion, "q": " ".join(q_parts)}
+        if card_name is not None:
+            params["card"] = card_name
+        if sort is not None:
+            params["sort"] = f"{sort}:{'asc' if asc else 'desc'}"
+        if k is not None:
+            params["k"] = k
+        return _deq_url(params, base_url)
 
     def pack_pick_str(self) -> str:
         return f"Pack {self.pack_num} Pick {self.pick_num}"
@@ -132,11 +183,11 @@ class DraftPack:
                     star_metrics.add(metric)
             card_lines += c.to_text(is_pick, metrics, star_metrics) + "\n"
 
-        pool_lines = "\n".join([c.to_text(False) for c in self.pool])
+        pool_lines = "\n".join([c.to_text(False) for c in (self.pool or [])])
         return (
             "=" * line_length
             + f"""
-{self.set_code} Sample Pack 
+{self.expansion} Sample Pack
 {self.draft_link()}
 {self.draft_date.isoformat()} - {self.record_str()} - {self.pack_pick_str()} - Skill Cohort: {int(self.skill_cohort)}%
 """
@@ -180,7 +231,7 @@ Pool
                     star_metrics.add(metric)
             card_elements += c.to_html(is_pick, metrics, star_metrics) + "\n"
 
-        pool_elements = "\n".join([c.to_html(False) for c in self.pool])
+        pool_elements = "\n".join([c.to_html(False) for c in (self.pool or [])])
 
         frame = (
             """<html lang="en-US">
@@ -260,7 +311,7 @@ def get_sample_pack(
     metric_filter: dict | None = None,
     deq_days: int | None = None,
     seed: int | None = None,
-) -> DraftPack:
+) -> DraftState:
     global _seed
 
     if seed is None:
@@ -313,8 +364,8 @@ def get_sample_pack(
             if row[f"pool_{name}"] >= i:
                 pool.append(draft_cards[name])
 
-    return DraftPack(
-        set_code=row["expansion"],
+    return DraftState(
+        expansion=row["expansion"],
         event_type=row["event_type"],
         draft_id=row["draft_id"],
         draft_date=row["draft_date"],
@@ -329,3 +380,61 @@ def get_sample_pack(
         pack=pack,
         pool=pool,
     )
+
+
+def _draft_card(card: dict) -> DraftCard:
+    """Map a 17lands draft card object to a DraftCard.
+
+    The draft feed gives name/image_url/types/mana_cost/layout but not the
+    card's own printing set, so set_code is left None.
+    """
+    return DraftCard(name=card["name"], image_url=card.get("image_url", ""))
+
+
+def _pool_cards(sections: list[dict]) -> list[DraftCard]:
+    """Flatten a pick's `sections` (the pool) into a flat card list.
+
+    Each section (Possible Maindeck / Likely Sideboard) holds `cards` as
+    columns grouped by mana value; flatten across sections and columns.
+    """
+    return [
+        _draft_card(card)
+        for section in sections
+        for column in section.get("cards", [])
+        for card in column
+    ]
+
+
+def _draft_state(data: dict, draft_id: str, pack_num: int, pick_num: int) -> DraftState:
+    """Build the DraftState for one pack/pick from a parsed 17lands response.
+
+    17lands pack/pick numbers are 0-indexed; the URL (and our model) are
+    1-indexed.
+    """
+    pick_data = next(
+        p for p in data["picks"]
+        if p["pack_number"] == pack_num - 1 and p["pick_number"] == pick_num - 1
+    )
+
+    return DraftState(
+        expansion=data["expansion"],
+        draft_id=draft_id,
+        pack_num=pack_num,
+        pick_num=pick_num,
+        pick=pick_data["pick"]["name"],
+        pack=[_draft_card(c) for c in pick_data["available"]],
+        pool=_pool_cards(pick_data.get("sections", [])),
+    )
+
+
+def fetch_draft_state(url: str) -> DraftState:
+    parts = urlparse(url).path.strip("/").split("/")
+    draft_id = parts[1]
+    pack_num = int(parts[2])
+    pick_num = int(parts[3])
+
+    data = requests.get(
+        f"https://www.17lands.com/data/draft?draft_id={draft_id}"
+    ).json()
+
+    return _draft_state(data, draft_id, pack_num, pick_num)

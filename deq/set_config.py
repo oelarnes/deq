@@ -8,6 +8,7 @@ class DEqConfig:
     end_date: dt.date | None = None
     is_pick_two: bool = False
     cube: bool = False
+    alias: str | None = None  # short public code for the set, e.g. "PCube"
 
 
 # Sets included in the p1 strategy analysis (requires full public parquet data)
@@ -44,7 +45,10 @@ config = {
     "ECL": DEqConfig(start_date=dt.date(2026, 1, 20), end_date=dt.date(2026, 3, 2)),
     "TLA": DEqConfig(start_date=dt.date(2025, 11, 18), end_date=dt.date(2026, 1, 20)),
     "Cube+-+Powered": DEqConfig(
-        start_date=dt.date(2025, 10, 28), end_date=dt.date(2026, 6, 23), cube=True
+        start_date=dt.date(2025, 10, 28),
+        end_date=dt.date(2026, 6, 23),
+        cube=True,
+        alias="PCube",
     ),
     "OM1": DEqConfig(
         start_date=dt.date(2025, 9, 23),
@@ -67,3 +71,18 @@ config = {
     "LTR": DEqConfig(start_date=dt.date(2023, 6, 20), end_date=dt.date(2023, 9, 5)),
     "MOM": DEqConfig(start_date=dt.date(2023, 4, 18), end_date=dt.date(2023, 6, 20)),
 }
+
+
+def resolve_set_code(code: str) -> str | None:
+    """Map a user-supplied set code or alias to its canonical config key.
+
+    Matches real set codes and aliases case-insensitively. Returns None if
+    the code is not configured.
+    """
+    folded = code.casefold()
+    for real, cfg in config.items():
+        if folded == real.casefold():
+            return real
+        if cfg.alias and folded == cfg.alias.casefold():
+            return real
+    return None
