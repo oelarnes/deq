@@ -382,16 +382,35 @@ def get_sample_pack(
     )
 
 
-def fetch_draft_state(url: str) -> DraftState:
-    parts = urlparse(url).path.strip("/").split("/")
-    draft_id = parts[1]
-    pack_num = int(parts[2])
-    pick_num = int(parts[3])
+def _draft_card(card: dict) -> DraftCard:
+    """Map a 17lands draft card object to a DraftCard.
 
-    data = requests.get(
-        f"https://www.17lands.com/data/draft?draft_id={draft_id}"
-    ).json()
+    The draft feed gives name/image_url/types/mana_cost/layout but not the
+    card's own printing set, so set_code is left None.
+    """
+    return DraftCard(name=card["name"], image_url=card.get("image_url", ""))
 
+
+def _pool_cards(sections: list[dict]) -> list[DraftCard]:
+    """Flatten a pick's `sections` (the pool) into a flat card list.
+
+    Each section (Possible Maindeck / Likely Sideboard) holds `cards` as
+    columns grouped by mana value; flatten across sections and columns.
+    """
+    return [
+        _draft_card(card)
+        for section in sections
+        for column in section.get("cards", [])
+        for card in column
+    ]
+
+
+def _draft_state(data: dict, draft_id: str, pack_num: int, pick_num: int) -> DraftState:
+    """Build the DraftState for one pack/pick from a parsed 17lands response.
+
+    17lands pack/pick numbers are 0-indexed; the URL (and our model) are
+    1-indexed.
+    """
     pick_data = next(
         p for p in data["picks"]
         if p["pack_number"] == pack_num - 1 and p["pick_number"] == pick_num - 1
@@ -403,8 +422,19 @@ def fetch_draft_state(url: str) -> DraftState:
         pack_num=pack_num,
         pick_num=pick_num,
         pick=pick_data["pick"]["name"],
-        pack=[
-            DraftCard(name=c["name"], image_url=c["image_url"])
-            for c in pick_data["available"]
-        ],
+        pack=[_draft_card(c) for c in pick_data["available"]],
+        pool=_pool_cards(pick_data.get("sections", [])),
     )
+
+
+def fetch_draft_state(url: str) -> DraftState:
+    parts = urlparse(url).path.strip("/").split("/")
+    draft_id = parts[1]
+    pack_num = int(parts[2])
+    pick_num = int(parts[3])
+
+    data = requests.get(
+        f"https://www.17lands.com/data/draft?draft_id={draft_id}"
+    ).json()
+
+    return _draft_state(data, draft_id, pack_num, pick_num)

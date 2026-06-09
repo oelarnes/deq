@@ -56,6 +56,11 @@ class TestFetchDraftState:
                         {"name": "Lightning Bolt", "image_url": "bolt.jpg"},
                         {"name": "Counterspell", "image_url": "counter.jpg"},
                     ],
+                    # sections hold the pool as columns grouped by mana value
+                    "sections": [
+                        {"title": "Possible Maindeck", "cards": [[], [{"name": "Opt", "image_url": "opt.jpg"}]]},
+                        {"title": "Likely Sideboard", "cards": [[{"name": "Negate", "image_url": "neg.jpg"}]]},
+                    ],
                 }
             ],
         }
@@ -76,6 +81,8 @@ class TestFetchDraftState:
         assert [c.name for c in pick.pack] == ["Lightning Bolt", "Counterspell"]
         # the draft environment is not attached to individual cards
         assert all(c.set_code is None for c in pick.pack)
+        # pool is flattened from sections across columns
+        assert [c.name for c in pick.pool] == ["Opt", "Negate"]
 
     def test_draft_link_roundtrips(self, monkeypatch: pytest.MonkeyPatch):
         url = "https://www.17lands.com/draft/abc123/1/2"
