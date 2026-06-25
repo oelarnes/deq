@@ -303,7 +303,7 @@ ext = {
         .otherwise(pl.col(ColName.ALSA))
     ),
     "ata_17l": agg_col(
-        pl.when(pl.col(ColName.NUM_TAKEN) < SAMPLE_THRESHOLD)
+        pl.when(pl.col(ColName.NUM_TAKEN) < 200)
         .then(None)
         .otherwise(pl.col(ColName.ATA))
     ),
