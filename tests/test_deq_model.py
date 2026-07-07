@@ -25,16 +25,17 @@ from typing import Iterable
 import polars as pl
 import pytest
 
+from spells import TimePeriod
+
 from deq.main import live_deq
 
 try:
-    from .conftest import BLB_COLOR_SETS, BLB_END, BLB_SET, BLB_START
+    from .conftest import BLB_AS_OF, BLB_COLOR_SETS, BLB_SET
 except ImportError:  # script-mode (regenerate)
     import datetime as _dt
 
     BLB_SET = "BLB"
-    BLB_START = _dt.date(2024, 8, 13)
-    BLB_END = _dt.date(2024, 9, 24)
+    BLB_AS_OF = _dt.date(2024, 9, 24)
     BLB_COLOR_SETS = ["WU", "WB", "WR", "WG", "UB", "UR", "UG", "BR", "BG", "RG"]
 
 METRICS = (
@@ -265,7 +266,7 @@ def _values_close(actual: float | None, expected: float | None) -> bool:
 
 
 def test_live_deq_matches_expected(blb_data) -> None:  # noqa: ARG001 — fixture activates env
-    df = live_deq(BLB_SET, BLB_START, BLB_END, color_sets=BLB_COLOR_SETS).sort("name")
+    df = live_deq(BLB_SET, TimePeriod.ALL_TIME, BLB_AS_OF, color_sets=BLB_COLOR_SETS).sort("name")
     assert df.height == len(EXPECTED), (
         f"row count {df.height} != fixture card count {len(EXPECTED)}"
     )
@@ -304,7 +305,7 @@ def test_empty_color_sets_zeroes_bias_adj(blb_data) -> None:  # noqa: ARG001
     which is zero when no pairs are tracked). The components that don't touch
     color-pair data — deq_base, pct_top, npr — must match EXPECTED.
     """
-    df = live_deq(BLB_SET, BLB_START, BLB_END, color_sets=[]).sort("name")
+    df = live_deq(BLB_SET, TimePeriod.ALL_TIME, BLB_AS_OF, color_sets=[]).sort("name")
 
     for col in ZEROED_BY_EMPTY_COLOR_SETS:
         non_zero = df.filter(
@@ -349,7 +350,7 @@ def test_no_top_data_falls_back_to_all(blb_no_top_data) -> None:  # noqa: ARG001
     Regression test for the pct_top=0 / pct_gp_top=null bug: 0*null evaluates
     to null in Polars, which previously zeroed deq for sets like OM1.
     """
-    df = live_deq(BLB_SET, BLB_START, BLB_END, color_sets=BLB_COLOR_SETS).sort("name")
+    df = live_deq(BLB_SET, TimePeriod.ALL_TIME, BLB_AS_OF, color_sets=BLB_COLOR_SETS).sort("name")
 
     assert (df["pct_top"] == 0).all(), "all cards should have pct_top=0 with no top game data"
 
@@ -404,7 +405,7 @@ def regenerate_expected() -> str:
         for sub in ("ratings", "deck_color"):
             shutil.copytree(src / sub, td_path / sub)
         (td_path / "ad_hoc").mkdir()
-        df = live_deq(BLB_SET, BLB_START, BLB_END, color_sets=BLB_COLOR_SETS)
+        df = live_deq(BLB_SET, TimePeriod.ALL_TIME, BLB_AS_OF, color_sets=BLB_COLOR_SETS)
     return _format_expected(df)
 
 

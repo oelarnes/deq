@@ -5,10 +5,10 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:d8c9f7311c3528fb922a65d209d8ed86d0e667d6eaa0a5b1e844e3b6fba44558"
+content_hash = "sha256:d7bed26df95f311ef6490e06c68ae6743eba0ed8911dabd0656089b0be3ae58b"
 
 [[metadata.targets]]
-requires_python = ">=3.11"
+requires_python = ">=3.13"
 
 [[package]]
 name = "accessible-pygments"
@@ -2438,8 +2438,8 @@ files = [
 
 [[package]]
 name = "spells-mtg"
-version = "0.12.0"
-requires_python = ">=3.11"
+version = "0.14.0"
+requires_python = ">=3.13"
 summary = "analaysis of 17Lands.com public datasets"
 groups = ["default"]
 dependencies = [
@@ -2447,8 +2447,8 @@ dependencies = [
     "wget>=3.2",
 ]
 files = [
-    {file = "spells_mtg-0.12.0-py3-none-any.whl", hash = "sha256:0c386003d6331c87eaa9012590341840a7f7e36b837aac47122e4f7f8f2c4b6a"},
-    {file = "spells_mtg-0.12.0.tar.gz", hash = "sha256:e7c327bbda9e13b16bee39a4f9202f7e68a358f7db79c20e23fe572d76d35a12"},
+    {file = "spells_mtg-0.14.0-py3-none-any.whl", hash = "sha256:f81be261a1ba84499c5f8c65c314bb8f847ddc5bb8c1b01959540730c9453e87"},
+    {file = "spells_mtg-0.14.0.tar.gz", hash = "sha256:b6132d0654ead53a0b069e46ce06e29cdd015d494534eed6d9909a57c93665c7"},
 ]
 
 [[package]]
