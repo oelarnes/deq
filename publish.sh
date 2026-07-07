@@ -1,3 +1,5 @@
+set -e
+
 git stash
 
 git checkout main

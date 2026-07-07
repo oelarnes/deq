@@ -922,7 +922,7 @@ def daily_deq(
         history_df.write_parquet(history_df_path)
 
     available_sets = sorted(
-        list(history_df["set_code"].unique()),
+        set(history_df["set_code"].unique()) & set(config.keys()),
         key=lambda val: config[val].start_date,
         reverse=True,
     )

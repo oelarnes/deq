@@ -47,13 +47,8 @@ config = {
     "Cube+-+Powered": DEqConfig(
         start_date=dt.date(2025, 10, 28), end_date=dt.date(2026, 6, 23), cube=True
     ),
-    "OM1": DEqConfig(
-        start_date=dt.date(2025, 9, 23),
-        end_date=dt.date(2025, 11, 18),
-        is_pick_two=True,
-    ),
     "EOE": DEqConfig(start_date=dt.date(2025, 7, 29), end_date=dt.date(2025, 9, 23)),
-    "FIN": DEqConfig(start_date=dt.date(2025, 6, 10), end_date=dt.date(2025, 12, 30)),
+    "FIN": DEqConfig(start_date=dt.date(2025, 6, 10), end_date=dt.date(2026, 6, 23)),
     "TDM": DEqConfig(start_date=dt.date(2025, 4, 8), end_date=dt.date(2025, 10, 28)),
     "DFT": DEqConfig(start_date=dt.date(2025, 2, 11), end_date=dt.date(2025, 4, 8)),
     "PIO": DEqConfig(start_date=dt.date(2024, 12, 10), end_date=dt.date(2025, 2, 11)),
