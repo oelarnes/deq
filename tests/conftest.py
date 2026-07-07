@@ -18,6 +18,8 @@ from pathlib import Path
 
 import pytest
 
+from deq.set_config import DEqConfig, config
+
 FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "spells_data"
 
 BLB_SET = "BLB"
@@ -43,9 +45,13 @@ def blb_data(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[Path,
     """Stage the BLB ratings + deck_color JSONs under a temp SPELLS_DATA_HOME.
 
     Copies (not symlinks) so spells' lazy-write code can't pollute the
-    fixture tree on accident.
+    fixture tree on accident. Also injects a BLB entry into deq.set_config's
+    `config` dict for the test's duration — live_deq() reads config[set_code]
+    directly for is_pick_two/start_date, and production config is trimmed
+    down to just MSH while the spells 0.14.0 migration is being verified.
     """
     monkeypatch.setenv("SPELLS_DATA_HOME", str(tmp_path))
+    monkeypatch.setitem(config, BLB_SET, DEqConfig(start_date=BLB_START, end_date=BLB_END))
 
     for sub in ("ratings", "deck_color"):
         src = FIXTURE_ROOT / sub / BLB_SET
@@ -65,6 +71,7 @@ def blb_no_top_data(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generato
     falls back cleanly to all-cohort values rather than propagating nulls.
     """
     monkeypatch.setenv("SPELLS_DATA_HOME", str(tmp_path))
+    monkeypatch.setitem(config, BLB_SET, DEqConfig(start_date=BLB_START, end_date=BLB_END))
 
     for sub in ("ratings", "deck_color"):
         src = FIXTURE_ROOT / sub / BLB_SET
