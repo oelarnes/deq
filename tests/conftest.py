@@ -43,8 +43,7 @@ def blb_data(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[Path,
     """Stage the BLB ratings + deck_color JSONs under a temp SPELLS_DATA_HOME.
 
     Copies (not symlinks) so spells' lazy-write code can't pollute the
-    fixture tree on accident. Also points the ad_hoc cache at the temp dir
-    so daily_deq history files don't leak into the developer's home dir.
+    fixture tree on accident.
     """
     monkeypatch.setenv("SPELLS_DATA_HOME", str(tmp_path))
 
@@ -54,7 +53,6 @@ def blb_data(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[Path,
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(src, dst)
 
-    (tmp_path / "ad_hoc").mkdir()
     yield tmp_path
 
 
@@ -83,5 +81,4 @@ def blb_no_top_data(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generato
                     card[field] = 0
         f.write_text(json.dumps(cards))
 
-    (tmp_path / "ad_hoc").mkdir()
     yield tmp_path

@@ -1,13 +1,11 @@
 import datetime as dt
 import math
-import os
 from dataclasses import dataclass
 
 import polars as pl
 
 from spells import summon, ColName, ColType, ColSpec, TimePeriod, card_ratings_view
 from spells.columns import agg_col
-from spells.cache import ad_hoc_dir
 from spells.card_data_files import deck_color_df, CacheUsage
 from deq.set_config import DEqConfig, config
 
@@ -840,10 +838,6 @@ def live_deq(
     return deq_df
 
 
-def deq_ref_dir():
-    return os.path.join(ad_hoc_dir(), "deq")
-
-
 @dataclass
 class DeqData:
     df: pl.DataFrame
@@ -856,15 +850,12 @@ class DeqData:
 def daily_deq(
     set_code: str | None = None,
     as_of: dt.date | None = None,
-    refresh: bool = False,
 ) -> DeqData:
     """Generate DEq ratings for the current (or a given) set/day.
 
     The query window is a pure function of the set's config and `as_of` (see
-    `_resolve_window`) — no more day-by-day retry loop hunting for a
-    start_date with enough games. `history_v2.parquet` is now a log of what
-    (time_period, cache_usage) was actually used each day, kept for
-    debugging/comparison; it's no longer read back to compute today's window.
+    `_resolve_window`) — no day-by-day retry loop hunting for a start_date
+    with enough games, and no history log to compute or reproduce it from.
     """
     as_of = as_of or dt.date.today()
     set_code = (
@@ -884,51 +875,10 @@ def daily_deq(
     cfg = config[set_code]
     time_period, cache_usage, start_date, end_date = _resolve_window(cfg, as_of)
 
-    ref_dir = deq_ref_dir()
-    if not os.path.isdir(ref_dir):
-        os.makedirs(ref_dir)
-
-    history_df_path = os.path.join(ref_dir, "history_v2.parquet")
-
-    if not os.path.isfile(history_df_path):
-        history_df = pl.DataFrame([])
-        as_of_df = pl.DataFrame([])
-    else:
-        history_df = pl.read_parquet(history_df_path)
-        as_of_df = history_df.filter(
-            (pl.col("set_code") == set_code) & (pl.col("as_of") == as_of)
-        )
-
     deq_df = live_deq(set_code, time_period, cache_usage, as_of=as_of)
 
-    if as_of_df.is_empty() or refresh:
-        history_df = (
-            pl.concat(
-                [
-                    history_df,
-                    pl.DataFrame(
-                        [
-                            {
-                                "set_code": set_code,
-                                "as_of": as_of,
-                                "time_period": str(time_period),
-                                "cache_usage": str(cache_usage),
-                            }
-                        ]
-                    ),
-                ]
-            )
-            .group_by(["set_code", "as_of"])
-            .last()
-        )
-
-        print("Writing history.parquet")
-        history_df.write_parquet(history_df_path)
-
     available_sets = sorted(
-        set(history_df["set_code"].unique()) & set(config.keys()),
-        key=lambda val: config[val].start_date,
-        reverse=True,
+        config.keys(), key=lambda val: config[val].start_date, reverse=True
     )
 
     return DeqData(
