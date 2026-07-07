@@ -656,15 +656,16 @@ def live_deq(
             ],
         )
 
+        # Per-card color-pair composition always comes from the all-player
+        # dataset: 17lands doesn't precompute user_group and colors together,
+        # so top-cohort composition isn't queryable. bias_adj_df normalizes
+        # the weights per card, so only the composition proportions matter —
+        # the archetype excess win rates joined against them stay per-cohort.
         if active_colors:
-            # NOTE: 17lands doesn't precompute player_cohort x deck_colors
-            # together (see _is_known_precompute_gap in spells' card_data_files.py) —
-            # this raises for "top" once active_colors is non-empty. Deferred;
-            # see the deck-colors follow-up in this PR's description.
             deck_counts_df = card_ratings_view(
                 set_code,
                 event_type=format,
-                player_cohort=player_cohort,
+                player_cohort="all",
                 deck_colors=active_colors,
                 time_period=time_period,
                 cache_usage=cache_usage,
@@ -681,8 +682,25 @@ def live_deq(
                 },
             )
 
+        # The "other" residual must subtract from the same all-player totals
+        # the color counts came from; the cohort's own card_df totals would
+        # mix scales. For the "all" pass card_df already is that dataset.
+        if player_cohort == "all":
+            composition_totals_df = card_df.select(ColName.NAME, ColName.DECK)
+        else:
+            composition_totals_df = card_ratings_view(
+                set_code,
+                event_type=format,
+                player_cohort="all",
+                time_period=time_period,
+                cache_usage=cache_usage,
+                columns=[ColName.DECK],
+            )
+
         other_counts_df = (
-            card_df.select(ColName.NAME, pl.col(ColName.DECK).alias("num_gp_all"))
+            composition_totals_df.select(
+                ColName.NAME, pl.col(ColName.DECK).alias("num_gp_all")
+            )
             .join(
                 deck_counts_df.group_by(ColName.NAME).agg(pl.col(ColName.DECK).sum()),
                 on=ColName.NAME,
