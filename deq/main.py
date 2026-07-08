@@ -527,11 +527,13 @@ def live_deq(
     min_games_pct: float = 0.005,
     as_of: dt.date | None = None,
 ) -> pl.DataFrame:
-    event_type = EventType.PICK_TWO if config[set_code].is_pick_two else EventType.PREMIER
+    cfg = config[set_code]
+    event_type = EventType.PICK_TWO if cfg.is_pick_two else EventType.PREMIER
     as_of = as_of or dt.date.today()
+    observed_end = cfg.end_date if cfg.end_date is not None else as_of
 
     set_context = {
-        "observed_days": (as_of - config[set_code].start_date).days,
+        "observed_days": (observed_end - cfg.start_date).days,
         "projection_days": 0,
     }
 
@@ -547,7 +549,7 @@ def live_deq(
             meta_decay=meta_decay,
             sample_decay=sample_decay,
             max_deq_days=max_deq_days,
-            is_pick_two=config[set_code].is_pick_two,
+            is_pick_two=cfg.is_pick_two,
             # gp_bias_weight ColSpec is unused here; bias adj is computed via direct join below
             color_sets=[],
         ),
