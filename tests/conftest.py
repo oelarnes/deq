@@ -25,8 +25,8 @@ FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "spells_data"
 BLB_SET = "BLB"
 BLB_START = dt.date(2024, 8, 13)
 BLB_END = dt.date(2024, 9, 24)
-# fixtures are cached as an ALL_TIME snapshot as of BLB_END
-BLB_AS_OF = BLB_END
+# fixtures are cached as an ALL_TIME snapshot as of this date
+BLB_AS_OF = dt.date(2026, 7, 8)
 BLB_COLOR_SETS = ["WU", "WB", "WR", "WG", "UB", "UR", "UG", "BR", "BG", "RG"]
 
 _GAME_FIELDS = (

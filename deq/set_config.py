@@ -42,6 +42,7 @@ p1_sets = [
 # commented out. Add sets back one at a time once things look good.
 config = {
     "MSH": DEqConfig(start_date=dt.date(2026, 6, 23)),
+    "BLB": DEqConfig(start_date=dt.date(2024, 7, 30), end_date=dt.date(2024, 9, 24)),
     # "SOS": DEqConfig(start_date=dt.date(2026, 4, 21), end_date=dt.date(2026, 6, 23)),
     # "TMT": DEqConfig(start_date=dt.date(2026, 3, 3), end_date=dt.date(2026, 4, 21)),
     # "ECL": DEqConfig(start_date=dt.date(2026, 1, 20), end_date=dt.date(2026, 3, 2)),
@@ -56,7 +57,6 @@ config = {
     # "PIO": DEqConfig(start_date=dt.date(2024, 12, 10), end_date=dt.date(2025, 2, 11)),
     # "FDN": DEqConfig(start_date=dt.date(2024, 11, 12), end_date=dt.date(2024, 12, 10)),
     # "DSK": DEqConfig(start_date=dt.date(2024, 9, 24), end_date=dt.date(2025, 10, 14)),
-    # "BLB": DEqConfig(start_date=dt.date(2024, 7, 30), end_date=dt.date(2024, 9, 24)),
     # "MH3": DEqConfig(start_date=dt.date(2024, 6, 11), end_date=dt.date(2025, 10, 21)),
     # "OTJ": DEqConfig(start_date=dt.date(2024, 4, 16), end_date=dt.date(2025, 11, 4)),
     # "MKM": DEqConfig(start_date=dt.date(2024, 2, 6), end_date=dt.date(2024, 4, 16)),
