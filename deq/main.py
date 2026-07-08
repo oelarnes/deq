@@ -525,15 +525,16 @@ def live_deq(
     max_deq_days: int = MAX_DEQ_DAYS,
     color_sets: list[str] | None = None,
     min_games_pct: float = 0.005,
-    as_of: dt.date | None = None,
+    observed_start: dt.date | None = None,
+    observed_end: dt.date | None = None,
 ) -> pl.DataFrame:
     cfg = config[set_code]
     event_type = EventType.PICK_TWO if cfg.is_pick_two else EventType.PREMIER
-    as_of = as_of or dt.date.today()
-    observed_end = cfg.end_date if cfg.end_date is not None else as_of
+    observed_start = observed_start or cfg.start_date
+    observed_end = observed_end or cfg.end_date or dt.date.today()
 
     set_context = {
-        "observed_days": (observed_end - cfg.start_date).days,
+        "observed_days": (observed_end - observed_start).days,
         "projection_days": 0,
     }
 
@@ -863,7 +864,13 @@ def daily_deq(
     cfg = config[set_code]
     time_period, cache_usage, start_date, end_date = _resolve_window(cfg, as_of)
 
-    deq_df = live_deq(set_code, time_period=time_period, cache_usage=cache_usage, as_of=as_of)
+    deq_df = live_deq(
+        set_code,
+        time_period=time_period,
+        cache_usage=cache_usage,
+        observed_start=start_date,
+        observed_end=end_date,
+    )
 
     available_sets = [s for s in sorted(
         config.keys(), key=lambda val: config[val].start_date, reverse=True
