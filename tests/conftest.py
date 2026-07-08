@@ -25,8 +25,7 @@ FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "spells_data"
 BLB_SET = "BLB"
 BLB_START = dt.date(2024, 8, 13)
 BLB_END = dt.date(2024, 9, 24)
-# Fixtures are cached as an ALL_TIME snapshot as of BLB_END (the spells
-# cache_usage/time_period scheme replaced literal start_date/end_date windows).
+# fixtures are cached as an ALL_TIME snapshot as of BLB_END
 BLB_AS_OF = BLB_END
 BLB_COLOR_SETS = ["WU", "WB", "WR", "WG", "UB", "UR", "UG", "BR", "BG", "RG"]
 
@@ -45,10 +44,8 @@ def blb_data(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[Path,
     """Stage the BLB ratings + deck_color JSONs under a temp SPELLS_DATA_HOME.
 
     Copies (not symlinks) so spells' lazy-write code can't pollute the
-    fixture tree on accident. Also injects a BLB entry into deq.set_config's
-    `config` dict for the test's duration — live_deq() reads config[set_code]
-    directly for is_pick_two/start_date, and production config is trimmed
-    down to just MSH while the spells 0.14.0 migration is being verified.
+    fixture tree on accident. Injects a BLB config entry since live_deq()
+    reads config[set_code] and BLB isn't in the production config.
     """
     monkeypatch.setenv("SPELLS_DATA_HOME", str(tmp_path))
     monkeypatch.setitem(config, BLB_SET, DEqConfig(start_date=BLB_START, end_date=BLB_END))

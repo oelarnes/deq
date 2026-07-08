@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import polars as pl
 
-from spells import summon, ColName, ColType, ColSpec, TimePeriod, card_ratings_view
+from spells import summon, ColName, ColType, ColSpec, EventType, TimePeriod, card_ratings_view
 from spells.columns import agg_col
 from spells.card_data_files import deck_color_df, CacheUsage
 from deq.set_config import DEqConfig, config
@@ -69,48 +69,30 @@ COLOR_SETS = [
     "BRG",
 ]
 
-# Threshold (in days since a format's release) for preferring
-# ALL_EXCEPT_FIRST_WEEK over LAST_TWO_WEEKS in _resolve_window — see there.
 WIDE_WINDOW_THRESHOLD_DAYS = 21
 
 
 def _resolve_window(
     cfg: DEqConfig, as_of: dt.date
 ) -> tuple[TimePeriod, CacheUsage | dt.date, dt.date, dt.date]:
-    """Derive a card-ratings query window from a set's config, replacing the
-    literal start_date/end_date this used to take directly (spells' ratings
-    API now only accepts named time periods, not arbitrary date ranges).
-
-    time_period is whichever of LAST_TWO_WEEKS or ALL_EXCEPT_FIRST_WEEK is
-    wider: for a format under 3 weeks old, ALL_EXCEPT_FIRST_WEEK would be
-    under 14 days (elapsed - 7 < 14), so LAST_TWO_WEEKS is wider; at exactly
-    3 weeks they're equal (14 days each); past that, ALL_EXCEPT_FIRST_WEEK
-    keeps growing while LAST_TWO_WEEKS stays fixed, so it becomes wider.
-
-    cache_usage is CacheUsage.NONE (today's cache, live fetch on a miss) if
-    the set is still open-ended or its end_date hasn't arrived yet, else
-    CacheUsage.LAST (whatever's cached, however old — a concluded set's
-    ratings won't change, so there's no reason to refetch).
-
-    Also returns descriptive start_date/end_date for display purposes only
-    (site.py's embargo check and the date range shown to users) — these
-    approximate, but don't drive, the actual query.
-    """
+    """Date window used for DEq along with assumed start and end date for display"""
     elapsed = (as_of - cfg.start_date).days
+    is_live = cfg.end_date is None or cfg.end_date >= as_of
 
     if elapsed >= WIDE_WINDOW_THRESHOLD_DAYS:
         time_period = TimePeriod.ALL_EXCEPT_FIRST_WEEK
         display_start = cfg.start_date + dt.timedelta(days=7)
     else:
+        assert is_live, "Did a new format end before three weeks elapsed?"
         time_period = TimePeriod.LAST_TWO_WEEKS
         display_start = as_of - dt.timedelta(days=14)
 
-    is_live = cfg.end_date is None or cfg.end_date > as_of
     if is_live:
         cache_usage = CacheUsage.NONE
         display_end = as_of - dt.timedelta(days=1)
     else:
         cache_usage = CacheUsage.LAST
+        assert cfg.end_date is not None, "for typing"
         display_end = cfg.end_date
 
     return time_period, cache_usage, display_start, display_end
@@ -530,8 +512,8 @@ def deq_bias_set_context(
 
 def live_deq(
     set_code: str,
-    time_period: TimePeriod,
-    cache_usage: dt.date | CacheUsage,
+    time_period: TimePeriod = TimePeriod.ALL_EXCEPT_FIRST_WEEK,
+    cache_usage: dt.date | CacheUsage = CacheUsage.NONE,
     pick_equity_init: float = PICK_EQUITY_INIT,
     pick_equity_mid: float = PICK_EQUITY_MID,
     pick_equity_mid_index: int = PICK_EQUITY_MID_INDEX,
@@ -545,7 +527,7 @@ def live_deq(
     min_games_pct: float = 0.005,
     as_of: dt.date | None = None,
 ) -> pl.DataFrame:
-    format = "PickTwoDraft" if config[set_code].is_pick_two else "PremierDraft"
+    event_type = EventType.PICK_TWO if config[set_code].is_pick_two else EventType.PREMIER
     as_of = as_of or dt.date.today()
 
     set_context = {
@@ -585,7 +567,7 @@ def live_deq(
     for player_cohort in ["all", "top"]:
         dc_df = deck_color_df(
             set_code,
-            event_type=format,
+            event_type=event_type,
             player_cohort=player_cohort,
             time_period=time_period,
             cache_usage=cache_usage,
@@ -637,7 +619,7 @@ def live_deq(
 
         card_df = card_ratings_view(
             set_code,
-            event_type=format,
+            event_type=event_type,
             player_cohort=player_cohort,
             time_period=time_period,
             cache_usage=cache_usage,
@@ -656,15 +638,12 @@ def live_deq(
             ],
         )
 
-        # Per-card color-pair composition always comes from the all-player
-        # dataset: 17lands doesn't precompute user_group and colors together,
-        # so top-cohort composition isn't queryable. bias_adj_df normalizes
-        # the weights per card, so only the composition proportions matter —
-        # the archetype excess win rates joined against them stay per-cohort.
+        # 17lands doesn't serve cohort-filtered color-pair data, so composition
+        # weights come from the all-player dataset for both cohorts
         if active_colors:
             deck_counts_df = card_ratings_view(
                 set_code,
-                event_type=format,
+                event_type=event_type,
                 player_cohort="all",
                 deck_colors=active_colors,
                 time_period=time_period,
@@ -682,15 +661,13 @@ def live_deq(
                 },
             )
 
-        # The "other" residual must subtract from the same all-player totals
-        # the color counts came from; the cohort's own card_df totals would
-        # mix scales. For the "all" pass card_df already is that dataset.
+        # the "other" residual is relative to the same all-player totals
         if player_cohort == "all":
             composition_totals_df = card_df.select(ColName.NAME, ColName.DECK)
         else:
             composition_totals_df = card_ratings_view(
                 set_code,
-                event_type=format,
+                event_type=event_type,
                 player_cohort="all",
                 time_period=time_period,
                 cache_usage=cache_usage,
@@ -869,12 +846,6 @@ def daily_deq(
     set_code: str | None = None,
     as_of: dt.date | None = None,
 ) -> DeqData:
-    """Generate DEq ratings for the current (or a given) set/day.
-
-    The query window is a pure function of the set's config and `as_of` (see
-    `_resolve_window`) — no day-by-day retry loop hunting for a start_date
-    with enough games, and no history log to compute or reproduce it from.
-    """
     as_of = as_of or dt.date.today()
     set_code = (
         [
@@ -893,11 +864,11 @@ def daily_deq(
     cfg = config[set_code]
     time_period, cache_usage, start_date, end_date = _resolve_window(cfg, as_of)
 
-    deq_df = live_deq(set_code, time_period, cache_usage, as_of=as_of)
+    deq_df = live_deq(set_code, time_period=time_period, cache_usage=cache_usage, as_of=as_of)
 
-    available_sets = sorted(
+    available_sets = [s for s in sorted(
         config.keys(), key=lambda val: config[val].start_date, reverse=True
-    )
+    ) if config[s].start_date <= as_of]
 
     return DeqData(
         df=deq_df,
