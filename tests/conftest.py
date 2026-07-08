@@ -45,7 +45,7 @@ def blb_data(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[Path,
 
     Copies (not symlinks) so spells' lazy-write code can't pollute the
     fixture tree on accident. Injects a pinned BLB config entry since
-    live_deq() reads config[set_code], and the fixture must not depend on
+    _compute_deq() reads config[set_code], and the fixture must not depend on
     whatever BLB's entry happens to be in production config.
     """
     monkeypatch.setenv("SPELLS_DATA_HOME", str(tmp_path))

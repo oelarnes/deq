@@ -510,10 +510,13 @@ def deq_bias_set_context(
     return set_context
 
 
-def live_deq(
+def _compute_deq(
     set_code: str,
-    time_period: TimePeriod = TimePeriod.ALL_EXCEPT_FIRST_WEEK,
-    cache_usage: dt.date | CacheUsage = CacheUsage.NONE,
+    *,
+    time_period: TimePeriod,
+    cache_usage: dt.date | CacheUsage,
+    observed_start: dt.date,
+    observed_end: dt.date,
     pick_equity_init: float = PICK_EQUITY_INIT,
     pick_equity_mid: float = PICK_EQUITY_MID,
     pick_equity_mid_index: int = PICK_EQUITY_MID_INDEX,
@@ -525,13 +528,12 @@ def live_deq(
     max_deq_days: int = MAX_DEQ_DAYS,
     color_sets: list[str] | None = None,
     min_games_pct: float = 0.005,
-    observed_start: dt.date | None = None,
-    observed_end: dt.date | None = None,
 ) -> pl.DataFrame:
+    """DEq frame for a fully-specified data window. Callers must supply a
+    window whose observed_start/observed_end match time_period, so that
+    observed_days lines up with the data actually fetched — see deq()."""
     cfg = config[set_code]
     event_type = EventType.PICK_TWO if cfg.is_pick_two else EventType.PREMIER
-    observed_start = observed_start or cfg.start_date
-    observed_end = observed_end or cfg.end_date or dt.date.today()
 
     set_context = {
         "observed_days": (observed_end - observed_start).days,
@@ -839,47 +841,55 @@ class DeqData:
     set_code: str
     start_date: dt.date
     end_date: dt.date
-    available_sets: list[str]
 
 
-def daily_deq(
-    set_code: str | None = None,
-    as_of: dt.date | None = None,
-) -> DeqData:
+def current_set(as_of: dt.date | None = None) -> str:
+    """The most recently launched set whose format is live as of `as_of`."""
     as_of = as_of or dt.date.today()
-    set_code = (
-        [
-            key
-            for key, cfg in config.items()
-            if cfg.start_date < dt.date.today()
-            and (
-                cfg.end_date is None
-                or cfg.end_date >= dt.date.today() - dt.timedelta(days=1)
-            )
-        ][0]
-        if set_code is None
-        else set_code
+    live = [
+        code
+        for code, cfg in config.items()
+        if cfg.start_date <= as_of
+        and (cfg.end_date is None or cfg.end_date >= as_of - dt.timedelta(days=1))
+    ]
+    return max(live, key=lambda code: config[code].start_date)
+
+
+def available_sets(as_of: dt.date | None = None) -> list[str]:
+    """Sets launched on or before `as_of`, newest first."""
+    as_of = as_of or dt.date.today()
+    return sorted(
+        (code for code, cfg in config.items() if cfg.start_date <= as_of),
+        key=lambda code: config[code].start_date,
+        reverse=True,
     )
 
-    cfg = config[set_code]
-    time_period, cache_usage, start_date, end_date = _resolve_window(cfg, as_of)
 
-    deq_df = live_deq(
+def deq(
+    set_code: str | None = None,
+    as_of: dt.date | None = None,
+    **model_params,
+) -> DeqData:
+    """DEq ratings for a set. With no arguments, the daily production calc for
+    the current set. `as_of` back-dates the calculation; any DEq model
+    parameter accepted by _compute_deq may be overridden via keyword to test
+    alternatives."""
+    as_of = as_of or dt.date.today()
+    set_code = set_code or current_set(as_of)
+    time_period, cache_usage, start_date, end_date = _resolve_window(
+        config[set_code], as_of
+    )
+    deq_df = _compute_deq(
         set_code,
         time_period=time_period,
         cache_usage=cache_usage,
         observed_start=start_date,
         observed_end=end_date,
+        **model_params,
     )
-
-    available_sets = [s for s in sorted(
-        config.keys(), key=lambda val: config[val].start_date, reverse=True
-    ) if config[s].start_date <= as_of]
-
     return DeqData(
         df=deq_df,
         set_code=set_code,
         start_date=start_date,
         end_date=end_date,
-        available_sets=available_sets,
     )

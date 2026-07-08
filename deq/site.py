@@ -1,4 +1,3 @@
-import datetime as dt
 import json
 import math
 import random
@@ -7,7 +6,7 @@ from pathlib import Path
 
 import polars as pl
 
-from deq.main import daily_deq
+from deq.main import available_sets, deq
 from deq.set_config import config
 
 
@@ -84,7 +83,7 @@ def write_set_json(deq_data) -> Path:
     return path
 
 
-def write_html(deq_data, version: int) -> Path:
+def write_html(deq_data, sets: list[str], version: int) -> Path:
     title_map = {"Cube+-+Powered": "Cube - Powered"}
     code_map = {"Cube+-+Powered": "PCube"}
     date_format = "%-d %b %y"
@@ -92,7 +91,7 @@ def write_html(deq_data, version: int) -> Path:
     select_elements = "".join(
         f'<option value="{code}"{" selected" if code == deq_data.set_code else ""}>'
         f'{code_map.get(code, code)}</option>'
-        for code in deq_data.available_sets
+        for code in sets
     )
 
     html = load_html_template().format(
@@ -124,17 +123,16 @@ def main(set_code: str | None = None):
 
     sync_static()
 
-    # daily_deq(None) returns the latest active set; use it as the page default
-    default_data = daily_deq(set_code)
+    # deq(None) returns the current set; use it as the page default
+    default_data = deq(set_code)
 
-    # Write JSON for every active set; reuse default_data for its set
-    for code in config:
-        if dt.date.today() > config[code].start_date:
-            data = default_data if code == default_data.set_code else daily_deq(code)
-            sanity_check(data)
-            write_set_json(data)
+    sets = available_sets()
+    for code in sets:
+        data = default_data if code == default_data.set_code else deq(code)
+        sanity_check(data)
+        write_set_json(data)
 
-    write_html(default_data, version)
+    write_html(default_data, sets, version)
     print("DEq site generated.")
 
 

@@ -1,4 +1,4 @@
-"""Regression test for live_deq() pinned to a 50-card BLB snapshot.
+"""Regression test for the DEq engine pinned to a 50-card BLB snapshot.
 
 For every card in the trimmed fixture set we lock in expected values for
 seven derived metrics: the four DEq components (pick_equity, mwr,
@@ -26,7 +26,7 @@ import pytest
 
 from spells import TimePeriod
 
-from deq.main import live_deq
+from deq.main import _compute_deq
 
 try:
     from .conftest import BLB_AS_OF, BLB_COLOR_SETS, BLB_SET, BLB_START, BLB_END
@@ -255,6 +255,18 @@ EXPECTED: dict[str, tuple[float | None, ...]] = {
 # --- END EXPECTED ---
 
 
+def _blb_deq(color_sets: list[str]) -> pl.DataFrame:
+    """Run the engine over the fixture's ALL_TIME snapshot for BLB's format span."""
+    return _compute_deq(
+        BLB_SET,
+        time_period=TimePeriod.ALL_TIME,
+        cache_usage=BLB_AS_OF,
+        observed_start=BLB_START,
+        observed_end=BLB_END,
+        color_sets=color_sets,
+    )
+
+
 def _values_close(actual: float | None, expected: float | None) -> bool:
     """None matches None; NaN matches NaN; finite floats compared with isclose."""
     if expected is None:
@@ -267,7 +279,7 @@ def _values_close(actual: float | None, expected: float | None) -> bool:
 
 
 def test_live_deq_matches_expected(blb_data) -> None:  # noqa: ARG001 — fixture activates env
-    df = live_deq(BLB_SET, TimePeriod.ALL_TIME, BLB_AS_OF, color_sets=BLB_COLOR_SETS).sort("name")
+    df = _blb_deq(BLB_COLOR_SETS).sort("name")
     assert df.height == len(EXPECTED), (
         f"row count {df.height} != fixture card count {len(EXPECTED)}"
     )
@@ -306,7 +318,7 @@ def test_empty_color_sets_zeroes_bias_adj(blb_data) -> None:  # noqa: ARG001
     which is zero when no pairs are tracked). The components that don't touch
     color-pair data — deq_base, pct_top, npr — must match EXPECTED.
     """
-    df = live_deq(BLB_SET, TimePeriod.ALL_TIME, BLB_AS_OF, color_sets=[]).sort("name")
+    df = _blb_deq([]).sort("name")
 
     for col in ZEROED_BY_EMPTY_COLOR_SETS:
         non_zero = df.filter(
@@ -351,7 +363,7 @@ def test_no_top_data_falls_back_to_all(blb_no_top_data) -> None:  # noqa: ARG001
     Regression test for the pct_top=0 / pct_gp_top=null bug: 0*null evaluates
     to null in Polars, which previously zeroed deq for sets like OM1.
     """
-    df = live_deq(BLB_SET, TimePeriod.ALL_TIME, BLB_AS_OF, color_sets=BLB_COLOR_SETS).sort("name")
+    df = _blb_deq(BLB_COLOR_SETS).sort("name")
 
     assert (df["pct_top"] == 0).all(), "all cards should have pct_top=0 with no top game data"
 
@@ -388,7 +400,7 @@ def _format_expected(df: pl.DataFrame) -> str:
 
 
 def regenerate_expected() -> str:
-    """Recompute live_deq on the current fixtures and return the source for EXPECTED.
+    """Recompute the DEq engine on the current fixtures and return the source for EXPECTED.
 
     Run as `pdm run python tests/test_deq_model.py regenerate` and paste the
     output between the BEGIN/END EXPECTED markers in this file.
@@ -408,7 +420,7 @@ def regenerate_expected() -> str:
         os.environ["SPELLS_DATA_HOME"] = str(td_path)
         for sub in ("ratings", "deck_color"):
             shutil.copytree(src / sub, td_path / sub)
-        df = live_deq(BLB_SET, TimePeriod.ALL_TIME, BLB_AS_OF, color_sets=BLB_COLOR_SETS)
+        df = _blb_deq(BLB_COLOR_SETS)
     return _format_expected(df)
 
 
