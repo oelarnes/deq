@@ -267,7 +267,9 @@ def _values_close(actual: float | None, expected: float | None) -> bool:
 
 
 def test_live_deq_matches_expected(blb_data) -> None:  # noqa: ARG001 — fixture activates env
-    df = live_deq(BLB_SET, TimePeriod.ALL_TIME, BLB_AS_OF, color_sets=BLB_COLOR_SETS).sort("name")
+    df = live_deq(
+        BLB_SET, TimePeriod.ALL_TIME, BLB_AS_OF, color_sets=BLB_COLOR_SETS, as_of=BLB_AS_OF
+    ).sort("name")
     assert df.height == len(EXPECTED), (
         f"row count {df.height} != fixture card count {len(EXPECTED)}"
     )
@@ -306,7 +308,9 @@ def test_empty_color_sets_zeroes_bias_adj(blb_data) -> None:  # noqa: ARG001
     which is zero when no pairs are tracked). The components that don't touch
     color-pair data — deq_base, pct_top, npr — must match EXPECTED.
     """
-    df = live_deq(BLB_SET, TimePeriod.ALL_TIME, BLB_AS_OF, color_sets=[]).sort("name")
+    df = live_deq(
+        BLB_SET, TimePeriod.ALL_TIME, BLB_AS_OF, color_sets=[], as_of=BLB_AS_OF
+    ).sort("name")
 
     for col in ZEROED_BY_EMPTY_COLOR_SETS:
         non_zero = df.filter(
@@ -351,7 +355,9 @@ def test_no_top_data_falls_back_to_all(blb_no_top_data) -> None:  # noqa: ARG001
     Regression test for the pct_top=0 / pct_gp_top=null bug: 0*null evaluates
     to null in Polars, which previously zeroed deq for sets like OM1.
     """
-    df = live_deq(BLB_SET, TimePeriod.ALL_TIME, BLB_AS_OF, color_sets=BLB_COLOR_SETS).sort("name")
+    df = live_deq(
+        BLB_SET, TimePeriod.ALL_TIME, BLB_AS_OF, color_sets=BLB_COLOR_SETS, as_of=BLB_AS_OF
+    ).sort("name")
 
     assert (df["pct_top"] == 0).all(), "all cards should have pct_top=0 with no top game data"
 
@@ -408,7 +414,9 @@ def regenerate_expected() -> str:
         os.environ["SPELLS_DATA_HOME"] = str(td_path)
         for sub in ("ratings", "deck_color"):
             shutil.copytree(src / sub, td_path / sub)
-        df = live_deq(BLB_SET, TimePeriod.ALL_TIME, BLB_AS_OF, color_sets=BLB_COLOR_SETS)
+        df = live_deq(
+            BLB_SET, TimePeriod.ALL_TIME, BLB_AS_OF, color_sets=BLB_COLOR_SETS, as_of=BLB_AS_OF
+        )
     return _format_expected(df)
 
 

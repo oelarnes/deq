@@ -44,8 +44,9 @@ def blb_data(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[Path,
     """Stage the BLB ratings + deck_color JSONs under a temp SPELLS_DATA_HOME.
 
     Copies (not symlinks) so spells' lazy-write code can't pollute the
-    fixture tree on accident. Injects a BLB config entry since live_deq()
-    reads config[set_code] and BLB isn't in the production config.
+    fixture tree on accident. Injects a pinned BLB config entry since
+    live_deq() reads config[set_code], and the fixture must not depend on
+    whatever BLB's entry happens to be in production config.
     """
     monkeypatch.setenv("SPELLS_DATA_HOME", str(tmp_path))
     monkeypatch.setitem(config, BLB_SET, DEqConfig(start_date=BLB_START, end_date=BLB_END))
