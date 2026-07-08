@@ -531,7 +531,7 @@ def live_deq(
     as_of = as_of or dt.date.today()
 
     set_context = {
-        "observed_days": (as_of - config[set_code].start_date).days + 1,
+        "observed_days": (as_of - config[set_code].start_date).days,
         "projection_days": 0,
     }
 
@@ -662,17 +662,14 @@ def live_deq(
             )
 
         # the "other" residual is relative to the same all-player totals
-        if player_cohort == "all":
-            composition_totals_df = card_df.select(ColName.NAME, ColName.DECK)
-        else:
-            composition_totals_df = card_ratings_view(
-                set_code,
-                event_type=event_type,
-                player_cohort="all",
-                time_period=time_period,
-                cache_usage=cache_usage,
-                columns=[ColName.DECK],
-            )
+        composition_totals_df = card_ratings_view(
+            set_code,
+            event_type=event_type,
+            player_cohort="all",
+            time_period=time_period,
+            cache_usage=cache_usage,
+            columns=[ColName.DECK],
+        )
 
         other_counts_df = (
             composition_totals_df.select(
