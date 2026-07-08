@@ -17,5 +17,3 @@ cp -r docs/_build/html/* $SITE_DIR
 
 echo "site deployed to $SITE_DIR"
 echo "Note: any pre-publish stash is still saved. Run 'git stash pop' to restore."
-
-.venv/bin/python scripts/clean_spells_data.py --execute
