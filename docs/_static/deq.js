@@ -889,8 +889,9 @@ linkSelect.addEventListener('change', function() {
     }
 
     if (setParam) {
-        const opt = linkSelect.querySelector(`option[value="${setParam.toUpperCase()}"]`);
-        if (opt) linkSelect.value = setParam.toUpperCase();
+        const target = setParam.toUpperCase();
+        const opt = Array.from(linkSelect.options).find(o => o.value.toUpperCase() === target);
+        if (opt) linkSelect.value = opt.value;
     }
 
     await loadSet(linkSelect.value);
