@@ -1,16 +1,13 @@
 import datetime as dt
 import math
-import os
 from dataclasses import dataclass
 
 import polars as pl
 
-from spells import summon, ColName, ColType, ColSpec
+from spells import summon, ColName, ColType, ColSpec, EventType, TimePeriod, card_ratings_view
 from spells.columns import agg_col
-from spells.cache import ad_hoc_dir
-from spells.draft_data import CardDataFileSpec
-from spells.card_data_files import deck_color_df
-from deq.set_config import config
+from spells.card_data_files import deck_color_df, CacheUsage
+from deq.set_config import DEqConfig, config
 
 BASIC_LANDS = ["Plains", "Island", "Swamp", "Mountain", "Forest"]
 
@@ -71,6 +68,34 @@ COLOR_SETS = [
     "URG",
     "BRG",
 ]
+
+WIDE_WINDOW_THRESHOLD_DAYS = 21
+
+
+def _resolve_window(
+    cfg: DEqConfig, as_of: dt.date
+) -> tuple[TimePeriod, CacheUsage | dt.date, dt.date, dt.date]:
+    """Date window used for DEq along with assumed start and end date for display"""
+    elapsed = (as_of - cfg.start_date).days
+    is_live = cfg.end_date is None or cfg.end_date >= as_of
+
+    if elapsed >= WIDE_WINDOW_THRESHOLD_DAYS:
+        time_period = TimePeriod.ALL_EXCEPT_FIRST_WEEK
+        display_start = cfg.start_date + dt.timedelta(days=7)
+    else:
+        assert is_live, "Did a new format end before three weeks elapsed?"
+        time_period = TimePeriod.LAST_TWO_WEEKS
+        display_start = as_of - dt.timedelta(days=14)
+
+    if is_live:
+        cache_usage = CacheUsage.NONE
+        display_end = as_of - dt.timedelta(days=1)
+    else:
+        cache_usage = CacheUsage.LAST
+        assert cfg.end_date is not None, "for typing"
+        display_end = cfg.end_date
+
+    return time_period, cache_usage, display_start, display_end
 
 
 def deq_col_specs(
@@ -485,10 +510,13 @@ def deq_bias_set_context(
     return set_context
 
 
-def live_deq(
+def _compute_deq(
     set_code: str,
-    start_date: dt.date,
-    end_date: dt.date,
+    *,
+    time_period: TimePeriod,
+    cache_usage: dt.date | CacheUsage,
+    observed_start: dt.date,
+    observed_end: dt.date,
     pick_equity_init: float = PICK_EQUITY_INIT,
     pick_equity_mid: float = PICK_EQUITY_MID,
     pick_equity_mid_index: int = PICK_EQUITY_MID_INDEX,
@@ -501,10 +529,14 @@ def live_deq(
     color_sets: list[str] | None = None,
     min_games_pct: float = 0.005,
 ) -> pl.DataFrame:
-    format = "PickTwoDraft" if config[set_code].is_pick_two else "PremierDraft"
+    """DEq frame for a fully-specified data window. Callers must supply a
+    window whose observed_start/observed_end match time_period, so that
+    observed_days lines up with the data actually fetched — see deq()."""
+    cfg = config[set_code]
+    event_type = EventType.PICK_TWO if cfg.is_pick_two else EventType.PREMIER
 
     set_context = {
-        "observed_days": (end_date - start_date).days + 1,
+        "observed_days": (observed_end - observed_start).days,
         "projection_days": 0,
     }
 
@@ -520,7 +552,7 @@ def live_deq(
             meta_decay=meta_decay,
             sample_decay=sample_decay,
             max_deq_days=max_deq_days,
-            is_pick_two=config[set_code].is_pick_two,
+            is_pick_two=cfg.is_pick_two,
             # gp_bias_weight ColSpec is unused here; bias adj is computed via direct join below
             color_sets=[],
         ),
@@ -540,10 +572,10 @@ def live_deq(
     for player_cohort in ["all", "top"]:
         dc_df = deck_color_df(
             set_code,
-            format=format,
+            event_type=event_type,
             player_cohort=player_cohort,
-            start_date=start_date,
-            end_date=end_date,
+            time_period=time_period,
+            cache_usage=cache_usage,
         ).with_columns(
             pl.col(ColName.NUM_WON).sum().alias(ColName.GP_WR_MEAN)
             / pl.col(ColName.NUM_GAMES).sum()
@@ -590,8 +622,12 @@ def live_deq(
             ]
         )
 
-        card_df = summon(
+        card_df = card_ratings_view(
             set_code,
+            event_type=event_type,
+            player_cohort=player_cohort,
+            time_period=time_period,
+            cache_usage=cache_usage,
             columns=[
                 ColName.COLOR,
                 ColName.RARITY,
@@ -605,28 +641,20 @@ def live_deq(
                 ColName.PCT_GP,
                 ColName.GP_WR,
             ],
-            cdfs=CardDataFileSpec(
-                set_code=set_code,
-                format=format,
-                player_cohort=player_cohort,
-                start_date=start_date,
-                end_date=end_date,
-            ),
         )
 
+        # 17lands doesn't serve cohort-filtered color-pair data, so composition
+        # weights come from the all-player dataset for both cohorts
         if active_colors:
-            deck_counts_df = summon(
+            deck_counts_df = card_ratings_view(
                 set_code,
+                event_type=event_type,
+                player_cohort="all",
+                deck_colors=active_colors,
+                time_period=time_period,
+                cache_usage=cache_usage,
                 columns=[ColName.DECK],
                 group_by=[ColName.NAME, ColName.MAIN_COLORS],
-                cdfs=CardDataFileSpec(
-                    set_code=set_code,
-                    format=format,
-                    player_cohort=player_cohort,
-                    deck_colors=active_colors,
-                    start_date=start_date,
-                    end_date=end_date,
-                ),
             )
         else:
             deck_counts_df = pl.DataFrame(
@@ -638,8 +666,20 @@ def live_deq(
                 },
             )
 
+        # the "other" residual is relative to the same all-player totals
+        composition_totals_df = card_ratings_view(
+            set_code,
+            event_type=event_type,
+            player_cohort="all",
+            time_period=time_period,
+            cache_usage=cache_usage,
+            columns=[ColName.DECK],
+        )
+
         other_counts_df = (
-            card_df.select(ColName.NAME, pl.col(ColName.DECK).alias("num_gp_all"))
+            composition_totals_df.select(
+                ColName.NAME, pl.col(ColName.DECK).alias("num_gp_all")
+            )
             .join(
                 deck_counts_df.group_by(ColName.NAME).agg(pl.col(ColName.DECK).sum()),
                 on=ColName.NAME,
@@ -795,142 +835,61 @@ def live_deq(
     return deq_df
 
 
-def deq_ref_dir():
-    return os.path.join(ad_hoc_dir(), "deq")
-
-
 @dataclass
 class DeqData:
     df: pl.DataFrame
     set_code: str
     start_date: dt.date
     end_date: dt.date
-    available_sets: list[str]
 
 
-def daily_deq(
-    set_code: str | None = None,
-    as_of: dt.date | None = None,
-    gp_top_min_games: int = 50000,
-    max_format_day_start: int = 15,
-    refresh: bool = False,
-) -> DeqData:
+def current_set(as_of: dt.date | None = None) -> str:
+    """The most recently launched set whose format is live as of `as_of`."""
     as_of = as_of or dt.date.today()
-    set_code = (
-        [
-            key
-            for key, cfg in config.items()
-            if cfg.start_date < dt.date.today()
-            and (
-                cfg.end_date is None
-                or cfg.end_date >= dt.date.today() - dt.timedelta(days=1)
-            )
-        ][0]
-        if set_code is None
-        else set_code
-    )
+    live = [
+        code
+        for code, cfg in config.items()
+        if cfg.start_date <= as_of
+        and (cfg.end_date is None or cfg.end_date >= as_of - dt.timedelta(days=1))
+    ]
+    return max(live, key=lambda code: config[code].start_date)
 
-    cfg = config[set_code]
 
-    if cfg.end_date and cfg.end_date < as_of:
-        end_date = cfg.end_date
-    else:
-        end_date = as_of - dt.timedelta(days=1)
-
-    ref_dir = deq_ref_dir()
-    if not os.path.isdir(ref_dir):
-        os.makedirs(ref_dir)
-
-    history_df_path = os.path.join(ref_dir, "history_v2.parquet")
-
-    if not os.path.isfile(history_df_path):
-        history_df = pl.DataFrame([])
-        set_df = pl.DataFrame([])
-        as_of_df = pl.DataFrame([])
-    else:
-        history_df = pl.read_parquet(history_df_path)
-        set_df = history_df.filter(
-            (pl.col("set_code") == set_code) & (pl.col("as_of") <= as_of)
-        )
-        as_of_df = set_df.filter(pl.col("as_of") == as_of)
-
-    if set_df.is_empty():
-        start_date = cfg.start_date
-        accept = False
-    else:
-        if as_of_df.is_empty() or refresh:
-            params = set_df.sort("as_of").to_dicts()[-1]
-            start_date = params["start_date"] + dt.timedelta(days=1)
-            accept = False
-        else:
-            params = as_of_df.to_dicts()[0]
-            start_date = params["start_date"]
-            accept = True
-
-    while not accept:
-        print(f"Trying start_date {start_date.isoformat()}")
-        num_games = deck_color_df(
-            set_code, start_date=start_date, end_date=end_date, player_cohort="top"
-        )["num_games"].sum()
-
-        if num_games >= gp_top_min_games:
-            if (
-                not cfg.cube
-                and (start_date - cfg.start_date).days + 1 >= max_format_day_start
-            ):
-                accept = True
-                start_date = cfg.start_date + dt.timedelta(
-                    days=max_format_day_start - 1
-                )
-            else:
-                start_date = start_date + dt.timedelta(days=1)
-        elif start_date == cfg.start_date:
-            accept = True
-        else:
-            "using previous cached end date"
-            accept = True
-            start_date = start_date - dt.timedelta(days=1)
-
-    deq_df = live_deq(
-        set_code,
-        start_date,
-        end_date,
-    )
-
-    if as_of_df.is_empty() or refresh:
-        history_df = (
-            pl.concat(
-                [
-                    history_df,
-                    pl.DataFrame(
-                        [
-                            {
-                                "set_code": set_code,
-                                "as_of": as_of,
-                                "start_date": start_date,
-                                "end_date": end_date,
-                            }
-                        ]
-                    ),
-                ]
-            )
-            .group_by(["set_code", "as_of"])
-            .last()
-        )
-
-        print("Writing history.parquet")
-        history_df.write_parquet(history_df_path)
-
-    available_sets = sorted(
-        set(history_df["set_code"].unique()) & set(config.keys()),
-        key=lambda val: config[val].start_date,
+def available_sets(as_of: dt.date | None = None) -> list[str]:
+    """Sets launched on or before `as_of`, newest first."""
+    as_of = as_of or dt.date.today()
+    return sorted(
+        (code for code, cfg in config.items() if cfg.start_date <= as_of),
+        key=lambda code: config[code].start_date,
         reverse=True,
     )
 
+
+def deq(
+    set_code: str | None = None,
+    as_of: dt.date | None = None,
+    **model_params,
+) -> DeqData:
+    """DEq ratings for a set. With no arguments, the daily production calc for
+    the current set. `as_of` back-dates the calculation; any DEq model
+    parameter accepted by _compute_deq may be overridden via keyword to test
+    alternatives."""
+    as_of = as_of or dt.date.today()
+    set_code = set_code or current_set(as_of)
+    time_period, cache_usage, start_date, end_date = _resolve_window(
+        config[set_code], as_of
+    )
+    deq_df = _compute_deq(
+        set_code,
+        time_period=time_period,
+        cache_usage=cache_usage,
+        observed_start=start_date,
+        observed_end=end_date,
+        **model_params,
+    )
     return DeqData(
         df=deq_df,
         set_code=set_code,
         start_date=start_date,
         end_date=end_date,
-        available_sets=available_sets,
     )

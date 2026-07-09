@@ -1,8 +1,10 @@
 """One-time script to create BLB test fixtures from the cached 17Lands data.
 
 Reads BLB data from SPELLS_DATA_HOME (or ~/.local/share/spells/), trims to the
-first 50 cards alphabetically, and writes only the 'any' + 10 two-color pair
-ratings files plus both deck_color files into tests/fixtures/spells_data/.
+first 50 cards alphabetically, and writes ratings + deck_color files into
+tests/fixtures/spells_data/. Only the all-player cohort has color-pair files
+(17lands doesn't precompute user_group + colors together); top only needs
+the "any" ratings file.
 """
 
 from __future__ import annotations
@@ -18,9 +20,9 @@ SPELLS_DATA_HOME = Path(
 FIXTURE_ROOT = Path(__file__).parent.parent / "tests" / "fixtures" / "spells_data"
 
 SET_CODE = "BLB"
-START = "2024-08-13"
-END = "2024-09-24"
-DATE_RANGE = f"{START}_{END}"
+TIME_PERIOD = "ALL_TIME"
+AS_OF = "2026-07-08"
+SNAPSHOT_SUFFIX = f"{TIME_PERIOD}_{AS_OF}"
 FORMAT = "PremierDraft"
 NUM_CARDS = 50
 
@@ -28,9 +30,10 @@ TEN_PAIRS = ["WU", "WB", "WR", "WG", "UB", "UR", "UG", "BR", "BG", "RG"]
 COHORTS = ["all", "top"]
 
 
-def load_json(path: Path) -> list | dict:
+def load_json(path: Path) -> list:
     with open(path) as f:
-        return json.load(f)
+        raw = json.load(f)
+    return raw["data"] if isinstance(raw, dict) and "data" in raw else raw
 
 
 def write_json(path: Path, data) -> None:
@@ -42,7 +45,7 @@ def write_json(path: Path, data) -> None:
 
 def main():
     # Determine the 50 card names from the all/any file
-    any_src = SPELLS_DATA_HOME / "ratings" / SET_CODE / f"{FORMAT}_all_any_{DATE_RANGE}.json"
+    any_src = SPELLS_DATA_HOME / "ratings" / SET_CODE / f"{FORMAT}_all_any_{SNAPSHOT_SUFFIX}.json"
     all_cards: list[dict] = load_json(any_src)
     card_names_50 = sorted(c["name"] for c in all_cards)[:NUM_CARDS]
     card_names_set = set(card_names_50)
@@ -56,10 +59,10 @@ def main():
             print(f"  removed existing {dest.relative_to(FIXTURE_ROOT)}")
 
     # Copy and trim ratings files
-    colors_needed = ["any"] + TEN_PAIRS
     for cohort in COHORTS:
+        colors_needed = ["any"] + TEN_PAIRS if cohort == "all" else ["any"]
         for color in colors_needed:
-            filename = f"{FORMAT}_{cohort}_{color}_{DATE_RANGE}.json"
+            filename = f"{FORMAT}_{cohort}_{color}_{SNAPSHOT_SUFFIX}.json"
             src = SPELLS_DATA_HOME / "ratings" / SET_CODE / filename
             if not src.exists():
                 print(f"  MISSING: {src}")
@@ -70,7 +73,7 @@ def main():
 
     # Copy deck_color files as-is
     for cohort in COHORTS:
-        filename = f"{FORMAT}_{cohort}_{DATE_RANGE}.json"
+        filename = f"{FORMAT}_{cohort}_{SNAPSHOT_SUFFIX}.json"
         src = SPELLS_DATA_HOME / "deck_color" / SET_CODE / filename
         if not src.exists():
             print(f"  MISSING: {src}")
@@ -78,11 +81,10 @@ def main():
         data = load_json(src)
         write_json(FIXTURE_ROOT / "deck_color" / SET_CODE / filename, data)
 
-    print(f"\nDone. {len(colors_needed) * len(COHORTS)} ratings files + 2 deck_color files.")
-    print(f"\nBLB constants for conftest.py / test_deq_model.py:")
+    print("\nDone.")
+    print("\nBLB constants for conftest.py / test_deq_model.py:")
     print(f"  BLB_SET = {SET_CODE!r}")
-    print(f"  BLB_START = dt.date(2024, 8, 13)")
-    print(f"  BLB_END = dt.date(2024, 9, 24)")
+    print(f"  BLB_AS_OF = dt.date{tuple(int(x) for x in AS_OF.split('-'))}")
 
 
 if __name__ == "__main__":

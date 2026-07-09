@@ -1,4 +1,4 @@
-"""Regression test for live_deq() pinned to a 50-card BLB snapshot.
+"""Regression test for the DEq engine pinned to a 50-card BLB snapshot.
 
 For every card in the trimmed fixture set we lock in expected values for
 seven derived metrics: the four DEq components (pick_equity, mwr,
@@ -20,21 +20,23 @@ from __future__ import annotations
 
 import math
 import sys
-from typing import Iterable
 
 import polars as pl
 import pytest
 
-from deq.main import live_deq
+from spells import TimePeriod
+
+from deq.main import _compute_deq
 
 try:
-    from .conftest import BLB_COLOR_SETS, BLB_END, BLB_SET, BLB_START
+    from .conftest import BLB_AS_OF, BLB_COLOR_SETS, BLB_SET, BLB_START, BLB_END
 except ImportError:  # script-mode (regenerate)
     import datetime as _dt
 
     BLB_SET = "BLB"
     BLB_START = _dt.date(2024, 8, 13)
     BLB_END = _dt.date(2024, 9, 24)
+    BLB_AS_OF = _dt.date(2026, 7, 8)
     BLB_COLOR_SETS = ["WU", "WB", "WR", "WG", "UB", "UR", "UG", "BR", "BG", "RG"]
 
 METRICS = (
@@ -50,207 +52,219 @@ METRICS = (
 # --- BEGIN EXPECTED ---
 EXPECTED: dict[str, tuple[float | None, ...]] = {
     'Agate Assault': (
-        0.0098155, -0.00081956, 0.0001332, 2.5125e-05,
-        0.93464, 0.0069612, -0.91645,
+        0.010219, -0.0040932, 0.0025072, 0.00044926,
+        0.96677, 0.0069098, -0.85091,
     ),
     'Agate-Blade Assassin': (
-        0.0061297, -0.0046641, -0.0032026, -0.00028604,
-        0.9347, -0.0012582, -1.588,
+        0.0061736, 0.0019432, -0.0045957, -0.00041227,
+        0.96623, 0.0019314, -1.6411,
     ),
     "Alania's Pathmaker": (
-        0.0046925, 0.00026463, 0.00098428, 6.3009e-05,
-        0.93111, 0.0033192, -2.283,
+        0.0047191, -0.0044092, 0.0032036, 0.00020681,
+        0.96543, 0.0020865, -2.2699,
     ),
     'Alania, Divergent Storm': (
-        0.010262, -0.02995, 0.0042804, 0.00084542,
-        0.54065, -0.0049777, -0.74217,
+        0.011053, -0.044758, 0.010538, 0.0022507,
+        0.66986, -0.0075812, -0.71047,
     ),
     "Artist's Talent": (
-        0.0068516, -0.065854, 0.0070968, 0.00072665,
-        0.0, -0.0087909, -1.7755,
+        0.0069327, -0.065974, 0.012093, 0.0013174,
+        0.39431, -0.007413, -1.7381,
     ),
     'Azure Beastbinder': (
-        0.020617, 0.013367, -0.00040279, -0.00030902,
-        0.83137, 0.027771, 2.1144,
+        0.020587, 0.0074449, 0.00097879, 0.00074231,
+        0.89019, 0.024262, 1.8304,
     ),
     'Bakersbane Duo': (
-        0.016002, -0.00077772, 0.0016016, 0.00063376,
-        0.97099, 0.015778, 1.2993,
+        0.014761, 0.0012219, 0.00042938, 0.00014424,
+        0.98622, 0.014871, 1.0919,
     ),
     "Bandit's Talent": (
-        0.0081727, -0.02708, -0.00049249, -6.9505e-05,
-        0.7682, -0.010038, -1.2608,
+        0.0082265, -0.026288, -0.0019761, -0.00026035,
+        0.87075, -0.010223, -1.2161,
     ),
     'Banishing Light': (
-        0.016998, 0.0031365, -0.00014824, -6.7276e-05,
-        0.94786, 0.017583, 0.65268,
+        0.017567, 0.0031224, 0.00020716, 0.00010098,
+        0.97574, 0.018756, 0.85499,
     ),
     'Bark-Knuckle Boxer': (
-        0.013938, -0.0074924, 0.0022135, 0.00066609,
-        0.90432, 0.0078056, 0.46075,
+        0.014031, -0.0010978, 0.00089012, 0.00027134,
+        0.95607, 0.011826, 0.60442,
     ),
     'Barkform Harvester': (
-        0.0024564, -0.022166, 0.0024635, 7.6462e-05,
-        0.86896, -0.0043602, -3.1155,
+        0.0022457, -0.019766, 0.00070113, 1.9809e-05,
+        0.9171, -0.0037101, -3.2448,
     ),
     'Baylen, the Haymaker': (
-        0.010638, -0.034712, 0.0024401, 0.00046381,
-        0.375, -0.005197, -0.86448,
+        0.011524, -0.012114, 0.0015697, 0.00033548,
+        0.59383, 0.00036228, -0.59123,
     ),
     'Bellowing Crier': (
-        0.0031637, -0.014716, -0.0038797, -0.00015672,
-        0.91731, -0.0069165, -2.8065,
+        0.0032504, -0.017727, -0.00082879, -3.4029e-05,
+        0.95633, -0.0068687, -2.8012,
     ),
     'Beza, the Bounding Spring': (
-        0.027898, 0.023677, -5.7719e-06, -2.6494e-05,
-        0.6299, 0.044919, 4.1194,
+        0.028102, 0.024093, 1.1632e-05, 6.3427e-05,
+        0.77493, 0.046152, 4.1361,
     ),
     "Blacksmith's Talent": (
-        0.013118, 0.0024486, -0.0010253, -0.00027231,
-        0.87235, 0.010479, -0.033188,
+        0.011646, 0.001239, 0.00090043, 0.00019788,
+        0.93177, 0.0095762, -0.35682,
     ),
     'Blooming Blast': (
-        0.011478, -0.009968, -0.00080198, -0.00016661,
-        0.83962, 0.00039663, -0.66277,
+        0.012232, -0.011063, 0.0018082, 0.00043301,
+        0.9157, 0.0025608, -0.53984,
     ),
     'Bonebind Orator': (
-        0.0088938, -0.0022382, 0.00092448, 0.00013482,
-        0.96319, 0.0063185, -0.55287,
+        0.0082765, 0.00295, -0.0011303, -0.00014893,
+        0.98056, 0.0079372, -0.80327,
     ),
     'Bonecache Overseer': (
-        0.00893, -0.004173, 0.0038014, 0.00055971,
-        0.87713, 0.005316, -0.82204,
+        0.008979, -0.00073816, 0.0005908, 8.9155e-05,
+        0.93831, 0.0052369, -0.80332,
     ),
     'Brambleguard Captain': (
-        0.011582, 0.00039956, -0.0014318, -0.0003007,
-        0.81897, 0.0073707, -0.75756,
+        0.011709, -0.0019873, 0.0011778, 0.00026147,
+        0.91083, 0.0080755, -0.62413,
     ),
     'Brambleguard Veteran': (
-        0.013431, -0.001831, 0.0027833, 0.00077343,
-        0.87987, 0.011534, 0.14097,
+        0.014022, -0.0053085, 0.001637, 0.00049539,
+        0.9416, 0.0084806, 0.29041,
     ),
     'Brave-Kin Duo': (
-        0.0041254, -0.01365, -0.0026068, -0.0001417,
-        0.87013, -0.0053773, -2.7111,
+        0.0047434, -0.0082651, -0.00041694, -2.756e-05,
+        0.94739, -0.0019627, -2.3897,
     ),
     'Brazen Collector': (
-        0.014375, 0.0079739, -6.897e-05, -2.2978e-05,
-        0.89307, 0.018565, 0.19872,
+        0.014509, 0.0020568, 0.0014244, 0.00046138,
+        0.94492, 0.015249, 0.2825,
     ),
     'Brightblade Stoat': (
-        0.020211, 0.006758, -0.00031073, -0.00022222,
-        0.8977, 0.023167, 1.5882,
+        0.020361, 0.0063118, 4.233e-06, 3.3161e-06,
+        0.94935, 0.023495, 1.644,
     ),
     "Builder's Talent": (
-        0.011591, -0.0040771, 0.0011268, 0.00024648,
-        0.90284, 0.0057458, 0.044247,
+        0.009799, -0.0018714, 0.0005838, 9.9031e-05,
+        0.92986, 0.0049474, -0.7677,
     ),
     "Bumbleflower's Sharepot": (
-        0.0039265, -0.024951, 0.0024553, 0.00012729,
-        0.90645, -0.007791, -2.3627,
+        0.0032434, -0.026928, 0.00062684, 2.5872e-05,
+        0.93793, -0.0078693, -2.6952,
     ),
     'Burrowguard Mentor': (
-        0.016223, 0.010045, 0.00022096, 8.5932e-05,
-        0.88437, 0.018875, 0.73466,
+        0.015988, 0.01341, -0.0014149, -0.00055926,
+        0.94565, 0.01992, 0.76792,
     ),
     'Bushy Bodyguard': (
-        0.015061, -2.9408e-05, 0.0022374, 0.00077725,
-        0.9, 0.015227, 0.50879,
+        0.015572, 0.0046288, 0.00034535, 0.00012837,
+        0.95464, 0.017753, 0.77773,
     ),
     'Byway Barterer': (
-        0.021674, -0.0015065, 2.9414e-05, 3.5487e-05,
-        0.77111, 0.016892, 1.8682,
+        0.022224, -0.0098548, 0.00087132, 0.00086245,
+        0.87512, 0.011897, 1.9902,
     ),
     'Cache Grab': (
-        0.0098637, -0.0019754, 0.003109, 0.00052687,
-        0.96504, 0.0082797, -0.21744,
+        0.0091187, 0.0027613, 0.00081219, 0.00012318,
+        0.98318, 0.0089513, -0.40516,
     ),
     'Calamitous Tide': (
-        0.005306, -0.013803, -0.0014655, -0.00010817,
-        0.84147, -0.0047092, -1.8024,
+        0.0057496, -0.011498, 0.0025224, 0.00020699,
+        0.915, -0.0014613, -1.7377,
     ),
     'Camellia, the Seedmiser': (
-        0.022865, 0.0084925, 0.0014753, 0.0016155,
-        0.7994, 0.027124, 2.5296,
+        0.022768, 0.016623, 0.0004448, 0.00047396,
+        0.89142, 0.031975, 2.5272,
     ),
     "Caretaker's Talent": (
-        0.023453, 0.0058059, 0.00028506, 0.00035303,
-        0.77309, 0.021606, 2.458,
+        0.02281, 0.0083513, -0.00021497, -0.00023629,
+        0.86169, 0.021954, 2.0799,
     ),
     'Carrot Cake': (
-        0.016258, 0.0086621, 1.1354e-05, 5.4942e-06,
-        0.96876, 0.021387, 1.1867,
+        0.014298, 0.011518, -0.00048265, -0.00015156,
+        0.98466, 0.021092, 0.71982,
     ),
     'Cindering Cutthroat': (
-        0.0052331, -0.0079107, -0.0044976, -0.00032897,
-        0.91897, -0.0040813, -2.071,
+        0.0054052, -0.0023286, -0.0038082, -0.00028979,
+        0.95977, -0.00056577, -1.9944,
     ),
     'Clement, the Worrywort': (
-        0.019215, 0.0093284, -0.0015848, -0.00096943,
-        0.76031, 0.018815, 1.2999,
+        0.01949, 0.0058364, -0.0014846, -0.00094066,
+        0.86398, 0.016369, 1.3862,
     ),
     'Clifftop Lookout': (
-        0.011435, -0.024261, 0.00033797, 7.0565e-05,
-        0.82521, -0.0085662, -0.68196,
+        0.012557, -0.019302, -0.00029572, -7.3855e-05,
+        0.91909, -0.0050925, -0.31656,
     ),
     'Coiling Rebirth': (
-        0.015529, -0.018361, 0.00013327, 4.9474e-05,
-        0.61832, -0.0015241, 0.04344,
+        0.015627, -0.014057, -0.0010223, -0.00039487,
+        0.7698, 9.0079e-05, 0.16445,
     ),
     'Conduct Electricity': (
-        0.0022122, -0.024533, 0.0037101, 0.00010468,
-        0.80514, -0.0045528, -3.376,
+        0.0024483, -0.024862, 0.0066316, 0.00020624,
+        0.89338, -0.0039935, -3.2958,
     ),
     'Consumed by Greed': (
-        0.019821, 0.016163, 6.3678e-05, 4.4135e-05,
-        0.93137, 0.032426, 2.1135,
+        0.018823, 0.01543, -0.00085822, -0.00049994,
+        0.96406, 0.02946, 1.8472,
     ),
     'Corpseberry Cultivator': (
-        0.0072364, -0.015606, 0.0044903, 0.00048993,
-        0.94231, -0.0022551, -1.2615,
+        0.0071376, -0.012193, 0.0011344, 0.00012107,
+        0.97109, -0.0024705, -1.2597,
     ),
     'Coruscation Mage': (
-        0.010783, -0.0015532, -0.00051001, -0.00010117,
-        0.87889, 0.0062978, -0.57181,
+        0.011223, -0.010033, 0.0028614, 0.00059132,
+        0.92988, 0.003353, -0.55995,
     ),
     "Cruelclaw's Heist": (
-        0.015973, -0.022641, -0.00030917, -0.00012179,
-        0.65529, -0.0047594, 0.04117,
+        0.015657, -0.022398, -0.0012272, -0.00046854,
+        0.78814, -0.0054551, 0.10715,
     ),
     'Crumb and Get It': (
-        0.0095229, -0.0010653, -0.0011411, -0.00018362,
-        0.95016, 0.0056361, -0.75974,
+        0.0088401, 0.0018335, -0.00029938, -4.3418e-05,
+        0.97566, 0.0080471, -0.87654,
     ),
     'Curious Forager': (
-        0.014752, -0.0068651, 0.0017301, 0.00057949,
-        0.91692, 0.0088234, 0.76922,
+        0.014768, -0.0049109, 0.00032797, 0.00011068,
+        0.95904, 0.0088674, 0.83037,
     ),
     'Daggerfang Duo': (
-        0.0090759, -0.0080012, 0.0011622, 0.00017438,
-        0.95857, 0.0018607, -0.59821,
+        0.0082604, -0.0063576, -0.00073128, -9.6149e-05,
+        0.97867, 0.00081571, -0.83325,
     ),
     'Daring Waverider': (
-        0.0094734, 0.0077079, -0.0013628, -0.00023333,
-        0.90652, 0.0096916, -0.45983,
+        0.0093613, -0.00068896, 0.0023651, 0.00036348,
+        0.94145, 0.0067487, -0.62586,
     ),
     'Darkstar Augur': (
-        0.025019, 0.017439, 8.4386e-08, 2.954e-07,
-        0.84215, 0.037463, 3.6917,
+        0.024671, 0.019482, -0.00047382, -0.00076079,
+        0.90905, 0.037867, 3.457,
     ),
     "Dawn's Truce": (
-        0.00788, -0.048347, -0.0005567, -6.8603e-05,
-        0.0, -0.0093048, -1.7522,
+        0.0090958, -0.045152, -0.00043609, -6.564e-05,
+        0.0, -0.0099618, -1.6246,
     ),
     'Dazzling Denial': (
-        0.0038178, -0.0033327, -0.0013134, -6.7216e-05,
-        0.92653, -0.00042716, -2.4802,
+        0.0038433, -0.0078534, 0.0046483, 0.00023657,
+        0.95761, 0.00040561, -2.5217,
     ),
     'Dewdrop Cure': (
-        0.0033915, -0.017798, -0.0015844, -7.3348e-05,
-        0.50224, -0.0032199, -2.8253,
+        0.0037804, -0.013935, -0.0014687, -7.9611e-05,
+        0.6997, -0.0025077, -2.6161,
     ),
 }
 # --- END EXPECTED ---
+
+
+def _blb_deq(color_sets: list[str]) -> pl.DataFrame:
+    """Run the engine over the fixture's ALL_TIME snapshot for BLB's format span."""
+    return _compute_deq(
+        BLB_SET,
+        time_period=TimePeriod.ALL_TIME,
+        cache_usage=BLB_AS_OF,
+        observed_start=BLB_START,
+        observed_end=BLB_END,
+        color_sets=color_sets,
+    )
 
 
 def _values_close(actual: float | None, expected: float | None) -> bool:
@@ -265,7 +279,7 @@ def _values_close(actual: float | None, expected: float | None) -> bool:
 
 
 def test_live_deq_matches_expected(blb_data) -> None:  # noqa: ARG001 — fixture activates env
-    df = live_deq(BLB_SET, BLB_START, BLB_END, color_sets=BLB_COLOR_SETS).sort("name")
+    df = _blb_deq(BLB_COLOR_SETS).sort("name")
     assert df.height == len(EXPECTED), (
         f"row count {df.height} != fixture card count {len(EXPECTED)}"
     )
@@ -304,7 +318,7 @@ def test_empty_color_sets_zeroes_bias_adj(blb_data) -> None:  # noqa: ARG001
     which is zero when no pairs are tracked). The components that don't touch
     color-pair data — deq_base, pct_top, npr — must match EXPECTED.
     """
-    df = live_deq(BLB_SET, BLB_START, BLB_END, color_sets=[]).sort("name")
+    df = _blb_deq([]).sort("name")
 
     for col in ZEROED_BY_EMPTY_COLOR_SETS:
         non_zero = df.filter(
@@ -349,7 +363,7 @@ def test_no_top_data_falls_back_to_all(blb_no_top_data) -> None:  # noqa: ARG001
     Regression test for the pct_top=0 / pct_gp_top=null bug: 0*null evaluates
     to null in Polars, which previously zeroed deq for sets like OM1.
     """
-    df = live_deq(BLB_SET, BLB_START, BLB_END, color_sets=BLB_COLOR_SETS).sort("name")
+    df = _blb_deq(BLB_COLOR_SETS).sort("name")
 
     assert (df["pct_top"] == 0).all(), "all cards should have pct_top=0 with no top game data"
 
@@ -363,7 +377,7 @@ def test_no_top_data_falls_back_to_all(blb_no_top_data) -> None:  # noqa: ARG001
 
 
 def _fmt_val(x: float | None, sig: int = 5) -> str:
-    if x is None:
+    if x is None or math.isnan(x):
         return "None"
     if x == 0.0:
         return "0.0"
@@ -380,22 +394,25 @@ def _format_expected(df: pl.DataFrame) -> str:
         lines.append(f"    {row['name']!r}: (")
         lines.append(f"        {v[0]}, {v[1]}, {v[2]}, {v[3]},")
         lines.append(f"        {v[4]}, {v[5]}, {v[6]},")
-        lines.append(f"    ),")
+        lines.append("    ),")
     lines.append("}")
     return "\n".join(lines)
 
 
 def regenerate_expected() -> str:
-    """Recompute live_deq on the current fixtures and return the source for EXPECTED.
+    """Recompute the DEq engine on the current fixtures and return the source for EXPECTED.
 
     Run as `pdm run python tests/test_deq_model.py regenerate` and paste the
     output between the BEGIN/END EXPECTED markers in this file.
     """
-    import datetime as dt
     import os
     import shutil
     import tempfile
     from pathlib import Path
+
+    from deq.set_config import DEqConfig, config
+
+    config[BLB_SET] = DEqConfig(start_date=BLB_START, end_date=BLB_END)
 
     src = Path(__file__).parent / "fixtures" / "spells_data"
     with tempfile.TemporaryDirectory() as td:
@@ -403,8 +420,7 @@ def regenerate_expected() -> str:
         os.environ["SPELLS_DATA_HOME"] = str(td_path)
         for sub in ("ratings", "deck_color"):
             shutil.copytree(src / sub, td_path / sub)
-        (td_path / "ad_hoc").mkdir()
-        df = live_deq(BLB_SET, BLB_START, BLB_END, color_sets=BLB_COLOR_SETS)
+        df = _blb_deq(BLB_COLOR_SETS)
     return _format_expected(df)
 
 
