@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:f7a1859eaeff33c278a09cf01a84601e2d89ba2b097ec902c0533636cf1614f2"
+content_hash = "sha256:a477e95dd8027a5e660f0b19a04c4c55cfca8480e2058312cd750f83dd7f2e75"
 
 [[metadata.targets]]
 requires_python = ">=3.13"
@@ -971,33 +971,33 @@ files = [
 
 [[package]]
 name = "jupyter-book"
-version = "1.0.3"
+version = "1.0.4.post1"
 requires_python = ">=3.9"
-summary = "Build a book with Jupyter Notebooks and Sphinx."
+summary = ""
 groups = ["dev"]
 dependencies = [
-    "Jinja2",
     "click<9,>=7.1",
+    "jinja2",
     "jsonschema<5",
     "linkify-it-py<3,>=2",
-    "myst-nb<3,>=1",
-    "myst-parser<3,>=1",
+    "myst-nb~=1.0",
+    "myst-parser~=3.0",
     "pyyaml",
-    "sphinx-book-theme<2,>=1.1.0",
-    "sphinx-comments",
-    "sphinx-copybutton",
-    "sphinx-design<1,>=0.5",
-    "sphinx-external-toc<2,>=1.0.1",
-    "sphinx-jupyterbook-latex<2,>=1",
-    "sphinx-multitoc-numbering<1,>=0.1.3",
-    "sphinx-thebe<1,>=0.3.1",
-    "sphinx-togglebutton",
-    "sphinx<8,>=5",
-    "sphinxcontrib-bibtex<3,>=2.5.0",
+    "sphinx-book-theme~=1.1",
+    "sphinx-comments~=0.0",
+    "sphinx-copybutton~=0.5",
+    "sphinx-design~=0.6",
+    "sphinx-external-toc~=1.0",
+    "sphinx-jupyterbook-latex~=1.0",
+    "sphinx-multitoc-numbering~=0.1",
+    "sphinx-thebe~=0.3",
+    "sphinx-togglebutton~=0.3",
+    "sphinxcontrib-bibtex~=2.5",
+    "sphinx~=7.0",
 ]
 files = [
-    {file = "jupyter_book-1.0.3-py3-none-any.whl", hash = "sha256:d99b0c92c62b469abc2b61047c1290923bce460367c6a7e296589cadc726119f"},
-    {file = "jupyter_book-1.0.3.tar.gz", hash = "sha256:f05788a76f4d284de9887fa816f4a99a4f16cc5f7c0fd5a56074a3d03bfc3e50"},
+    {file = "jupyter_book-1.0.4.post1-py3-none-any.whl", hash = "sha256:3a27a6b2581f1894ffe8f347d1a3432f06fc616997547919c42cd41c54db625d"},
+    {file = "jupyter_book-1.0.4.post1.tar.gz", hash = "sha256:2fe92c49ff74840edc0a86bb034eafdd0f645fca6e48266be367ce4d808b9601"},
 ]
 
 [[package]]
@@ -1479,12 +1479,12 @@ files = [
 
 [[package]]
 name = "myst-parser"
-version = "2.0.0"
+version = "3.0.1"
 requires_python = ">=3.8"
 summary = "An extended [CommonMark](https://spec.commonmark.org/) compliant parser,"
 groups = ["dev"]
 dependencies = [
-    "docutils<0.21,>=0.16",
+    "docutils<0.22,>=0.18",
     "jinja2",
     "markdown-it-py~=3.0",
     "mdit-py-plugins~=0.4",
@@ -1492,8 +1492,8 @@ dependencies = [
     "sphinx<8,>=6",
 ]
 files = [
-    {file = "myst_parser-2.0.0-py3-none-any.whl", hash = "sha256:7c36344ae39c8e740dad7fdabf5aa6fc4897a813083c6cc9990044eb93656b14"},
-    {file = "myst_parser-2.0.0.tar.gz", hash = "sha256:ea929a67a6a0b1683cdbe19b8d2e724cd7643f8aa3e7bb18dd65beac3483bead"},
+    {file = "myst_parser-3.0.1-py3-none-any.whl", hash = "sha256:6457aaa33a5d474aca678b8ead9b3dc298e89c68e67012e73146ea6fd54babf1"},
+    {file = "myst_parser-3.0.1.tar.gz", hash = "sha256:88f0cb406cb363b077d176b51c476f62d60604d68a8dcdf4832e080441301a87"},
 ]
 
 [[package]]
