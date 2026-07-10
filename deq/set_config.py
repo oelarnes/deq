@@ -45,11 +45,11 @@ config = {
     "SOS": DEqConfig(start_date=dt.date(2026, 4, 21), end_date=dt.date(2026, 6, 23)),
     "TMT": DEqConfig(start_date=dt.date(2026, 3, 3), end_date=dt.date(2026, 4, 21)),
     "ECL": DEqConfig(start_date=dt.date(2026, 1, 20), end_date=dt.date(2026, 3, 2)),
-    # "TLA": DEqConfig(start_date=dt.date(2025, 11, 18), end_date=dt.date(2026, 1, 20)),
-    # "Cube+-+Powered": DEqConfig(
-    #     start_date=dt.date(2025, 10, 28), end_date=dt.date(2026, 6, 23), cube=True
-    # ),
-    # "EOE": DEqConfig(start_date=dt.date(2025, 7, 29), end_date=dt.date(2025, 9, 23)),
+    "TLA": DEqConfig(start_date=dt.date(2025, 11, 18), end_date=dt.date(2026, 1, 20)),
+    "Cube+-+Powered": DEqConfig(
+        start_date=dt.date(2025, 10, 28), end_date=dt.date(2026, 6, 23), cube=True
+    ),
+    "EOE": DEqConfig(start_date=dt.date(2025, 7, 29), end_date=dt.date(2025, 9, 23)),
     # "FIN": DEqConfig(start_date=dt.date(2025, 6, 10), end_date=dt.date(2026, 6, 23)),
     # "TDM": DEqConfig(start_date=dt.date(2025, 4, 8), end_date=dt.date(2025, 10, 28)),
     # "DFT": DEqConfig(start_date=dt.date(2025, 2, 11), end_date=dt.date(2025, 4, 8)),
