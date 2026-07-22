@@ -55,11 +55,11 @@ config = {
     "DFT": DEqConfig(start_date=dt.date(2025, 2, 11), end_date=dt.date(2026, 7, 21)),
     "PIO": DEqConfig(start_date=dt.date(2024, 12, 10), end_date=dt.date(2025, 2, 11)),
     "FDN": DEqConfig(start_date=dt.date(2024, 11, 12), end_date=dt.date(2024, 12, 10)),
-    "DSK": DEqConfig(start_date=dt.date(2024, 9, 24), end_date=dt.date(2025, 10, 14)), # scheduled w/o 7/21/26
+    "DSK": DEqConfig(start_date=dt.date(2024, 9, 24), end_date=dt.date(2026, 7, 28)),
     "BLB": DEqConfig(start_date=dt.date(2024, 7, 30), end_date=dt.date(2026, 7, 2)),
     "MH3": DEqConfig(start_date=dt.date(2024, 6, 11), end_date=dt.date(2025, 10, 21)),
     "OTJ": DEqConfig(start_date=dt.date(2024, 4, 16), end_date=dt.date(2025, 11, 4)),
-    # "MKM": DEqConfig(start_date=dt.date(2024, 2, 6), end_date=dt.date(2024, 4, 16)),
+    "MKM": DEqConfig(start_date=dt.date(2024, 2, 6), end_date=dt.date(2024, 4, 16)),
     # "LCI": DEqConfig(start_date=dt.date(2023, 11, 14), end_date=dt.date(2024, 2, 6)),
     # "WOE": DEqConfig(start_date=dt.date(2023, 9, 5), end_date=dt.date(2025, 9, 23)),
     # "LTR": DEqConfig(start_date=dt.date(2023, 6, 20), end_date=dt.date(2023, 9, 5)),
