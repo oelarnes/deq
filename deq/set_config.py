@@ -60,8 +60,8 @@ config = {
     "MH3": DEqConfig(start_date=dt.date(2024, 6, 11), end_date=dt.date(2025, 10, 21)),
     "OTJ": DEqConfig(start_date=dt.date(2024, 4, 16), end_date=dt.date(2025, 11, 4)),
     "MKM": DEqConfig(start_date=dt.date(2024, 2, 6), end_date=dt.date(2024, 4, 16)),
-    # "LCI": DEqConfig(start_date=dt.date(2023, 11, 14), end_date=dt.date(2024, 2, 6)),
-    # "WOE": DEqConfig(start_date=dt.date(2023, 9, 5), end_date=dt.date(2025, 9, 23)),
+    "LCI": DEqConfig(start_date=dt.date(2023, 11, 14), end_date=dt.date(2024, 2, 6)),
+    "WOE": DEqConfig(start_date=dt.date(2023, 9, 5), end_date=dt.date(2025, 9, 23)),
     # "LTR": DEqConfig(start_date=dt.date(2023, 6, 20), end_date=dt.date(2023, 9, 5)),
     # "MOM": DEqConfig(start_date=dt.date(2023, 4, 18), end_date=dt.date(2023, 6, 20)),
 }
