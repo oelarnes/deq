@@ -49,7 +49,7 @@ config = {
     "Cube+-+Powered": DEqConfig(
         start_date=dt.date(2025, 10, 28), end_date=dt.date(2026, 6, 23), cube=True
     ),
-    "EOE": DEqConfig(start_date=dt.date(2025, 7, 29), end_date=dt.date(2025, 9, 23)), # scheduled w/o 7/28/26
+    "EOE": DEqConfig(start_date=dt.date(2025, 7, 29), end_date=dt.date(2026, 8, 4)),
     "FIN": DEqConfig(start_date=dt.date(2025, 6, 10), end_date=dt.date(2026, 6, 23)),
     "TDM": DEqConfig(start_date=dt.date(2025, 4, 8), end_date=dt.date(2025, 10, 28)),
     "DFT": DEqConfig(start_date=dt.date(2025, 2, 11), end_date=dt.date(2026, 7, 21)),
@@ -62,6 +62,6 @@ config = {
     "MKM": DEqConfig(start_date=dt.date(2024, 2, 6), end_date=dt.date(2024, 4, 16)),
     "LCI": DEqConfig(start_date=dt.date(2023, 11, 14), end_date=dt.date(2024, 2, 6)),
     "WOE": DEqConfig(start_date=dt.date(2023, 9, 5), end_date=dt.date(2025, 9, 23)),
-    # "LTR": DEqConfig(start_date=dt.date(2023, 6, 20), end_date=dt.date(2023, 9, 5)),
+    "LTR": DEqConfig(start_date=dt.date(2023, 6, 20), end_date=dt.date(2023, 9, 5)),
     # "MOM": DEqConfig(start_date=dt.date(2023, 4, 18), end_date=dt.date(2023, 6, 20)),
 }
