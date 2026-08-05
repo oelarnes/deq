@@ -37,11 +37,9 @@ p1_sets = [
     "NEO",
 ]
 
-# Per-set configuration for DEq daily calculations
-# TEMPORARY (spells 0.14.0 migration verification): everything but MSH is
-# commented out. Add sets back one at a time once things look good.
 config = {
-    "MSH": DEqConfig(start_date=dt.date(2026, 6, 23)),
+    "HOB": DEqConfig(start_date=dt.date(2026, 8, 11)),
+    "MSH": DEqConfig(start_date=dt.date(2026, 6, 23), end_date=dt.date(2026, 8, 11)),
     "SOS": DEqConfig(start_date=dt.date(2026, 4, 21), end_date=dt.date(2026, 6, 23)),
     "TMT": DEqConfig(start_date=dt.date(2026, 3, 3), end_date=dt.date(2026, 4, 21)),
     "ECL": DEqConfig(start_date=dt.date(2026, 1, 20), end_date=dt.date(2026, 3, 2)),
@@ -63,5 +61,6 @@ config = {
     "LCI": DEqConfig(start_date=dt.date(2023, 11, 14), end_date=dt.date(2024, 2, 6)),
     "WOE": DEqConfig(start_date=dt.date(2023, 9, 5), end_date=dt.date(2025, 9, 23)),
     "LTR": DEqConfig(start_date=dt.date(2023, 6, 20), end_date=dt.date(2023, 9, 5)),
-    # "MOM": DEqConfig(start_date=dt.date(2023, 4, 18), end_date=dt.date(2023, 6, 20)),
+    "MOM": DEqConfig(start_date=dt.date(2023, 4, 18), end_date=dt.date(2023, 6, 20)),
+    "ONE": DEqConfig(start_date=dt.date(2023, 2, 7), end_date=dt.date(2023, 4, 18)),
 }
