@@ -63,4 +63,6 @@ config = {
     "LTR": DEqConfig(start_date=dt.date(2023, 6, 20), end_date=dt.date(2023, 9, 5)),
     "MOM": DEqConfig(start_date=dt.date(2023, 4, 18), end_date=dt.date(2023, 6, 20)),
     "ONE": DEqConfig(start_date=dt.date(2023, 2, 7), end_date=dt.date(2023, 4, 18)),
+    "BRO": DEqConfig(start_date=dt.date(2022, 11, 15), end_date=dt.date(2024, 7, 23)),
+    "DMU": DEqConfig(start_date=dt.date(2022, 9, 1), end_date=dt.date(2024, 9, 10)),
 }
