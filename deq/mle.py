@@ -6,7 +6,7 @@ from scipy.sparse import csc_array
 
 import polars as pl
 
-from spells import summon, ColSpec, ColType, view_select, get_names, ColName
+from spells import summon, ColSpec, ColType, lazy_select, get_names, ColName
 from spells.cache import save_ad_hoc_dataset, read_ad_hoc_dataset
 from spells.draft_data import _get_set_context
 from spells.enums import View
@@ -308,7 +308,7 @@ def pick_priority(
             return df
 
     pick_x = csc_array(
-        view_select(
+        lazy_select(
             set_code,
             View.DRAFT,
             [
@@ -360,7 +360,7 @@ def marginal_pick_q(
     picks_per_pack = _get_set_context(set_code, None)["picks_per_pack"]
     wl_x = (
         draft_id_df.join(
-            view_select(
+            lazy_select(
                 set_code,
                 View.DRAFT,
                 [
@@ -426,7 +426,7 @@ def p0_q(
         draft_filter = TOP_PLAYER
 
     wl_x = (
-        view_select(
+        lazy_select(
             set_code,
             View.DRAFT,
             [
@@ -459,7 +459,7 @@ def marginal_q_by_pick(set_code: str, draft_filter: dict | None = None):
     picks_per_pack = _get_set_context(set_code, None)["picks_per_pack"]
 
     draft_id_df = (
-        view_select(
+        lazy_select(
             set_code,
             View.DRAFT,
             ["draft_id"],
@@ -535,7 +535,7 @@ def draft_equity(
         null_cards = null_card_df["name"].to_list()
         bad_drafts = (
             (
-                view_select(set_code, View.GAME, ["draft_id", "deck"], draft_filter)
+                lazy_select(set_code, View.GAME, ["draft_id", "deck"], draft_filter)
                 .filter(
                     pl.sum_horizontal(
                         [
@@ -563,7 +563,7 @@ def draft_equity(
     wl_x = np.concat(
         [
             (
-                view_select(
+                lazy_select(
                     set_code,
                     View.DRAFT,
                     [
@@ -594,7 +594,7 @@ def draft_equity(
                 .to_numpy()
             ),
             (
-                view_select(
+                lazy_select(
                     set_code,
                     View.DRAFT,
                     [

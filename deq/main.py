@@ -4,7 +4,8 @@ from dataclasses import dataclass
 
 import polars as pl
 
-from spells import summon, ColName, ColType, ColSpec, EventType, TimePeriod, card_ratings_view
+from spells import summon, ColName, ColType, ColSpec, EventType, TimePeriod
+from spells.draft_data import card_ratings_view
 from spells.columns import agg_col
 from spells.card_data_files import deck_color_df, CacheUsage
 from deq.set_config import DEqConfig, config
