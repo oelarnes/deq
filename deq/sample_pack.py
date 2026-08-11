@@ -7,7 +7,7 @@ import functools
 
 import polars as pl
 
-from spells import summon, view_select, ColName, get_names
+from spells import summon, lazy_select, ColName, get_names
 from spells.enums import View
 
 from deq import ext
@@ -229,7 +229,7 @@ def get_picks_df(
 ) -> pl.DataFrame:
     filter_spec = json.loads(filter_json)
 
-    return view_select(
+    return lazy_select(
         set_code,
         view=View.DRAFT,
         columns=[
