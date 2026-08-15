@@ -86,7 +86,7 @@ def _resolve_window(
     else:
         assert is_live, "Did a new format end before three weeks elapsed?"
         time_period = TimePeriod.LAST_TWO_WEEKS
-        display_start = as_of - dt.timedelta(days=14)
+        display_start = max(cfg.start_date, as_of - dt.timedelta(days=14))
 
     if is_live:
         cache_usage = CacheUsage.NONE
