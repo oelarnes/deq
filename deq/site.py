@@ -10,6 +10,15 @@ from deq.main import available_sets, deq
 from deq.set_config import config
 
 
+def window_label(time_period) -> str:
+    """17lands' own rendering of a time period, matching its filter dropdown.
+
+    Derived rather than mapped, so a period 17lands adds before spells does
+    still renders correctly.
+    """
+    return " ".join(word.capitalize() for word in str(time_period).lower().split("_"))
+
+
 def load_html_template(template_path="deq_site_template.html"):
     with open(template_path, "r", encoding="utf-8") as f:
         return f.read()
@@ -42,7 +51,9 @@ def sanity_check(deq_data) -> None:
 
     deq_min, deq_max = rated.min(), rated.max()
     if not (-0.20 < deq_min < deq_max < 0.20):
-        raise ValueError(f"{code}: DEq range [{deq_min:.4f}, {deq_max:.4f}] outside plausible bounds")
+        raise ValueError(
+            f"{code}: DEq range [{deq_min:.4f}, {deq_max:.4f}] outside plausible bounds"
+        )
 
     existing = data_dir() / f"{code}.json"
     if existing.exists():
@@ -57,19 +68,25 @@ def sanity_check(deq_data) -> None:
 
 
 def write_set_json(deq_data) -> Path:
-    date_format = "%-d %b %y"
     days_live = (deq_data.end_date - config[deq_data.set_code].start_date).days
     payload = {
         "set_code": deq_data.set_code,
-        "start_date": deq_data.start_date.strftime(date_format),
-        "end_date": deq_data.end_date.strftime(date_format),
+        "window": window_label(deq_data.time_period),
         "embargoed": days_live < 12,
         "cards": (
             deq_data.df.select(
-                "deq_grade", "name", "color", "rarity",
-                "deq", "mwr", "pick_equity",
+                "deq_grade",
+                "name",
+                "color",
+                "rarity",
+                "deq",
+                "mwr",
+                "pick_equity",
                 (pl.col("deq_bias_adj") + pl.col("deq_meta_adj")).alias("adj"),
-                "npr", "pct_top", "pct_gp", "image_url",
+                "npr",
+                "pct_top",
+                "pct_gp",
+                "image_url",
             )
             .fill_nan(None)
             .sort("deq", descending=True, nulls_last=True)
@@ -86,7 +103,6 @@ def write_set_json(deq_data) -> Path:
 def write_html(deq_data, sets: list[str], version: int) -> Path:
     title_map = {"Cube+-+Powered": "Cube - Powered"}
     code_map = {"Cube+-+Powered": "PCube"}
-    date_format = "%-d %b %y"
 
     select_elements = "".join(
         f'<option value="{code}"{" selected" if code == deq_data.set_code else ""}>'
@@ -96,8 +112,7 @@ def write_html(deq_data, sets: list[str], version: int) -> Path:
 
     html = load_html_template().format(
         set_code=title_map.get(deq_data.set_code, deq_data.set_code),
-        start_date=deq_data.start_date.strftime(date_format),
-        end_date=deq_data.end_date.strftime(date_format),
+        window=window_label(deq_data.time_period),
         select_elements=select_elements,
         version=version,
     )
