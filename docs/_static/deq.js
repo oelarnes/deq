@@ -849,8 +849,7 @@ const linkSelect = document.getElementById('link-select');
 async function loadSet(setCode) {
     const response = await fetch(`data/${setCode}.json`);
     const data = await response.json();
-    document.getElementById('startDate').textContent = data.start_date;
-    document.getElementById('endDate').textContent = data.end_date;
+    document.getElementById('dataWindow').textContent = data.window;
     currentSetCode = data.set_code;
     document.title = 'DEq: Estimated Draft Equity';
     isEmbargoed = !!data.embargoed;

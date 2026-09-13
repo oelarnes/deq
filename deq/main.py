@@ -76,11 +76,18 @@ WIDE_WINDOW_THRESHOLD_DAYS = 21
 def _resolve_window(
     cfg: DEqConfig, as_of: dt.date
 ) -> tuple[TimePeriod, CacheUsage | dt.date, dt.date, dt.date]:
-    """Date window used for DEq along with assumed start and end date for display"""
+    """Date window used for DEq along with assumed start and end date for display.
+
+    An event-count window has no calendar span, so the cube reports the format
+    start and overstates observed_days. Only meta_decay_factor reads it, and it
+    clamps at MAX_DEQ_DAYS, so any span past that is equivalent."""
     elapsed = (as_of - cfg.start_date).days
     is_live = cfg.end_date is None or cfg.end_date >= as_of
 
-    if elapsed >= WIDE_WINDOW_THRESHOLD_DAYS:
+    if cfg.cube:
+        time_period = TimePeriod.LAST_TWO_EVENTS
+        display_start = cfg.start_date
+    elif elapsed >= WIDE_WINDOW_THRESHOLD_DAYS:
         time_period = TimePeriod.ALL_EXCEPT_FIRST_WEEK
         display_start = cfg.start_date + dt.timedelta(days=7)
     else:
@@ -389,13 +396,17 @@ ext = {
     ),
     "deck_commons": ColSpec(
         col_type=ColType.NAME_SUM,
-        expr=lambda name, card_context: pl.col(f"deck_{name}")
-        * (1 if card_context[name]["rarity"] == "common" else 0),
+        expr=lambda name, card_context: (
+            pl.col(f"deck_{name}")
+            * (1 if card_context[name]["rarity"] == "common" else 0)
+        ),
     ),
     "deck_rares": ColSpec(
         col_type=ColType.NAME_SUM,
-        expr=lambda name, card_context: pl.col(f"deck_{name}")
-        * (1 if card_context[name]["rarity"] == "rare" else 0),
+        expr=lambda name, card_context: (
+            pl.col(f"deck_{name}")
+            * (1 if card_context[name]["rarity"] == "rare" else 0)
+        ),
     ),
     "deck_commons_mean": agg_col(pl.col("deck_commons") / pl.col("deck")),
     "deck_rares_mean": agg_col(pl.col("deck_rares") / pl.col("deck")),
@@ -534,7 +545,13 @@ def _compute_deq(
     window whose observed_start/observed_end match time_period, so that
     observed_days lines up with the data actually fetched — see deq()."""
     cfg = config[set_code]
-    event_type = EventType.PICK_TWO if cfg.is_pick_two else EventType.PREMIER
+    event_type = (
+        EventType.PICK_TWO
+        if cfg.is_pick_two
+        else EventType.PREMIER_COMBINED
+        if cfg.contender
+        else EventType.PREMIER
+    )
 
     set_context = {
         "observed_days": (observed_end - observed_start).days,
@@ -599,10 +616,9 @@ def _compute_deq(
             active_colors = color_sets
         else:
             total_games = dc_df[ColName.NUM_GAMES].sum()
-            active_colors = (
-                dc_df.filter(pl.col(ColName.NUM_GAMES) >= min_games_pct * total_games)
-                [ColName.MAIN_COLORS].to_list()
-            )
+            active_colors = dc_df.filter(
+                pl.col(ColName.NUM_GAMES) >= min_games_pct * total_games
+            )[ColName.MAIN_COLORS].to_list()
 
         excess_wr_df = pl.concat(
             [
@@ -616,9 +632,9 @@ def _compute_deq(
                     )
                 ),
                 (
-                    dc_df.filter(pl.col(ColName.MAIN_COLORS).is_in(active_colors)).select(
-                        gp_wr_excess, ColName.MAIN_COLORS
-                    )
+                    dc_df.filter(
+                        pl.col(ColName.MAIN_COLORS).is_in(active_colors)
+                    ).select(gp_wr_excess, ColName.MAIN_COLORS)
                 ),
             ]
         )
@@ -808,8 +824,14 @@ def _compute_deq(
                 pl.when(pl.col("pct_gp") > 0)
                 .then(
                     (
-                        (pl.col("pct_top") * pl.col("pct_gp_top") * pl.col(f"{m}_top")).fill_null(0.0)
-                        + (1 - pl.col("pct_top")) * pl.col("pct_gp_all") * pl.col(f"{m}_all")
+                        (
+                            pl.col("pct_top")
+                            * pl.col("pct_gp_top")
+                            * pl.col(f"{m}_top")
+                        ).fill_null(0.0)
+                        + (1 - pl.col("pct_top"))
+                        * pl.col("pct_gp_all")
+                        * pl.col(f"{m}_all")
                     )
                     / pl.col("pct_gp")
                 )
@@ -840,6 +862,7 @@ def _compute_deq(
 class DeqData:
     df: pl.DataFrame
     set_code: str
+    time_period: TimePeriod
     start_date: dt.date
     end_date: dt.date
 
@@ -891,6 +914,7 @@ def deq(
     return DeqData(
         df=deq_df,
         set_code=set_code,
+        time_period=time_period,
         start_date=start_date,
         end_date=end_date,
     )
