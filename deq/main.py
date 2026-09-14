@@ -82,7 +82,7 @@ def _resolve_window(
     start and overstates observed_days. Only meta_decay_factor reads it, and it
     clamps at MAX_DEQ_DAYS, so any span past that is equivalent."""
     elapsed = (as_of - cfg.start_date).days
-    is_live = cfg.end_date is None or cfg.end_date >= as_of
+    is_live = has_pending_data(cfg, as_of)
 
     if cfg.cube:
         time_period = TimePeriod.LAST_TWO_EVENTS
@@ -867,14 +867,31 @@ class DeqData:
     end_date: dt.date
 
 
+def is_live(cfg: DEqConfig, as_of: dt.date | None = None) -> bool:
+    """Whether the format is still open for play as of `as_of`."""
+    as_of = as_of or dt.date.today()
+    return cfg.end_date is None or cfg.end_date >= as_of
+
+
+def has_pending_data(cfg: DEqConfig, as_of: dt.date | None = None) -> bool:
+    """Whether 17lands may still hold data for this format that we have not pulled.
+
+    A snapshot taken on a given day reflects play through the day before, so the
+    changeover day itself only lands in a run made the day after `end_date`. The
+    extra day also covers an `end_date` recorded a day early, which happens when
+    Wizards reports the changeover inconsistently.
+    """
+    as_of = as_of or dt.date.today()
+    return cfg.end_date is None or cfg.end_date >= as_of - dt.timedelta(days=1)
+
+
 def current_set(as_of: dt.date | None = None) -> str:
     """The most recently launched set whose format is live as of `as_of`."""
     as_of = as_of or dt.date.today()
     live = [
         code
         for code, cfg in config.items()
-        if cfg.start_date <= as_of
-        and (cfg.end_date is None or cfg.end_date >= as_of - dt.timedelta(days=1))
+        if cfg.start_date <= as_of and has_pending_data(cfg, as_of)
     ]
     return max(live, key=lambda code: config[code].start_date)
 

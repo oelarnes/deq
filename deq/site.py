@@ -6,7 +6,7 @@ from pathlib import Path
 
 import polars as pl
 
-from deq.main import available_sets, deq
+from deq.main import available_sets, deq, is_live
 from deq.set_config import config
 
 
@@ -104,10 +104,20 @@ def write_html(deq_data, sets: list[str], version: int) -> Path:
     title_map = {"Cube+-+Powered": "Cube - Powered"}
     code_map = {"Cube+-+Powered": "PCube"}
 
+    def options(codes: list[str]) -> str:
+        return "".join(
+            f'<option value="{code}"'
+            f'{" selected" if code == deq_data.set_code else ""}>'
+            f"{code_map.get(code, code)}</option>"
+            for code in codes
+        )
+
+    live = [code for code in sets if is_live(config[code])]
+    ended = [code for code in sets if not is_live(config[code])]
     select_elements = "".join(
-        f'<option value="{code}"{" selected" if code == deq_data.set_code else ""}>'
-        f'{code_map.get(code, code)}</option>'
-        for code in sets
+        f'<optgroup label="{label}">{options(codes)}</optgroup>'
+        for label, codes in (("Live", live), ("Ended", ended))
+        if codes
     )
 
     html = load_html_template().format(
