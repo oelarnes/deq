@@ -881,6 +881,8 @@ class DeqData:
 def is_live(cfg: DEqConfig, as_of: dt.date | None = None) -> bool:
     """Whether the format is still open for play as of `as_of`."""
     as_of = as_of or dt.date.today()
+    if launch_date(cfg) > as_of:
+        return False
     run = current_run(cfg, as_of)
     return run.end_date is None or run.end_date >= as_of
 
@@ -894,6 +896,8 @@ def has_pending_data(cfg: DEqConfig, as_of: dt.date | None = None) -> bool:
     Wizards reports the changeover inconsistently.
     """
     as_of = as_of or dt.date.today()
+    if launch_date(cfg) > as_of:
+        return False
     run = current_run(cfg, as_of)
     return run.end_date is None or run.end_date >= as_of - dt.timedelta(days=1)
 

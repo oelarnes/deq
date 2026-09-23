@@ -54,6 +54,19 @@ def test_the_predicates_differ_by_exactly_one_day():
     assert has_pending_data(ended_yesterday, AS_OF)
 
 
+def test_a_fully_pre_configured_future_set_is_not_live_before_launch():
+    """A set whose only run is entirely in the future (start and end both
+    already known, e.g. a pre-announced event window) must not read as live
+    just because current_run()'s no-run-started-yet fallback happens to carry
+    a real, later end_date."""
+    not_yet_launched = DEqConfig(
+        runs=[Run(dt.date(2026, 9, 29), dt.date(2026, 11, 9))]
+    )
+    as_of = dt.date(2026, 9, 23)
+    assert not is_live(not_yet_launched, as_of)
+    assert not has_pending_data(not_yet_launched, as_of)
+
+
 # A format that ran once, ended, and has a second run configured ahead of
 # time (e.g. a set returning to the Arena queue for a known future window).
 RETURNING_FORMAT = DEqConfig(

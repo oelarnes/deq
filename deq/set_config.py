@@ -62,7 +62,12 @@ p1_sets = [
 ]
 
 config = {
-    "HOB": DEqConfig(runs=[Run(dt.date(2026, 8, 11))], contender=True),
+    "FRA": DEqConfig(
+        runs=[Run(dt.date(2026, 9, 29), dt.date(2026, 11, 9))], contender=True
+    ),
+    "HOB": DEqConfig(
+        runs=[Run(dt.date(2026, 8, 11), dt.date(2026, 9, 29))], contender=True
+    ),
     "MSH": DEqConfig(runs=[Run(dt.date(2026, 6, 23), dt.date(2026, 8, 11))]),
     "SOS": DEqConfig(
         runs=[Run(dt.date(2026, 4, 21), dt.date(2026, 6, 23))], contender=True
@@ -71,7 +76,11 @@ config = {
     "ECL": DEqConfig(runs=[Run(dt.date(2026, 1, 20), dt.date(2026, 3, 2))]),
     "TLA": DEqConfig(runs=[Run(dt.date(2025, 11, 18), dt.date(2026, 6, 9))]),
     "Cube+-+Powered": DEqConfig(
-        runs=[Run(dt.date(2025, 10, 28), dt.date(2026, 9, 28))], cube=True
+        runs=[
+            Run(dt.date(2025, 10, 28), dt.date(2026, 9, 28)),
+            Run(dt.date(2026, 10, 20), dt.date(2026, 11, 9)),
+        ],
+        cube=True,
     ),
     "EOE": DEqConfig(runs=[Run(dt.date(2025, 7, 29), dt.date(2026, 8, 4))]),
     "FIN": DEqConfig(runs=[Run(dt.date(2025, 6, 10), dt.date(2026, 6, 23))]),
