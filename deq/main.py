@@ -8,7 +8,7 @@ from spells import summon, ColName, ColType, ColSpec, EventType, TimePeriod
 from spells.draft_data import card_ratings_view
 from spells.columns import agg_col
 from spells.card_data_files import deck_color_df, CacheUsage
-from deq.set_config import DEqConfig, config
+from deq.set_config import DEqConfig, config, current_run
 
 BASIC_LANDS = ["Plains", "Island", "Swamp", "Mountain", "Forest"]
 
@@ -81,27 +81,28 @@ def _resolve_window(
     An event-count window has no calendar span, so the cube reports the format
     start and overstates observed_days. Only meta_decay_factor reads it, and it
     clamps at MAX_DEQ_DAYS, so any span past that is equivalent."""
-    elapsed = (as_of - cfg.start_date).days
+    run = current_run(cfg, as_of)
+    elapsed = (as_of - run.start_date).days
     is_live = has_pending_data(cfg, as_of)
 
     if cfg.cube:
         time_period = TimePeriod.LAST_TWO_EVENTS
-        display_start = cfg.start_date
+        display_start = run.start_date
     elif elapsed >= WIDE_WINDOW_THRESHOLD_DAYS:
         time_period = TimePeriod.ALL_EXCEPT_FIRST_WEEK
-        display_start = cfg.start_date + dt.timedelta(days=7)
+        display_start = run.start_date + dt.timedelta(days=7)
     else:
         assert is_live, "Did a new format end before three weeks elapsed?"
         time_period = TimePeriod.LAST_TWO_WEEKS
-        display_start = max(cfg.start_date, as_of - dt.timedelta(days=14))
+        display_start = max(run.start_date, as_of - dt.timedelta(days=14))
 
     if is_live:
         cache_usage = CacheUsage.NONE
         display_end = as_of - dt.timedelta(days=1)
     else:
         cache_usage = CacheUsage.LAST
-        assert cfg.end_date is not None, "for typing"
-        display_end = cfg.end_date
+        assert run.end_date is not None, "for typing"
+        display_end = run.end_date
 
     return time_period, cache_usage, display_start, display_end
 
@@ -865,12 +866,14 @@ class DeqData:
     time_period: TimePeriod
     start_date: dt.date
     end_date: dt.date
+    run_start_date: dt.date
 
 
 def is_live(cfg: DEqConfig, as_of: dt.date | None = None) -> bool:
     """Whether the format is still open for play as of `as_of`."""
     as_of = as_of or dt.date.today()
-    return cfg.end_date is None or cfg.end_date >= as_of
+    run = current_run(cfg, as_of)
+    return run.end_date is None or run.end_date >= as_of
 
 
 def has_pending_data(cfg: DEqConfig, as_of: dt.date | None = None) -> bool:
@@ -882,7 +885,8 @@ def has_pending_data(cfg: DEqConfig, as_of: dt.date | None = None) -> bool:
     Wizards reports the changeover inconsistently.
     """
     as_of = as_of or dt.date.today()
-    return cfg.end_date is None or cfg.end_date >= as_of - dt.timedelta(days=1)
+    run = current_run(cfg, as_of)
+    return run.end_date is None or run.end_date >= as_of - dt.timedelta(days=1)
 
 
 def current_set(as_of: dt.date | None = None) -> str:
@@ -891,17 +895,21 @@ def current_set(as_of: dt.date | None = None) -> str:
     live = [
         code
         for code, cfg in config.items()
-        if cfg.start_date <= as_of and has_pending_data(cfg, as_of)
+        if current_run(cfg, as_of).start_date <= as_of and has_pending_data(cfg, as_of)
     ]
-    return max(live, key=lambda code: config[code].start_date)
+    return max(live, key=lambda code: current_run(config[code], as_of).start_date)
 
 
 def available_sets(as_of: dt.date | None = None) -> list[str]:
     """Sets launched on or before `as_of`, newest first."""
     as_of = as_of or dt.date.today()
     return sorted(
-        (code for code, cfg in config.items() if cfg.start_date <= as_of),
-        key=lambda code: config[code].start_date,
+        (
+            code
+            for code, cfg in config.items()
+            if current_run(cfg, as_of).start_date <= as_of
+        ),
+        key=lambda code: current_run(config[code], as_of).start_date,
         reverse=True,
     )
 
@@ -917,9 +925,8 @@ def deq(
     alternatives."""
     as_of = as_of or dt.date.today()
     set_code = set_code or current_set(as_of)
-    time_period, cache_usage, start_date, end_date = _resolve_window(
-        config[set_code], as_of
-    )
+    cfg = config[set_code]
+    time_period, cache_usage, start_date, end_date = _resolve_window(cfg, as_of)
     deq_df = _compute_deq(
         set_code,
         time_period=time_period,
@@ -934,4 +941,5 @@ def deq(
         time_period=time_period,
         start_date=start_date,
         end_date=end_date,
+        run_start_date=current_run(cfg, as_of).start_date,
     )

@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from deq.set_config import DEqConfig, config
+from deq.set_config import DEqConfig, Run, config
 
 FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "spells_data"
 
@@ -49,7 +49,7 @@ def blb_data(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[Path,
     whatever BLB's entry happens to be in production config.
     """
     monkeypatch.setenv("SPELLS_DATA_HOME", str(tmp_path))
-    monkeypatch.setitem(config, BLB_SET, DEqConfig(start_date=BLB_START, end_date=BLB_END))
+    monkeypatch.setitem(config, BLB_SET, DEqConfig(runs=[Run(BLB_START, BLB_END)]))
 
     for sub in ("ratings", "deck_color"):
         src = FIXTURE_ROOT / sub / BLB_SET
@@ -69,7 +69,7 @@ def blb_no_top_data(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generato
     falls back cleanly to all-cohort values rather than propagating nulls.
     """
     monkeypatch.setenv("SPELLS_DATA_HOME", str(tmp_path))
-    monkeypatch.setitem(config, BLB_SET, DEqConfig(start_date=BLB_START, end_date=BLB_END))
+    monkeypatch.setitem(config, BLB_SET, DEqConfig(runs=[Run(BLB_START, BLB_END)]))
 
     for sub in ("ratings", "deck_color"):
         src = FIXTURE_ROOT / sub / BLB_SET
