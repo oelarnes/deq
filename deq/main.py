@@ -8,7 +8,7 @@ from spells import summon, ColName, ColType, ColSpec, EventType, TimePeriod
 from spells.draft_data import card_ratings_view
 from spells.columns import agg_col
 from spells.card_data_files import deck_color_df, CacheUsage
-from deq.set_config import DEqConfig, config, current_run, launch_date
+from deq.set_config import DEqConfig, config, current_run, is_contender, launch_date
 
 BASIC_LANDS = ["Plains", "Island", "Swamp", "Mountain", "Forest"]
 
@@ -551,16 +551,21 @@ def _compute_deq(
     max_deq_days: int = MAX_DEQ_DAYS,
     color_sets: list[str] | None = None,
     min_games_pct: float = 0.005,
+    contender: bool = False,
 ) -> pl.DataFrame:
     """DEq frame for a fully-specified data window. Callers must supply a
     window whose observed_start/observed_end match time_period, so that
-    observed_days lines up with the data actually fetched — see deq()."""
+    observed_days lines up with the data actually fetched — see deq().
+
+    `contender` must reflect whether 17lands' combined event type is actually
+    queryable as of the call (the Contender Draft queue may launch partway
+    through a set's run) — see is_contender() in set_config.py."""
     cfg = config[set_code]
     event_type = (
         EventType.PICK_TWO
         if cfg.is_pick_two
         else EventType.PREMIER_COMBINED
-        if cfg.contender
+        if contender
         else EventType.PREMIER
     )
 
@@ -947,6 +952,7 @@ def deq(
         cache_usage=cache_usage,
         observed_start=start_date,
         observed_end=end_date,
+        contender=is_contender(cfg, as_of),
         **model_params,
     )
     return DeqData(

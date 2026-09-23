@@ -13,7 +13,12 @@ class DEqConfig:
     runs: list[Run]
     is_pick_two: bool = False
     cube: bool = False
-    contender: bool = False
+    # date the Contender Draft queue opens, if it does. 17lands' combined
+    # Premier+Contender event type isn't queryable before this date, so it
+    # must be a real (possibly future, pre-configured) date, not a blanket
+    # flag. Once combined data exists it's a property of the set, not any
+    # one run.
+    contender_start: dt.date | None = None
 
 
 def current_run(cfg: DEqConfig, as_of: dt.date) -> Run:
@@ -32,6 +37,13 @@ def launch_date(cfg: DEqConfig) -> dt.date:
     read as newer than sets that actually launched more recently.
     """
     return min(run.start_date for run in cfg.runs)
+
+
+def is_contender(cfg: DEqConfig, as_of: dt.date) -> bool:
+    """Whether 17lands' combined Premier+Contender event type is queryable as
+    of `as_of`. The Contender Draft queue can open partway through a set's
+    run, so this must be a real date check, not a blanket flag."""
+    return cfg.contender_start is not None and as_of >= cfg.contender_start
 
 
 # Sets included in the p1 strategy analysis (requires full public parquet data)
@@ -63,14 +75,17 @@ p1_sets = [
 
 config = {
     "FRA": DEqConfig(
-        runs=[Run(dt.date(2026, 9, 29), dt.date(2026, 11, 9))], contender=True
+        runs=[Run(dt.date(2026, 9, 29), dt.date(2026, 11, 9))],
+        contender_start=dt.date(2026, 10, 13),
     ),
     "HOB": DEqConfig(
-        runs=[Run(dt.date(2026, 8, 11), dt.date(2026, 9, 29))], contender=True
+        runs=[Run(dt.date(2026, 8, 11), dt.date(2026, 9, 29))],
+        contender_start=dt.date(2026, 8, 11),
     ),
     "MSH": DEqConfig(runs=[Run(dt.date(2026, 6, 23), dt.date(2026, 8, 11))]),
     "SOS": DEqConfig(
-        runs=[Run(dt.date(2026, 4, 21), dt.date(2026, 6, 23))], contender=True
+        runs=[Run(dt.date(2026, 4, 21), dt.date(2026, 6, 23))],
+        contender_start=dt.date(2026, 4, 21),
     ),
     "TMT": DEqConfig(runs=[Run(dt.date(2026, 3, 3), dt.date(2026, 4, 21))]),
     "ECL": DEqConfig(runs=[Run(dt.date(2026, 1, 20), dt.date(2026, 3, 2))]),

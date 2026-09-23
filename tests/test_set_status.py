@@ -15,7 +15,7 @@ import pytest
 from spells import TimePeriod
 
 from deq.main import _resolve_window, current_set, has_pending_data, is_live
-from deq.set_config import DEqConfig, Run, current_run
+from deq.set_config import DEqConfig, Run, current_run, is_contender
 
 AS_OF = dt.date(2026, 9, 14)
 
@@ -108,6 +108,24 @@ def test_a_bring_back_run_does_not_reset_window_maturity():
         time_period, _, display_start, _ = _resolve_window(RETURNING_FORMAT, as_of)
         assert time_period == TimePeriod.ALL_EXCEPT_FIRST_WEEK
         assert display_start == launch_plus_week
+
+
+def test_contender_only_applies_once_the_contender_queue_has_opened():
+    """The Contender Draft queue can open partway through a Premier Draft
+    run (e.g. two weeks after launch); 17lands' combined event type isn't
+    queryable before that, regardless of which run is currently active."""
+    staggered_contender = DEqConfig(
+        runs=[Run(dt.date(2026, 9, 29), dt.date(2026, 11, 9))],
+        contender_start=dt.date(2026, 10, 13),
+    )
+    assert not is_contender(staggered_contender, dt.date(2026, 9, 29))
+    assert not is_contender(staggered_contender, dt.date(2026, 10, 12))
+    assert is_contender(staggered_contender, dt.date(2026, 10, 13))
+    assert is_contender(staggered_contender, dt.date(2026, 11, 9))
+
+
+def test_contender_defaults_off():
+    assert not is_contender(RETURNING_FORMAT, dt.date(2026, 9, 25))
 
 
 def test_a_reactivated_old_set_does_not_displace_the_current_set(monkeypatch):
