@@ -7,7 +7,7 @@ from pathlib import Path
 import polars as pl
 
 from deq.main import available_sets, deq, is_live
-from deq.set_config import config
+from deq.set_config import config, launch_date
 
 
 def window_label(time_period) -> str:
@@ -68,7 +68,7 @@ def sanity_check(deq_data) -> None:
 
 
 def write_set_json(deq_data) -> Path:
-    days_live = (deq_data.end_date - deq_data.run_start_date).days
+    days_live = (deq_data.end_date - launch_date(config[deq_data.set_code])).days
     payload = {
         "set_code": deq_data.set_code,
         "window": window_label(deq_data.time_period),

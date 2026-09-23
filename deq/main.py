@@ -80,27 +80,37 @@ def _resolve_window(
 
     An event-count window has no calendar span, so the cube reports the format
     start and overstates observed_days. Only meta_decay_factor reads it, and it
-    clamps at MAX_DEQ_DAYS, so any span past that is equivalent."""
-    run = current_run(cfg, as_of)
-    elapsed = (as_of - run.start_date).days
+    clamps at MAX_DEQ_DAYS, so any span past that is equivalent.
+
+    Elapsed/display_start are measured from the set's original launch, not
+    the active run: a later run (e.g. a brief bring-back) is de minimis next
+    to the bulk of an already-mature format's data, so it must not reset the
+    wide-window maturity check or the displayed coverage start. Only whether
+    the format is presently live, and the end date once it's not, follow the
+    active run — that's the whole point of being able to configure one ahead
+    of time.
+    """
+    start = launch_date(cfg)
+    elapsed = (as_of - start).days
     is_live = has_pending_data(cfg, as_of)
 
     if cfg.cube:
         time_period = TimePeriod.LAST_TWO_EVENTS
-        display_start = run.start_date
+        display_start = start
     elif elapsed >= WIDE_WINDOW_THRESHOLD_DAYS:
         time_period = TimePeriod.ALL_EXCEPT_FIRST_WEEK
-        display_start = run.start_date + dt.timedelta(days=7)
+        display_start = start + dt.timedelta(days=7)
     else:
         assert is_live, "Did a new format end before three weeks elapsed?"
         time_period = TimePeriod.LAST_TWO_WEEKS
-        display_start = max(run.start_date, as_of - dt.timedelta(days=14))
+        display_start = max(start, as_of - dt.timedelta(days=14))
 
     if is_live:
         cache_usage = CacheUsage.NONE
         display_end = as_of - dt.timedelta(days=1)
     else:
         cache_usage = CacheUsage.LAST
+        run = current_run(cfg, as_of)
         assert run.end_date is not None, "for typing"
         display_end = run.end_date
 
@@ -866,7 +876,6 @@ class DeqData:
     time_period: TimePeriod
     start_date: dt.date
     end_date: dt.date
-    run_start_date: dt.date
 
 
 def is_live(cfg: DEqConfig, as_of: dt.date | None = None) -> bool:
@@ -942,5 +951,4 @@ def deq(
         time_period=time_period,
         start_date=start_date,
         end_date=end_date,
-        run_start_date=current_run(cfg, as_of).start_date,
     )

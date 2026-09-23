@@ -12,7 +12,9 @@ import datetime as dt
 
 import pytest
 
-from deq.main import current_set, has_pending_data, is_live
+from spells import TimePeriod
+
+from deq.main import _resolve_window, current_set, has_pending_data, is_live
 from deq.set_config import DEqConfig, Run, current_run
 
 AS_OF = dt.date(2026, 9, 14)
@@ -81,6 +83,18 @@ def test_the_run_ends_automatically_on_its_own_end_date():
     as_of = dt.date(2026, 9, 30)
     assert not is_live(RETURNING_FORMAT, as_of)
     assert current_run(RETURNING_FORMAT, as_of).end_date == dt.date(2026, 9, 29)
+
+
+def test_a_bring_back_run_does_not_reset_window_maturity():
+    """A brief reactivation of an already-mature format is de minimis next to
+    the bulk of its historical data, so it must not reset _resolve_window's
+    wide-window check or displayed coverage start back to a fresh-format
+    LAST_TWO_WEEKS bootstrap keyed off the new run's start date."""
+    launch_plus_week = dt.date(2024, 4, 16) + dt.timedelta(days=7)
+    for as_of in [dt.date(2026, 9, 21), dt.date(2026, 9, 25), dt.date(2026, 9, 30)]:
+        time_period, _, display_start, _ = _resolve_window(RETURNING_FORMAT, as_of)
+        assert time_period == TimePeriod.ALL_EXCEPT_FIRST_WEEK
+        assert display_start == launch_plus_week
 
 
 def test_a_reactivated_old_set_does_not_displace_the_current_set(monkeypatch):
