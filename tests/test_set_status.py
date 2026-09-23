@@ -12,7 +12,7 @@ import datetime as dt
 
 import pytest
 
-from deq.main import has_pending_data, is_live
+from deq.main import current_set, has_pending_data, is_live
 from deq.set_config import DEqConfig, Run, current_run
 
 AS_OF = dt.date(2026, 9, 14)
@@ -81,3 +81,21 @@ def test_the_run_ends_automatically_on_its_own_end_date():
     as_of = dt.date(2026, 9, 30)
     assert not is_live(RETURNING_FORMAT, as_of)
     assert current_run(RETURNING_FORMAT, as_of).end_date == dt.date(2026, 9, 29)
+
+
+def test_a_reactivated_old_set_does_not_displace_the_current_set(monkeypatch):
+    """A bring-back run makes the old set live again, but current_set() picks
+    the page default by original launch date, not by which run last started —
+    otherwise a week-long OTJ return would knock the actual current set (e.g.
+    HOB) off the front page."""
+    import deq.main
+
+    monkeypatch.setattr(
+        deq.main,
+        "config",
+        {"NEWSET": DEqConfig(runs=[Run(dt.date(2026, 8, 11))]), "OLDSET": RETURNING_FORMAT},
+    )
+
+    as_of = dt.date(2026, 9, 25)
+    assert is_live(RETURNING_FORMAT, as_of)
+    assert current_set(as_of) == "NEWSET"

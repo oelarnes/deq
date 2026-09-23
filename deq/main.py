@@ -8,7 +8,7 @@ from spells import summon, ColName, ColType, ColSpec, EventType, TimePeriod
 from spells.draft_data import card_ratings_view
 from spells.columns import agg_col
 from spells.card_data_files import deck_color_df, CacheUsage
-from deq.set_config import DEqConfig, config, current_run
+from deq.set_config import DEqConfig, config, current_run, launch_date
 
 BASIC_LANDS = ["Plains", "Island", "Swamp", "Mountain", "Forest"]
 
@@ -890,26 +890,27 @@ def has_pending_data(cfg: DEqConfig, as_of: dt.date | None = None) -> bool:
 
 
 def current_set(as_of: dt.date | None = None) -> str:
-    """The most recently launched set whose format is live as of `as_of`."""
+    """The most recently launched set whose format is live as of `as_of`.
+
+    Ranked by each set's original launch, not its active run, so a set
+    reactivated for a later run (e.g. OTJ's 2026 bring-back) shows up as
+    live without displacing a genuinely newer set as the page default.
+    """
     as_of = as_of or dt.date.today()
     live = [
         code
         for code, cfg in config.items()
-        if current_run(cfg, as_of).start_date <= as_of and has_pending_data(cfg, as_of)
+        if launch_date(cfg) <= as_of and has_pending_data(cfg, as_of)
     ]
-    return max(live, key=lambda code: current_run(config[code], as_of).start_date)
+    return max(live, key=lambda code: launch_date(config[code]))
 
 
 def available_sets(as_of: dt.date | None = None) -> list[str]:
     """Sets launched on or before `as_of`, newest first."""
     as_of = as_of or dt.date.today()
     return sorted(
-        (
-            code
-            for code, cfg in config.items()
-            if current_run(cfg, as_of).start_date <= as_of
-        ),
-        key=lambda code: current_run(config[code], as_of).start_date,
+        (code for code, cfg in config.items() if launch_date(cfg) <= as_of),
+        key=lambda code: launch_date(config[code]),
         reverse=True,
     )
 

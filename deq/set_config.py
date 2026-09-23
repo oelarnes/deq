@@ -24,6 +24,16 @@ def current_run(cfg: DEqConfig, as_of: dt.date) -> Run:
     return max(started, key=lambda run: run.start_date) if started else cfg.runs[0]
 
 
+def launch_date(cfg: DEqConfig) -> dt.date:
+    """When the set first launched, regardless of any later runs.
+
+    Used to rank/filter sets by how recently they debuted, so a set
+    temporarily reactivated for a later run (e.g. a bring-back event) doesn't
+    read as newer than sets that actually launched more recently.
+    """
+    return min(run.start_date for run in cfg.runs)
+
+
 # Sets included in the p1 strategy analysis (requires full public parquet data)
 p1_sets = [
     "SOS",
