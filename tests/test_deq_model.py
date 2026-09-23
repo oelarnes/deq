@@ -410,9 +410,9 @@ def regenerate_expected() -> str:
     import tempfile
     from pathlib import Path
 
-    from deq.set_config import DEqConfig, config
+    from deq.set_config import DEqConfig, Run, config
 
-    config[BLB_SET] = DEqConfig(start_date=BLB_START, end_date=BLB_END)
+    config[BLB_SET] = DEqConfig(runs=[Run(BLB_START, BLB_END)])
 
     src = Path(__file__).parent / "fixtures" / "spells_data"
     with tempfile.TemporaryDirectory() as td:

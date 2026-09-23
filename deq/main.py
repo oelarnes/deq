@@ -8,7 +8,7 @@ from spells import summon, ColName, ColType, ColSpec, EventType, TimePeriod
 from spells.draft_data import card_ratings_view
 from spells.columns import agg_col
 from spells.card_data_files import deck_color_df, CacheUsage
-from deq.set_config import DEqConfig, config
+from deq.set_config import DEqConfig, config, current_run, launch_date
 
 BASIC_LANDS = ["Plains", "Island", "Swamp", "Mountain", "Forest"]
 
@@ -80,28 +80,39 @@ def _resolve_window(
 
     An event-count window has no calendar span, so the cube reports the format
     start and overstates observed_days. Only meta_decay_factor reads it, and it
-    clamps at MAX_DEQ_DAYS, so any span past that is equivalent."""
-    elapsed = (as_of - cfg.start_date).days
+    clamps at MAX_DEQ_DAYS, so any span past that is equivalent.
+
+    Elapsed/display_start are measured from the set's original launch, not
+    the active run: a later run (e.g. a brief bring-back) is de minimis next
+    to the bulk of an already-mature format's data, so it must not reset the
+    wide-window maturity check or the displayed coverage start. Only whether
+    the format is presently live, and the end date once it's not, follow the
+    active run — that's the whole point of being able to configure one ahead
+    of time.
+    """
+    start = launch_date(cfg)
+    elapsed = (as_of - start).days
     is_live = has_pending_data(cfg, as_of)
 
     if cfg.cube:
         time_period = TimePeriod.LAST_TWO_EVENTS
-        display_start = cfg.start_date
+        display_start = start
     elif elapsed >= WIDE_WINDOW_THRESHOLD_DAYS:
         time_period = TimePeriod.ALL_EXCEPT_FIRST_WEEK
-        display_start = cfg.start_date + dt.timedelta(days=7)
+        display_start = start + dt.timedelta(days=7)
     else:
         assert is_live, "Did a new format end before three weeks elapsed?"
         time_period = TimePeriod.LAST_TWO_WEEKS
-        display_start = max(cfg.start_date, as_of - dt.timedelta(days=14))
+        display_start = max(start, as_of - dt.timedelta(days=14))
 
     if is_live:
         cache_usage = CacheUsage.NONE
         display_end = as_of - dt.timedelta(days=1)
     else:
         cache_usage = CacheUsage.LAST
-        assert cfg.end_date is not None, "for typing"
-        display_end = cfg.end_date
+        run = current_run(cfg, as_of)
+        assert run.end_date is not None, "for typing"
+        display_end = run.end_date
 
     return time_period, cache_usage, display_start, display_end
 
@@ -870,7 +881,8 @@ class DeqData:
 def is_live(cfg: DEqConfig, as_of: dt.date | None = None) -> bool:
     """Whether the format is still open for play as of `as_of`."""
     as_of = as_of or dt.date.today()
-    return cfg.end_date is None or cfg.end_date >= as_of
+    run = current_run(cfg, as_of)
+    return run.end_date is None or run.end_date >= as_of
 
 
 def has_pending_data(cfg: DEqConfig, as_of: dt.date | None = None) -> bool:
@@ -882,26 +894,32 @@ def has_pending_data(cfg: DEqConfig, as_of: dt.date | None = None) -> bool:
     Wizards reports the changeover inconsistently.
     """
     as_of = as_of or dt.date.today()
-    return cfg.end_date is None or cfg.end_date >= as_of - dt.timedelta(days=1)
+    run = current_run(cfg, as_of)
+    return run.end_date is None or run.end_date >= as_of - dt.timedelta(days=1)
 
 
 def current_set(as_of: dt.date | None = None) -> str:
-    """The most recently launched set whose format is live as of `as_of`."""
+    """The most recently launched set whose format is live as of `as_of`.
+
+    Ranked by each set's original launch, not its active run, so a set
+    reactivated for a later run (e.g. OTJ's 2026 bring-back) shows up as
+    live without displacing a genuinely newer set as the page default.
+    """
     as_of = as_of or dt.date.today()
     live = [
         code
         for code, cfg in config.items()
-        if cfg.start_date <= as_of and has_pending_data(cfg, as_of)
+        if launch_date(cfg) <= as_of and has_pending_data(cfg, as_of)
     ]
-    return max(live, key=lambda code: config[code].start_date)
+    return max(live, key=lambda code: launch_date(config[code]))
 
 
 def available_sets(as_of: dt.date | None = None) -> list[str]:
     """Sets launched on or before `as_of`, newest first."""
     as_of = as_of or dt.date.today()
     return sorted(
-        (code for code, cfg in config.items() if cfg.start_date <= as_of),
-        key=lambda code: config[code].start_date,
+        (code for code, cfg in config.items() if launch_date(cfg) <= as_of),
+        key=lambda code: launch_date(config[code]),
         reverse=True,
     )
 
@@ -917,9 +935,8 @@ def deq(
     alternatives."""
     as_of = as_of or dt.date.today()
     set_code = set_code or current_set(as_of)
-    time_period, cache_usage, start_date, end_date = _resolve_window(
-        config[set_code], as_of
-    )
+    cfg = config[set_code]
+    time_period, cache_usage, start_date, end_date = _resolve_window(cfg, as_of)
     deq_df = _compute_deq(
         set_code,
         time_period=time_period,
