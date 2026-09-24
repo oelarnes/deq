@@ -54,55 +54,45 @@ def test_the_predicates_differ_by_exactly_one_day():
     assert has_pending_data(ended_yesterday, AS_OF)
 
 
-def test_a_fully_pre_configured_future_set_is_not_live_before_launch():
-    """A set whose only run is entirely in the future (start and end both
-    already known, e.g. a pre-announced event window) must not read as live
-    just because current_run()'s no-run-started-yet fallback happens to carry
-    a real, later end_date."""
+def test_a_set_is_not_live_before_launch():
+    """Even when its whole run, end date included, is configured in advance."""
     not_yet_launched = DEqConfig(
-        runs=[Run(dt.date(2026, 9, 29), dt.date(2026, 11, 9))]
+        runs=[Run(dt.date(2026, 9, 29), dt.date(2026, 11, 10))]
     )
     as_of = dt.date(2026, 9, 23)
     assert not is_live(not_yet_launched, as_of)
     assert not has_pending_data(not_yet_launched, as_of)
 
 
-# A format that ran once, ended, and has a second run configured ahead of
-# time (e.g. a set returning to the Arena queue for a known future window).
+# a set that ran once, then returns for a week configured in advance
 RETURNING_FORMAT = DEqConfig(
     runs=[
-        Run(dt.date(2024, 4, 16), dt.date(2025, 11, 4)),
+        Run(dt.date(2024, 4, 16), dt.date(2024, 6, 11)),
         Run(dt.date(2026, 9, 22), dt.date(2026, 9, 29)),
     ]
 )
 
 
-def test_a_future_run_does_not_trigger_live_early():
-    """Configuring the next run ahead of time must not flip the format live
-    before that run's own start_date arrives."""
+def test_a_future_run_does_not_go_live_early():
     as_of = dt.date(2026, 9, 21)
     assert not is_live(RETURNING_FORMAT, as_of)
-    assert current_run(RETURNING_FORMAT, as_of).end_date == dt.date(2025, 11, 4)
+    assert current_run(RETURNING_FORMAT, as_of).end_date == dt.date(2024, 6, 11)
 
 
-def test_a_future_run_goes_live_automatically_on_its_start_date():
-    """No manual edit needed on the day the new run starts."""
+def test_a_future_run_goes_live_on_its_start_date():
     as_of = dt.date(2026, 9, 22)
     assert is_live(RETURNING_FORMAT, as_of)
     assert current_run(RETURNING_FORMAT, as_of).start_date == as_of
 
 
-def test_the_run_ends_automatically_on_its_own_end_date():
+def test_a_later_run_closes_on_its_own_end_date():
     as_of = dt.date(2026, 9, 30)
     assert not is_live(RETURNING_FORMAT, as_of)
     assert current_run(RETURNING_FORMAT, as_of).end_date == dt.date(2026, 9, 29)
 
 
-def test_a_bring_back_run_does_not_reset_window_maturity():
-    """A brief reactivation of an already-mature format is de minimis next to
-    the bulk of its historical data, so it must not reset _resolve_window's
-    wide-window check or displayed coverage start back to a fresh-format
-    LAST_TWO_WEEKS bootstrap keyed off the new run's start date."""
+def test_a_later_run_keeps_the_launch_based_window():
+    """A week of returning play is small next to the original run's data."""
     launch_plus_week = dt.date(2024, 4, 16) + dt.timedelta(days=7)
     for as_of in [dt.date(2026, 9, 21), dt.date(2026, 9, 25), dt.date(2026, 9, 30)]:
         time_period, _, display_start, _ = _resolve_window(RETURNING_FORMAT, as_of)
@@ -110,37 +100,46 @@ def test_a_bring_back_run_does_not_reset_window_maturity():
         assert display_start == launch_plus_week
 
 
-def test_contender_only_applies_once_the_contender_queue_has_opened():
-    """The Contender Draft queue can open partway through a Premier Draft
-    run (e.g. two weeks after launch); 17lands' combined event type isn't
-    queryable before that, regardless of which run is currently active."""
+def test_contender_starts_on_its_own_date():
     staggered_contender = DEqConfig(
-        runs=[Run(dt.date(2026, 9, 29), dt.date(2026, 11, 9))],
+        runs=[Run(dt.date(2026, 9, 29), dt.date(2026, 11, 10))],
         contender_start=dt.date(2026, 10, 13),
     )
     assert not is_contender(staggered_contender, dt.date(2026, 9, 29))
     assert not is_contender(staggered_contender, dt.date(2026, 10, 12))
     assert is_contender(staggered_contender, dt.date(2026, 10, 13))
-    assert is_contender(staggered_contender, dt.date(2026, 11, 9))
+    assert is_contender(staggered_contender, dt.date(2026, 11, 10))
 
 
 def test_contender_defaults_off():
     assert not is_contender(RETURNING_FORMAT, dt.date(2026, 9, 25))
 
 
-def test_a_reactivated_old_set_does_not_displace_the_current_set(monkeypatch):
-    """A bring-back run makes the old set live again, but current_set() picks
-    the page default by original launch date, not by which run last started —
-    otherwise a week-long OTJ return would knock the actual current set (e.g.
-    HOB) off the front page."""
+NEWSET = DEqConfig(runs=[Run(dt.date(2026, 8, 11), dt.date(2026, 9, 29))])
+
+
+def test_a_returning_set_does_not_become_the_default(monkeypatch):
     import deq.main
 
     monkeypatch.setattr(
-        deq.main,
-        "config",
-        {"NEWSET": DEqConfig(runs=[Run(dt.date(2026, 8, 11))]), "OLDSET": RETURNING_FORMAT},
+        deq.main, "config", {"NEWSET": NEWSET, "OLDSET": RETURNING_FORMAT}
     )
-
     as_of = dt.date(2026, 9, 25)
     assert is_live(RETURNING_FORMAT, as_of)
     assert current_set(as_of) == "NEWSET"
+
+
+def test_the_newest_set_stays_the_default_after_its_run_closes(monkeypatch):
+    """With nothing newer configured, no set is live, but the page still needs a default."""
+    import deq.main
+
+    monkeypatch.setattr(
+        deq.main, "config", {"NEWSET": NEWSET, "OLDSET": RETURNING_FORMAT}
+    )
+    as_of = dt.date(2026, 10, 15)
+    assert not has_pending_data(NEWSET, as_of)
+    assert not has_pending_data(RETURNING_FORMAT, as_of)
+    assert current_set(as_of) == "NEWSET"
+    time_period, _, _, display_end = _resolve_window(NEWSET, as_of)
+    assert time_period == TimePeriod.ALL_EXCEPT_FIRST_WEEK
+    assert display_end == dt.date(2026, 9, 29)

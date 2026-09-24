@@ -82,14 +82,9 @@ def _resolve_window(
     start and overstates observed_days. Only meta_decay_factor reads it, and it
     clamps at MAX_DEQ_DAYS, so any span past that is equivalent.
 
-    Elapsed/display_start are measured from the set's original launch, not
-    the active run: a later run (e.g. a brief bring-back) is de minimis next
-    to the bulk of an already-mature format's data, so it must not reset the
-    wide-window maturity check or the displayed coverage start. Only whether
-    the format is presently live, and the end date once it's not, follow the
-    active run — that's the whole point of being able to configure one ahead
-    of time.
-    """
+    Window sizing is keyed to the set's launch because later runs are small
+    next to the original; only liveness and the closed end date follow the
+    active run."""
     start = launch_date(cfg)
     elapsed = (as_of - start).days
     is_live = has_pending_data(cfg, as_of)
@@ -555,11 +550,7 @@ def _compute_deq(
 ) -> pl.DataFrame:
     """DEq frame for a fully-specified data window. Callers must supply a
     window whose observed_start/observed_end match time_period, so that
-    observed_days lines up with the data actually fetched — see deq().
-
-    `contender` must reflect whether 17lands' combined event type is actually
-    queryable as of the call (the Contender Draft queue may launch partway
-    through a set's run) — see is_contender() in set_config.py."""
+    observed_days lines up with the data actually fetched — see deq()."""
     cfg = config[set_code]
     event_type = (
         EventType.PICK_TWO
@@ -908,19 +899,8 @@ def has_pending_data(cfg: DEqConfig, as_of: dt.date | None = None) -> bool:
 
 
 def current_set(as_of: dt.date | None = None) -> str:
-    """The most recently launched set whose format is live as of `as_of`.
-
-    Ranked by each set's original launch, not its active run, so a set
-    reactivated for a later run (e.g. OTJ's 2026 bring-back) shows up as
-    live without displacing a genuinely newer set as the page default.
-    """
-    as_of = as_of or dt.date.today()
-    live = [
-        code
-        for code, cfg in config.items()
-        if launch_date(cfg) <= as_of and has_pending_data(cfg, as_of)
-    ]
-    return max(live, key=lambda code: launch_date(config[code]))
+    """The page default: the most recently launched set, whether or not it's live."""
+    return available_sets(as_of)[0]
 
 
 def available_sets(as_of: dt.date | None = None) -> list[str]:
