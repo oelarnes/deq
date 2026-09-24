@@ -70,7 +70,7 @@ config = {
         runs=[Run(dt.date(2026, 8, 11), dt.date(2026, 9, 29))],
         contender_start=dt.date(2026, 8, 24),
     ),
-    # MSH ran Contender Draft, but 17lands has no combined data for it
+    # contender_start (7/7) waits on a 17lands backfill of MSH's combined data
     "MSH": DEqConfig(runs=[Run(dt.date(2026, 6, 23), dt.date(2026, 8, 11))]),
     "SOS": DEqConfig(
         runs=[Run(dt.date(2026, 4, 21), dt.date(2026, 6, 23))],
