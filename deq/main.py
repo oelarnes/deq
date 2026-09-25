@@ -889,25 +889,26 @@ def has_pending_data(cfg: DEqConfig, as_of: dt.date | None = None) -> bool:
     A snapshot taken on a given day reflects play through the day before, so the
     changeover day itself only lands in a run made the day after `end_date`. The
     extra day also covers an `end_date` recorded a day early, which happens when
-    Wizards reports the changeover inconsistently.
+    Wizards reports the changeover inconsistently. For the same reason, nothing
+    is posted until the day after launch.
     """
     as_of = as_of or dt.date.today()
-    if launch_date(cfg) > as_of:
+    if launch_date(cfg) >= as_of:
         return False
     run = current_run(cfg, as_of)
     return run.end_date is None or run.end_date >= as_of - dt.timedelta(days=1)
 
 
 def current_set(as_of: dt.date | None = None) -> str:
-    """The page default: the most recently launched set, whether or not it's live."""
+    """The page default: the newest set with data, whether or not it's live."""
     return available_sets(as_of)[0]
 
 
 def available_sets(as_of: dt.date | None = None) -> list[str]:
-    """Sets launched on or before `as_of`, newest first."""
+    """Sets with data as of `as_of`, newest first: 17lands posts a day behind play."""
     as_of = as_of or dt.date.today()
     return sorted(
-        (code for code, cfg in config.items() if launch_date(cfg) <= as_of),
+        (code for code, cfg in config.items() if launch_date(cfg) < as_of),
         key=lambda code: launch_date(config[code]),
         reverse=True,
     )

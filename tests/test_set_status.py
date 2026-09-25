@@ -100,14 +100,14 @@ def test_a_later_run_keeps_the_launch_based_window():
         assert display_start == launch_plus_week
 
 
-def test_contender_starts_on_its_own_date():
+def test_contender_data_starts_the_day_after_contender_opens():
     staggered_contender = DEqConfig(
         runs=[Run(dt.date(2026, 9, 29), dt.date(2026, 11, 10))],
         contender_start=dt.date(2026, 10, 13),
     )
-    assert not is_contender(staggered_contender, dt.date(2026, 9, 29))
-    assert not is_contender(staggered_contender, dt.date(2026, 10, 12))
-    assert is_contender(staggered_contender, dt.date(2026, 10, 13))
+    assert not is_contender(staggered_contender, dt.date(2026, 9, 30))
+    assert not is_contender(staggered_contender, dt.date(2026, 10, 13))
+    assert is_contender(staggered_contender, dt.date(2026, 10, 14))
     assert is_contender(staggered_contender, dt.date(2026, 11, 10))
 
 
@@ -143,3 +143,16 @@ def test_the_newest_set_stays_the_default_after_its_run_closes(monkeypatch):
     time_period, _, _, display_end = _resolve_window(NEWSET, as_of)
     assert time_period == TimePeriod.ALL_EXCEPT_FIRST_WEEK
     assert display_end == dt.date(2026, 9, 29)
+
+
+def test_a_new_set_has_no_data_on_launch_day(monkeypatch):
+    """The previous set stays the default until the new one's first day is posted."""
+    import deq.main
+
+    launching = DEqConfig(runs=[Run(dt.date(2026, 9, 29), dt.date(2026, 11, 10))])
+    monkeypatch.setattr(deq.main, "config", {"NEWSET": NEWSET, "LAUNCHING": launching})
+    launch = dt.date(2026, 9, 29)
+    assert not has_pending_data(launching, launch)
+    assert current_set(launch) == "NEWSET"
+    assert has_pending_data(launching, launch + dt.timedelta(days=1))
+    assert current_set(launch + dt.timedelta(days=1)) == "LAUNCHING"

@@ -30,8 +30,8 @@ def launch_date(cfg: DEqConfig) -> dt.date:
 
 
 def is_contender(cfg: DEqConfig, as_of: dt.date) -> bool:
-    """Whether 17lands' combined Premier+Contender event type exists as of `as_of`."""
-    return cfg.contender_start is not None and as_of >= cfg.contender_start
+    """Whether 17lands has combined Premier+Contender data as of `as_of`, a day behind play."""
+    return cfg.contender_start is not None and as_of > cfg.contender_start
 
 
 # Sets included in the p1 strategy analysis (requires full public parquet data)
