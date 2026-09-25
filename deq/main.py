@@ -8,7 +8,7 @@ from spells import summon, ColName, ColType, ColSpec, EventType, TimePeriod
 from spells.draft_data import card_ratings_view
 from spells.columns import agg_col
 from spells.card_data_files import deck_color_df, CacheUsage
-from deq.set_config import DEqConfig, config, current_run, launch_date
+from deq.set_config import DEqConfig, config, current_run, is_contender, launch_date
 
 BASIC_LANDS = ["Plains", "Island", "Swamp", "Mountain", "Forest"]
 
@@ -82,14 +82,9 @@ def _resolve_window(
     start and overstates observed_days. Only meta_decay_factor reads it, and it
     clamps at MAX_DEQ_DAYS, so any span past that is equivalent.
 
-    Elapsed/display_start are measured from the set's original launch, not
-    the active run: a later run (e.g. a brief bring-back) is de minimis next
-    to the bulk of an already-mature format's data, so it must not reset the
-    wide-window maturity check or the displayed coverage start. Only whether
-    the format is presently live, and the end date once it's not, follow the
-    active run — that's the whole point of being able to configure one ahead
-    of time.
-    """
+    Window sizing is keyed to the set's launch because later runs are small
+    next to the original; only liveness and the closed end date follow the
+    active run."""
     start = launch_date(cfg)
     elapsed = (as_of - start).days
     is_live = has_pending_data(cfg, as_of)
@@ -551,6 +546,7 @@ def _compute_deq(
     max_deq_days: int = MAX_DEQ_DAYS,
     color_sets: list[str] | None = None,
     min_games_pct: float = 0.005,
+    contender: bool = False,
 ) -> pl.DataFrame:
     """DEq frame for a fully-specified data window. Callers must supply a
     window whose observed_start/observed_end match time_period, so that
@@ -560,7 +556,7 @@ def _compute_deq(
         EventType.PICK_TWO
         if cfg.is_pick_two
         else EventType.PREMIER_COMBINED
-        if cfg.contender
+        if contender
         else EventType.PREMIER
     )
 
@@ -881,6 +877,8 @@ class DeqData:
 def is_live(cfg: DEqConfig, as_of: dt.date | None = None) -> bool:
     """Whether the format is still open for play as of `as_of`."""
     as_of = as_of or dt.date.today()
+    if launch_date(cfg) > as_of:
+        return False
     run = current_run(cfg, as_of)
     return run.end_date is None or run.end_date >= as_of
 
@@ -891,34 +889,26 @@ def has_pending_data(cfg: DEqConfig, as_of: dt.date | None = None) -> bool:
     A snapshot taken on a given day reflects play through the day before, so the
     changeover day itself only lands in a run made the day after `end_date`. The
     extra day also covers an `end_date` recorded a day early, which happens when
-    Wizards reports the changeover inconsistently.
+    Wizards reports the changeover inconsistently. For the same reason, nothing
+    is posted until the day after launch.
     """
     as_of = as_of or dt.date.today()
+    if launch_date(cfg) >= as_of:
+        return False
     run = current_run(cfg, as_of)
     return run.end_date is None or run.end_date >= as_of - dt.timedelta(days=1)
 
 
 def current_set(as_of: dt.date | None = None) -> str:
-    """The most recently launched set whose format is live as of `as_of`.
-
-    Ranked by each set's original launch, not its active run, so a set
-    reactivated for a later run (e.g. OTJ's 2026 bring-back) shows up as
-    live without displacing a genuinely newer set as the page default.
-    """
-    as_of = as_of or dt.date.today()
-    live = [
-        code
-        for code, cfg in config.items()
-        if launch_date(cfg) <= as_of and has_pending_data(cfg, as_of)
-    ]
-    return max(live, key=lambda code: launch_date(config[code]))
+    """The page default: the newest set with data, whether or not it's live."""
+    return available_sets(as_of)[0]
 
 
 def available_sets(as_of: dt.date | None = None) -> list[str]:
-    """Sets launched on or before `as_of`, newest first."""
+    """Sets with data as of `as_of`, newest first: 17lands posts a day behind play."""
     as_of = as_of or dt.date.today()
     return sorted(
-        (code for code, cfg in config.items() if launch_date(cfg) <= as_of),
+        (code for code, cfg in config.items() if launch_date(cfg) < as_of),
         key=lambda code: launch_date(config[code]),
         reverse=True,
     )
@@ -943,6 +933,7 @@ def deq(
         cache_usage=cache_usage,
         observed_start=start_date,
         observed_end=end_date,
+        contender=is_contender(cfg, as_of),
         **model_params,
     )
     return DeqData(
