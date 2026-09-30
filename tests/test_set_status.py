@@ -156,3 +156,14 @@ def test_a_new_set_has_no_data_on_launch_day(monkeypatch):
     assert current_set(launch) == "NEWSET"
     assert has_pending_data(launching, launch + dt.timedelta(days=1))
     assert current_set(launch + dt.timedelta(days=1)) == "LAUNCHING"
+
+
+@pytest.mark.parametrize("days_after_launch", [1, 2, 14])
+def test_a_new_set_window_spans_its_posted_days(days_after_launch):
+    """Both ends are inclusive: the first posted day is launch day itself."""
+    launch = dt.date(2026, 9, 29)
+    fresh = DEqConfig(runs=[Run(launch, dt.date(2026, 11, 10))])
+    as_of = launch + dt.timedelta(days=days_after_launch)
+    _, _, display_start, display_end = _resolve_window(fresh, as_of)
+    assert display_start == launch
+    assert (display_end - display_start).days + 1 == days_after_launch
