@@ -430,3 +430,16 @@ if __name__ == "__main__":
     else:
         print("Usage: python tests/test_deq_model.py regenerate", file=sys.stderr)
         sys.exit(2)
+
+
+def test_single_day_window_has_finite_meta_adj(blb_data) -> None:  # noqa: ARG001
+    """A new set's first posted day spans launch to launch."""
+    df = _compute_deq(
+        BLB_SET,
+        time_period=TimePeriod.ALL_TIME,
+        cache_usage=BLB_AS_OF,
+        observed_start=BLB_START,
+        observed_end=BLB_START,
+        color_sets=BLB_COLOR_SETS,
+    )
+    assert df["deq_meta_adj"].is_finite().all()

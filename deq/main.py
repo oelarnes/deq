@@ -550,7 +550,8 @@ def _compute_deq(
 ) -> pl.DataFrame:
     """DEq frame for a fully-specified data window. Callers must supply a
     window whose observed_start/observed_end match time_period, so that
-    observed_days lines up with the data actually fetched — see deq()."""
+    observed_days lines up with the data actually fetched — see deq().
+    Both ends are inclusive."""
     cfg = config[set_code]
     event_type = (
         EventType.PICK_TWO
@@ -561,7 +562,7 @@ def _compute_deq(
     )
 
     set_context = {
-        "observed_days": (observed_end - observed_start).days,
+        "observed_days": (observed_end - observed_start).days + 1,
         "projection_days": 0,
     }
 
