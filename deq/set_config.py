@@ -63,7 +63,7 @@ p1_sets = [
 
 config = {
     "TRK": DEqConfig(
-        runs=[Run(dt.date(2026, 11, 10), dt.date(2027, 2, 3))],
+        runs=[Run(dt.date(2026, 11, 10), dt.date(2027, 2, 2))],
         contender_start=dt.date(2026, 11, 10),
     ),
     "FRA": DEqConfig(
