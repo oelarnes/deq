@@ -10,13 +10,6 @@ jobs:
   pytest:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out spells (sibling repo, required by pdm pre_install)
-        uses: actions/checkout@v4
-        with:
-          repository: oelarnes/spells
-          ref: main
-          path: spells
-
       - name: Check out deq
         uses: actions/checkout@v4
         with:
