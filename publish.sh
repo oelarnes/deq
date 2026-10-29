@@ -1,5 +1,34 @@
 set -e
 
+STATE_DIR="$HOME/.local/state/deq"
+LOG_DIR="$STATE_DIR/logs"
+mkdir -p "$LOG_DIR"
+find "$LOG_DIR" -name 'publish-*.log' -mtime +30 -delete
+LOG="$LOG_DIR/publish-$(date +%F-%H%M%S).log"
+ln -sfn "$LOG" "$LOG_DIR/latest.log"
+
+exec > >(tee "$LOG") 2>&1
+TEE_PID=$!
+
+# one line per run in history.log, so a glance shows which runs failed and
+# which sets site.py had to skip
+record_run() {
+    status=$?
+    # close the pipe to tee and let it finish writing before the log is read
+    exec >&- 2>&-
+    wait "$TEE_PID"
+    failed=$(sed -n 's/^  FAILED \([^:]*\):.*/\1/p' "$LOG" | paste -sd, -)
+    if [ "$status" -ne 0 ]; then
+        result="FAILED (exit $status)"
+    elif [ -n "$failed" ]; then
+        result="partial (failed: $failed)"
+    else
+        result="ok"
+    fi
+    echo "$(date '+%F %T') $result $(basename "$LOG")" >> "$STATE_DIR/history.log"
+}
+trap record_run EXIT
+
 git stash
 
 git checkout main
