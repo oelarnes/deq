@@ -62,8 +62,12 @@ p1_sets = [
 ]
 
 config = {
+    "TRK": DEqConfig(
+        runs=[Run(dt.date(2026, 11, 10), dt.date(2027, 2, 2))],
+        contender_start=dt.date(2026, 11, 10),
+    ),
     "FRA": DEqConfig(
-        runs=[Run(dt.date(2026, 9, 29), dt.date(2026, 11, 10))],
+        runs=[Run(dt.date(2026, 9, 29), dt.date(2026, 12, 3))],
         contender_start=dt.date(2026, 10, 13),
     ),
     "HOB": DEqConfig(
@@ -82,6 +86,7 @@ config = {
         runs=[
             Run(dt.date(2025, 11, 18), dt.date(2026, 1, 20)),
             Run(dt.date(2026, 6, 2), dt.date(2026, 6, 9)),
+            Run(dt.date(2027, 1, 5), dt.date(2027, 1, 12)),
         ]
     ),
     "Cube+-+Powered": DEqConfig(
@@ -90,6 +95,7 @@ config = {
             Run(dt.date(2026, 6, 2), dt.date(2026, 6, 23)),
             Run(dt.date(2026, 9, 8), dt.date(2026, 9, 29)),
             Run(dt.date(2026, 10, 20), dt.date(2026, 11, 10)),
+            Run(dt.date(2026, 12, 15), dt.date(2027, 1, 12)),
         ],
         cube=True,
     ),
@@ -103,9 +109,15 @@ config = {
         runs=[
             Run(dt.date(2025, 6, 10), dt.date(2025, 7, 29)),
             Run(dt.date(2026, 6, 16), dt.date(2026, 6, 23)),
+            Run(dt.date(2027, 1, 26), dt.date(2027, 2, 2)),
         ]
     ),
-    "TDM": DEqConfig(runs=[Run(dt.date(2025, 4, 8), dt.date(2025, 10, 28))]),
+    "TDM": DEqConfig(
+        runs=[
+            Run(dt.date(2025, 4, 8), dt.date(2025, 10, 28)),
+            Run(dt.date(2026, 11, 13), dt.date(2026, 11, 23)),
+        ]
+    ),
     "DFT": DEqConfig(
         runs=[
             Run(dt.date(2025, 2, 11), dt.date(2025, 4, 8)),
@@ -115,7 +127,7 @@ config = {
     "PIO": DEqConfig(
         runs=[
             Run(dt.date(2024, 12, 10), dt.date(2025, 2, 11)),
-            Run(dt.date(2026, 11, 3), dt.date(2026, 11, 11)),
+            Run(dt.date(2026, 11, 3), dt.date(2026, 11, 13)),
         ]
     ),
     "FDN": DEqConfig(runs=[Run(dt.date(2024, 11, 12), dt.date(2024, 12, 10))]),
@@ -123,6 +135,7 @@ config = {
         runs=[
             Run(dt.date(2024, 9, 24), dt.date(2024, 11, 12)),
             Run(dt.date(2026, 7, 21), dt.date(2026, 7, 28)),
+            Run(dt.date(2027, 1, 12), dt.date(2027, 1, 19)),
         ]
     ),
     "BLB": DEqConfig(
@@ -144,8 +157,18 @@ config = {
         ]
     ),
     "MKM": DEqConfig(runs=[Run(dt.date(2024, 2, 6), dt.date(2024, 4, 16))]),
-    "LCI": DEqConfig(runs=[Run(dt.date(2023, 11, 14), dt.date(2024, 2, 6))]),
-    "WOE": DEqConfig(runs=[Run(dt.date(2023, 9, 5), dt.date(2025, 9, 23))]),
+    "LCI": DEqConfig(
+        runs=[
+            Run(dt.date(2023, 11, 14), dt.date(2024, 2, 6)),
+            Run(dt.date(2027, 1, 19), dt.date(2027, 1, 26)),
+        ]
+    ),
+    "WOE": DEqConfig(
+        runs=[
+            Run(dt.date(2023, 9, 5), dt.date(2025, 9, 23)),
+            Run(dt.date(2026, 12, 22), dt.date(2026, 12, 29)),
+        ]
+    ),
     "LTR": DEqConfig(
         runs=[
             Run(dt.date(2023, 6, 20), dt.date(2023, 9, 5)),
@@ -153,7 +176,12 @@ config = {
         ]
     ),
     "MOM": DEqConfig(runs=[Run(dt.date(2023, 4, 18), dt.date(2023, 6, 20))]),
-    "ONE": DEqConfig(runs=[Run(dt.date(2023, 2, 7), dt.date(2023, 4, 18))]),
+    "ONE": DEqConfig(
+        runs=[
+            Run(dt.date(2023, 2, 7), dt.date(2023, 4, 18)),
+            Run(dt.date(2026, 12, 8), dt.date(2026, 12, 15)),
+        ]
+    ),
     "BRO": DEqConfig(runs=[Run(dt.date(2022, 11, 15), dt.date(2024, 7, 23))]),
     "DMU": DEqConfig(
         runs=[
