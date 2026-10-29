@@ -2,12 +2,17 @@ import json
 import math
 import random
 import shutil
+import sys
+import traceback
 from pathlib import Path
 
 import polars as pl
 
-from deq.main import available_sets, deq, is_live
+from deq.main import available_sets, current_set, deq, is_live
 from deq.set_config import config, launch_date
+
+
+PUBLISHED_DATA_DIR = Path("/var/www/html/on-draft/data")
 
 
 def window_label(time_period) -> str:
@@ -36,6 +41,16 @@ def data_dir() -> Path:
     return d
 
 
+def published_payload(code: str) -> dict | None:
+    """The set's JSON as currently deployed, which the build dir doesn't keep:
+    publish.sh cleans it before every build."""
+    path = PUBLISHED_DATA_DIR / f"{code}.json"
+    if not path.exists():
+        return None
+    with open(path) as f:
+        return json.load(f)
+
+
 def sanity_check(deq_data) -> None:
     code = deq_data.set_code
     df = deq_data.df
@@ -55,10 +70,8 @@ def sanity_check(deq_data) -> None:
             f"{code}: DEq range [{deq_min:.4f}, {deq_max:.4f}] outside plausible bounds"
         )
 
-    existing = data_dir() / f"{code}.json"
-    if existing.exists():
-        with open(existing) as f:
-            prev = json.load(f)
+    prev = published_payload(code)
+    if prev is not None:
         prev_rated = sum(1 for c in prev["cards"] if c["deq"] is not None)
         if prev_rated > 0 and rated_count < prev_rated * 0.80:
             raise ValueError(
@@ -67,9 +80,16 @@ def sanity_check(deq_data) -> None:
             )
 
 
-def write_set_json(deq_data) -> Path:
+def write_payload(payload: dict) -> None:
+    path = data_dir() / f"{payload['set_code']}.json"
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, allow_nan=False)
+    print(f"  wrote {path}")
+
+
+def set_payload(deq_data) -> dict:
     days_live = (deq_data.end_date - launch_date(config[deq_data.set_code])).days
-    payload = {
+    return {
         "set_code": deq_data.set_code,
         "window": window_label(deq_data.time_period),
         "embargoed": days_live < 12,
@@ -93,21 +113,16 @@ def write_set_json(deq_data) -> Path:
             .to_dicts()
         ),
     }
-    path = data_dir() / f"{deq_data.set_code}.json"
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(payload, f, allow_nan=False)
-    print(f"  wrote {path}")
-    return path
 
 
-def write_html(deq_data, sets: list[str], version: int) -> Path:
+def write_html(default: dict, sets: list[str], version: int) -> Path:
     title_map = {"Cube+-+Powered": "Cube - Powered"}
     code_map = {"Cube+-+Powered": "PCube"}
 
     def options(codes: list[str]) -> str:
         return "".join(
             f'<option value="{code}"'
-            f'{" selected" if code == deq_data.set_code else ""}>'
+            f'{" selected" if code == default["set_code"] else ""}>'
             f"{code_map.get(code, code)}</option>"
             for code in codes
         )
@@ -121,8 +136,8 @@ def write_html(deq_data, sets: list[str], version: int) -> Path:
     )
 
     html = load_html_template().format(
-        set_code=title_map.get(deq_data.set_code, deq_data.set_code),
-        window=window_label(deq_data.time_period),
+        set_code=title_map.get(default["set_code"], default["set_code"]),
+        window=default["window"],
         select_elements=select_elements,
         version=version,
     )
@@ -143,22 +158,47 @@ def sync_static() -> None:
             print(f"  copied {f.name}")
 
 
+def build_payload(code: str) -> dict | None:
+    """Today's payload for a set, or the published one if today's can't be built.
+
+    One set failing, such as a new set before 17lands has its data, shouldn't
+    take the rest of the site down with it."""
+    try:
+        data = deq(code)
+        sanity_check(data)
+        return set_payload(data)
+    except Exception:
+        traceback.print_exc()
+        previous = published_payload(code)
+        print(
+            f"  FAILED {code}: "
+            + ("keeping published data" if previous else "left off the site"),
+            file=sys.stderr,
+        )
+        return previous
+
+
 def main(set_code: str | None = None):
     version = math.floor(random.random() * 1e10)
 
     sync_static()
 
-    # deq(None) returns the current set; use it as the page default
-    default_data = deq(set_code)
+    payloads = {}
+    for code in available_sets():
+        payload = build_payload(code)
+        if payload is not None:
+            write_payload(payload)
+            payloads[code] = payload
 
-    sets = available_sets()
-    for code in sets:
-        data = default_data if code == default_data.set_code else deq(code)
-        sanity_check(data)
-        write_set_json(data)
+    if not payloads:
+        raise RuntimeError("no set could be published")
 
-    write_html(default_data, sets, version)
-    print("DEq site generated.")
+    # payloads keeps available_sets' newest-first order
+    default = payloads.get(set_code or current_set()) or next(iter(payloads.values()))
+    write_html(default, list(payloads), version)
+
+    failed = [code for code in available_sets() if code not in payloads]
+    print("DEq site generated." + (f" Left off: {', '.join(failed)}" if failed else ""))
 
 
 if __name__ == "__main__":
