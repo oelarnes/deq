@@ -421,11 +421,16 @@ function splitOnUnquotedSlash(value) {
     return parts;
 }
 
+// Lowercase with accents removed, so "smeagol" finds "Sméagol" and vice versa
+function foldName(s) {
+    return s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+}
+
 function nameFilter(row) {
     return term => {
         const orSplit = splitOnUnquotedSlash(term).map(stripQuotes).filter(s => s.length > 0);
         return orSplit.length === 0 || orSplit.some(
-            item => row.name.toLowerCase().includes(item)
+            item => row.search_name.includes(foldName(item))
         )
     }
 }
@@ -855,7 +860,7 @@ async function loadSet(setCode) {
     isEmbargoed = !!data.embargoed;
     document.getElementById('dataTable').classList.toggle('embargo-active', isEmbargoed);
     modal.classList.toggle('embargo-active', isEmbargoed);
-    deq_table = data.cards;
+    deq_table = data.cards.map(card => ({ ...card, search_name: foldName(card.name) }));
     openModalIdx = -1;
     modal.classList.remove('active');
     searchInput.value = '';
@@ -904,8 +909,8 @@ linkSelect.addEventListener('change', function() {
     }
 
     if (cardParam) {
-        const lower = cardParam.toLowerCase();
-        const idx = currentRenderedData.findIndex(c => c.name.toLowerCase() === lower);
+        const folded = foldName(cardParam);
+        const idx = currentRenderedData.findIndex(c => c.search_name === folded);
         if (idx >= 0) openModal(idx, false, true);
         updateURL();
     } else if (kParam) {
