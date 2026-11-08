@@ -137,7 +137,7 @@ def card_sheet_payload(code: str) -> dict | None:
     print(f"  {code}: card sheet of {len(cards)} cards, data expected {data_day}")
     return {
         "set_code": code,
-        "window": f"Card list, data from {data_day:%b} {data_day.day}",
+        "window": "N/A",
         "embargoed": False,
         "card_sheet": True,
         "cards": [
