@@ -8,7 +8,14 @@ from spells import summon, ColName, ColType, ColSpec, EventType, TimePeriod
 from spells.draft_data import card_ratings_view
 from spells.columns import agg_col
 from spells.card_data_files import deck_color_df, CacheUsage
-from deq.set_config import DEqConfig, config, current_run, is_contender, launch_date
+from deq.set_config import (
+    DEqConfig,
+    card_file_date,
+    config,
+    current_run,
+    is_contender,
+    launch_date,
+)
 
 BASIC_LANDS = ["Plains", "Island", "Swamp", "Mountain", "Forest"]
 
@@ -910,6 +917,21 @@ def available_sets(as_of: dt.date | None = None) -> list[str]:
     as_of = as_of or dt.date.today()
     return sorted(
         (code for code, cfg in config.items() if launch_date(cfg) < as_of),
+        key=lambda code: launch_date(config[code]),
+        reverse=True,
+    )
+
+
+def card_sheet_sets(as_of: dt.date | None = None) -> list[str]:
+    """Sets showing only their card list as of `as_of`, newest first: from the
+    card file date until 17lands has data, the day after launch."""
+    as_of = as_of or dt.date.today()
+    return sorted(
+        (
+            code
+            for code, cfg in config.items()
+            if card_file_date(cfg) <= as_of <= launch_date(cfg)
+        ),
         key=lambda code: launch_date(config[code]),
         reverse=True,
     )

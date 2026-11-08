@@ -1,3 +1,4 @@
+import datetime as dt
 import json
 import math
 import random
@@ -8,7 +9,9 @@ from pathlib import Path
 
 import polars as pl
 
-from deq.main import available_sets, current_set, deq, is_live
+from spells.cards import CardListUnavailable, card_df, draftable_names
+
+from deq.main import available_sets, card_sheet_sets, current_set, deq, is_live
 from deq.set_config import config, launch_date
 
 
@@ -115,6 +118,41 @@ def set_payload(deq_data) -> dict:
     }
 
 
+def card_sheet_payload(code: str) -> dict | None:
+    """The set's card list with no ratings, for browsing before 17lands has
+    data. Built once from MTGJSON and republished as-is until data arrives."""
+    data_day = launch_date(config[code]) + dt.timedelta(days=1)
+    published = published_payload(code)
+    if published is not None and published.get("card_sheet"):
+        print(f"  {code}: card sheet unchanged, data expected {data_day}")
+        return published
+
+    try:
+        names = draftable_names(code)
+    except CardListUnavailable as e:
+        print(f"  {code}: {e}, left off the site")
+        return None
+
+    cards = card_df(code, names).select("name", "color", "rarity", "image_url")
+    print(f"  {code}: card sheet of {len(cards)} cards, data expected {data_day}")
+    return {
+        "set_code": code,
+        "window": f"Card list, data from {data_day:%b} {data_day.day}",
+        "embargoed": False,
+        "card_sheet": True,
+        "cards": [
+            {
+                "deq_grade": "N/A",
+                **card,
+                **dict.fromkeys(
+                    ["deq", "mwr", "pick_equity", "adj", "npr", "pct_top", "pct_gp"]
+                ),
+            }
+            for card in cards.to_dicts()
+        ],
+    }
+
+
 def write_html(default: dict, sets: list[str], version: int) -> Path:
     title_map = {"Cube+-+Powered": "Cube - Powered"}
     code_map = {"Cube+-+Powered": "PCube"}
@@ -127,11 +165,13 @@ def write_html(default: dict, sets: list[str], version: int) -> Path:
             for code in codes
         )
 
-    live = [code for code in sets if is_live(config[code])]
-    ended = [code for code in sets if not is_live(config[code])]
+    today = dt.date.today()
+    upcoming = [code for code in sets if launch_date(config[code]) > today]
+    live = [code for code in sets if is_live(config[code], today)]
+    ended = [code for code in sets if code not in upcoming + live]
     select_elements = "".join(
         f'<optgroup label="{label}">{options(codes)}</optgroup>'
-        for label, codes in (("Live", live), ("Ended", ended))
+        for label, codes in (("Upcoming", upcoming), ("Live", live), ("Ended", ended))
         if codes
     )
 
@@ -183,21 +223,24 @@ def main(set_code: str | None = None):
 
     sync_static()
 
+    sheets = card_sheet_sets()
+    codes = sheets + available_sets()
     payloads = {}
-    for code in available_sets():
-        payload = build_payload(code)
+    for code in codes:
+        payload = card_sheet_payload(code) if code in sheets else build_payload(code)
         if payload is not None:
             write_payload(payload)
             payloads[code] = payload
 
-    if not payloads:
+    rated = [p for p in payloads.values() if not p.get("card_sheet")]
+    if not rated:
         raise RuntimeError("no set could be published")
 
-    # payloads keeps available_sets' newest-first order
-    default = payloads.get(set_code or current_set()) or next(iter(payloads.values()))
+    # payloads keeps the newest-first order of codes
+    default = payloads.get(set_code or current_set()) or rated[0]
     write_html(default, list(payloads), version)
 
-    failed = [code for code in available_sets() if code not in payloads]
+    failed = [code for code in codes if code not in payloads]
     print("DEq site generated." + (f" Left off: {', '.join(failed)}" if failed else ""))
 
 

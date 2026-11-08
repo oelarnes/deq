@@ -16,6 +16,8 @@ class DEqConfig:
     cube: bool = False
     # 17lands only serves the combined Premier+Contender event type from here on
     contender_start: dt.date | None = None
+    # the card list goes up ahead of launch; a week before it unless set here
+    card_file_date: dt.date | None = None
 
 
 def current_run(cfg: DEqConfig, as_of: dt.date) -> Run:
@@ -27,6 +29,11 @@ def current_run(cfg: DEqConfig, as_of: dt.date) -> Run:
 def launch_date(cfg: DEqConfig) -> dt.date:
     """When the set first launched; a later run doesn't make a set newer."""
     return min(run.start_date for run in cfg.runs)
+
+
+def card_file_date(cfg: DEqConfig) -> dt.date:
+    """When the set's card list goes up, ahead of any 17lands data."""
+    return cfg.card_file_date or launch_date(cfg) - dt.timedelta(days=7)
 
 
 def is_contender(cfg: DEqConfig, as_of: dt.date) -> bool:

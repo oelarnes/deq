@@ -14,6 +14,14 @@ from spells import TimePeriod
 
 from deq import site
 from deq.main import DeqData
+from deq.set_config import DEqConfig, Run
+
+TODAY = dt.date.today()
+
+
+def launched(days_ago: int) -> DEqConfig:
+    return DEqConfig(runs=[Run(TODAY - dt.timedelta(days=days_ago))])
+
 
 TEMPLATE = Path(__file__).parent.parent / "deq_site_template.html"
 
@@ -48,6 +56,7 @@ def fake_deq_data(code: str, n_cards: int = 10) -> DeqData:
 @pytest.fixture
 def site_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """A build in tmp_path, with FRA and TRK available and nothing published."""
+    monkeypatch.setattr(site, "config", {"TRK": launched(5), "FRA": launched(40)})
     monkeypatch.chdir(tmp_path)
     shutil.copy(TEMPLATE, tmp_path / TEMPLATE.name)
     (tmp_path / "docs" / "_build" / "html" / "_static").mkdir(parents=True)
@@ -58,6 +67,7 @@ def site_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(site, "PUBLISHED_DATA_DIR", published)
     monkeypatch.setattr(site, "available_sets", lambda: ["TRK", "FRA"])
     monkeypatch.setattr(site, "current_set", lambda: "TRK")
+    monkeypatch.setattr(site, "card_sheet_sets", lambda: [])
     return tmp_path
 
 
@@ -111,3 +121,73 @@ def test_a_large_drop_in_rated_cards_from_the_published_data_is_rejected(site_en
 
     with pytest.raises(ValueError, match="rated cards dropped"):
         site.sanity_check(fake_deq_data("FRA", n_cards=5))
+
+
+@pytest.fixture
+def upcoming(site_env, monkeypatch):
+    """NEW launches in three days, with a card list on MTGJSON."""
+    site.config["NEW"] = launched(-3)
+    monkeypatch.setattr(site, "card_sheet_sets", lambda: ["NEW"])
+    monkeypatch.setattr(site, "deq", failing_for())
+    monkeypatch.setattr(site, "draftable_names", lambda code: ["Opt", "Shock"])
+    monkeypatch.setattr(
+        site,
+        "card_df",
+        lambda code, names: pl.DataFrame(
+            {
+                "name": names,
+                "color": ["U", "R"],
+                "rarity": ["common", "common"],
+                "image_url": ["", ""],
+                "mana_value": [1, 1],
+            }
+        ),
+    )
+    return site_env
+
+
+def built_payload(root: Path, code: str) -> dict:
+    return json.loads(
+        (root / "docs" / "_build" / "html" / "data" / f"{code}.json").read_text()
+    )
+
+
+def test_an_upcoming_set_gets_a_card_sheet_without_becoming_default(upcoming):
+    site.main()
+
+    sheet = built_payload(upcoming, "NEW")
+    assert sheet["card_sheet"]
+    assert [c["name"] for c in sheet["cards"]] == ["Opt", "Shock"]
+    assert all(c["deq"] is None and c["deq_grade"] == "N/A" for c in sheet["cards"])
+
+    html = (upcoming / "docs" / "_build" / "html" / "deq.html").read_text()
+    assert '<optgroup label="Upcoming"><option value="NEW">' in html
+    assert '<option value="TRK" selected>' in html
+
+
+def test_a_published_card_sheet_is_republished_as_is(upcoming, monkeypatch):
+    published = {"set_code": "NEW", "window": "w", "card_sheet": True, "cards": []}
+    (site.PUBLISHED_DATA_DIR / "NEW.json").write_text(json.dumps(published))
+
+    def unexpected(code):
+        raise AssertionError("the card list should not be fetched again")
+
+    monkeypatch.setattr(site, "draftable_names", unexpected)
+    site.main()
+    assert built_payload(upcoming, "NEW") == published
+
+
+def test_a_set_without_a_card_list_is_left_off_quietly(upcoming, monkeypatch, capsys):
+    def unavailable(code):
+        raise site.CardListUnavailable(f"MTGJSON has no card list for {code} yet")
+
+    monkeypatch.setattr(site, "draftable_names", unavailable)
+    site.main()
+    assert built_sets(upcoming) == {"TRK", "FRA"}
+    assert "FAILED" not in capsys.readouterr().err
+
+
+def test_a_card_sheet_alone_is_not_a_site(upcoming, monkeypatch):
+    monkeypatch.setattr(site, "deq", failing_for("TRK", "FRA"))
+    with pytest.raises(RuntimeError):
+        site.main()

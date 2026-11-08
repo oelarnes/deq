@@ -14,7 +14,13 @@ import pytest
 
 from spells import TimePeriod
 
-from deq.main import _resolve_window, current_set, has_pending_data, is_live
+from deq.main import (
+    _resolve_window,
+    card_sheet_sets,
+    current_set,
+    has_pending_data,
+    is_live,
+)
 from deq.set_config import DEqConfig, Run, current_run, is_contender
 
 AS_OF = dt.date(2026, 9, 14)
@@ -167,3 +173,31 @@ def test_a_new_set_window_spans_its_posted_days(days_after_launch):
     _, _, display_start, display_end = _resolve_window(fresh, as_of)
     assert display_start == launch
     assert (display_end - display_start).days + 1 == days_after_launch
+
+
+def test_a_card_sheet_runs_from_a_week_before_launch_through_launch_day(monkeypatch):
+    """Launch day goes live with the sheet; the first data arrives the next day."""
+    import deq.main
+
+    launch = dt.date(2026, 11, 10)
+    upcoming = DEqConfig(runs=[Run(launch, dt.date(2027, 2, 2))])
+    monkeypatch.setattr(deq.main, "config", {"UPCOMING": upcoming, "NEWSET": NEWSET})
+    week = dt.timedelta(days=7)
+    assert card_sheet_sets(launch - week - dt.timedelta(days=1)) == []
+    assert card_sheet_sets(launch - week) == ["UPCOMING"]
+    assert card_sheet_sets(launch) == ["UPCOMING"]
+    assert is_live(upcoming, launch)
+    assert card_sheet_sets(launch + dt.timedelta(days=1)) == []
+    assert current_set(launch + dt.timedelta(days=1)) == "UPCOMING"
+
+
+def test_a_configured_card_file_date_overrides_the_week(monkeypatch):
+    import deq.main
+
+    launch = dt.date(2026, 11, 10)
+    early = DEqConfig(
+        runs=[Run(launch, dt.date(2027, 2, 2))], card_file_date=dt.date(2026, 10, 20)
+    )
+    monkeypatch.setattr(deq.main, "config", {"EARLY": early})
+    assert card_sheet_sets(dt.date(2026, 10, 19)) == []
+    assert card_sheet_sets(dt.date(2026, 10, 20)) == ["EARLY"]
