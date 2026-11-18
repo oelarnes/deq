@@ -827,6 +827,9 @@ searchInput.addEventListener('blur', function() {
     updateChipsVisibility();
 });
 
+// Autofocus can land before the listeners above are attached
+if (document.activeElement === searchInput) searchInput.dispatchEvent(new Event('focus'));
+
 renderChips();
 
 // URL state
