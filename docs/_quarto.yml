@@ -1,6 +1,6 @@
 project:
   type: website
-  output-dir: _build/quarto
+  output-dir: _build/html
   render:
     - intro.md
     - "*.ipynb"
