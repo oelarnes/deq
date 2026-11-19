@@ -24,7 +24,8 @@ $font-family-sans-serif: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helveti
 /*-- scss:rules --*/
 @import "deq-common";
 
-tbody tr:nth-child(even) {
+// great_tables output carries its own light styling
+table:not(.gt_table) > tbody > tr:nth-child(even) {
   background-color: #2a2e33;
 }
 
