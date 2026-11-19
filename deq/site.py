@@ -192,6 +192,7 @@ def write_html(default: dict, sets: list[str], version: int) -> Path:
 def sync_static() -> None:
     src = Path("docs") / "_static"
     dst = build_dir() / "_static"
+    dst.mkdir(exist_ok=True)
     for f in src.iterdir():
         if f.is_file():
             shutil.copy2(f, dst / f.name)

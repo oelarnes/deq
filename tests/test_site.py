@@ -59,8 +59,8 @@ def site_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(site, "config", {"TRK": launched(5), "FRA": launched(40)})
     monkeypatch.chdir(tmp_path)
     shutil.copy(TEMPLATE, tmp_path / TEMPLATE.name)
-    (tmp_path / "docs" / "_build" / "html" / "_static").mkdir(parents=True)
-    (tmp_path / "docs" / "_static").mkdir()
+    (tmp_path / "docs" / "_static").mkdir(parents=True)
+    (tmp_path / "docs" / "_static" / "style.css").write_text("")
 
     published = tmp_path / "published"
     published.mkdir()
