@@ -39,14 +39,13 @@ git pull
 export PATH="$HOME/.local/bin:$PATH"
 
 # match the venv to the lockfile just pulled, so a dependency bump cannot leave
-# the code ahead of the environment. No --prod or --only-keep: jupyter-book is
-# a dev dependency and this script runs it.
+# the code ahead of the environment
 pdm sync
 
-.venv/bin/jupyter-book clean -a docs
-.venv/bin/jupyter-book build docs
+# quarto is a user install in ~/.local/bin; the notebooks render from their saved outputs
+rm -rf docs/_build
+quarto render docs
 
-cp docs/_images/* docs/_build/html/_images
 .venv/bin/python deq/site.py
 
 SITE_DIR=/var/www/html/on-draft

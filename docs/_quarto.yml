@@ -1,0 +1,58 @@
+project:
+  type: website
+  output-dir: _build/html
+  render:
+    - intro.md
+    - "*.ipynb"
+  resources:
+    - /_images/*
+
+execute:
+  enabled: false
+
+website:
+  title: "MagicFlea on Draft: Spells and DEq"
+  favicon: deq.png
+  repo-url: https://github.com/oelarnes/deq
+  repo-subdir: docs
+  sidebar:
+    style: docked
+    logo: mfod-logo.png
+    title: false
+    search: true
+    tools:
+      - icon: table
+        text: DEq
+        href: deq.html
+      - icon: github
+        href: https://github.com/oelarnes/deq
+    contents:
+      - intro.md
+      - section: Articles
+        contents:
+          - p1-strategy.ipynb
+      - section: Aetherdrift
+        contents:
+          - dft-early.ipynb
+      - section: "Tarkir: Dragonstorm"
+        contents:
+          - tdm-post.ipynb
+      - section: DEq
+        contents:
+          - deq-docs.ipynb
+          - deq-math.ipynb
+          - npr-docs.ipynb
+      - section: Misc
+        contents:
+          - bayes-cohorts.ipynb
+  page-footer:
+    center: "© 2024–2026 MagicFlea"
+
+format:
+  html:
+    theme:
+      dark: [default, theme/deq-dark.scss]
+      light: [default, theme/deq-light.scss]
+    toc: true
+    highlight-style: github
+    code-copy: true
