@@ -1,3 +1,8 @@
+---
+aliases:
+  - index.html
+---
+
 # MagicFlea on Draft
 
 Find within my resources on the analysis of limited data! The pillars of this project are the analytics 
@@ -11,5 +16,24 @@ me on the various limited Discords since I don't use other social media, but you
 
 Many thanks to the folks at 17Lands, without whom none of this analysis is possible. Please support their Patreon!
 
-```{tableofcontents}
-```
+**Articles**
+
+- [How to Choose One Card By Analyzing Every Draft Ever](p1-strategy.ipynb)
+
+**Aetherdrift**
+
+- [It Was Fine to First Pick Green Commons, Actually](dft-early.ipynb)
+
+**Tarkir: Dragonstorm**
+
+- [Gumption Boros](tdm-post.ipynb)
+
+**DEq**
+
+- [DEq - A Card Quality Metric](deq-docs.ipynb)
+- [DEq - The Math](deq-math.ipynb)
+- [Normalized Pick Rate](npr-docs.ipynb)
+
+**Misc**
+
+- [Inferring Skill With Bayes Theorem](bayes-cohorts.ipynb)

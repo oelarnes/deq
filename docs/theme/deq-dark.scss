@@ -1,0 +1,34 @@
+/*-- scss:defaults --*/
+$font-size-root: 16px;
+// The DEq page's dark palette, so the docs and deq.html read as one site
+$body-bg: #121212;
+$body-color: #ced6dd;
+$body-emphasis-color: #f3f4f5;
+$secondary-color: #9ca4af;
+$link-color: #528fe4;
+$link-hover-color: #e89217;
+$primary: #528fe4;
+$border-color: #48566b;
+$code-color: #f3c7ee;
+$code-bg: #29313d;
+$code-block-bg: #29313d;
+$code-block-border-left: #3fa34d;
+$navbar-bg: #121212;
+$navbar-fg: #ced6dd;
+$sidebar-bg: #121212;
+$footer-bg: #121212;
+$callout-color-note: #528fe4;
+$table-border-color: #48566b;
+$font-family-sans-serif: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+
+/*-- scss:rules --*/
+@import "deq-common";
+
+tbody tr:nth-child(even) {
+  background-color: #2a2e33;
+}
+
+.card {
+  background-color: #29313d;
+  border-color: #48566b;
+}
