@@ -15,3 +15,78 @@ h1, h2 {
 .sidebar-item-section > .sidebar-item-container .sidebar-item-text {
   font-weight: 700;
 }
+
+// Mobile: the top bar shows the site, not the page title repeated from below
+@media (max-width: 991.98px) {
+  .quarto-secondary-nav {
+    min-height: 3.25rem;
+  }
+
+  .quarto-secondary-nav .container-fluid,
+  .quarto-secondary-nav a.flex-grow-1 {
+    display: flex;
+    align-items: center;
+  }
+
+  // Quarto hides the page title on mobile because the bar normally repeats it
+  #title-block-header h1.title.d-none {
+    display: block !important;
+  }
+
+  #title-block-header.quarto-title-block.default .quarto-title h1.title {
+    margin-bottom: 1rem;
+  }
+
+  .quarto-secondary-nav .quarto-btn-toggle,
+  .quarto-secondary-nav .quarto-search-button {
+    font-size: 1.35rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .quarto-secondary-nav .quarto-secondary-nav-title {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 0;
+    font-size: 0;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  .quarto-secondary-nav .quarto-secondary-nav-title::before {
+    content: "";
+    flex: none;
+    width: 2.75rem;
+    height: 2rem;
+    border-radius: 4px;
+    background: url("mfod-logo.png") center / cover no-repeat;
+  }
+
+  .quarto-secondary-nav .quarto-secondary-nav-title::after {
+    content: "MagicFlea on Draft";
+    font-size: 1.05rem;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  // Opened menu: wrap long titles and give each entry a comfortable tap target
+  #quarto-sidebar .sidebar-item-container .sidebar-link,
+  #quarto-sidebar .sidebar-item-text {
+    white-space: normal;
+  }
+
+  #quarto-sidebar .sidebar-item-container .sidebar-link {
+    padding-top: 0.45rem;
+    padding-bottom: 0.45rem;
+  }
+
+  #quarto-sidebar .sidebar-item-section {
+    margin-top: 0.6rem;
+  }
+
+  #quarto-sidebar .sidebar-tools-main a {
+    font-size: 1.3rem;
+    padding: 0.25rem 0.6rem;
+  }
+}
