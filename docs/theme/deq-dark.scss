@@ -1,4 +1,5 @@
 /*-- scss:defaults --*/
+@import url("https://fonts.googleapis.com/css2?family=Yellowtail&display=swap");
 $font-size-root: 16px;
 // The DEq page's dark palette, so the docs and deq.html read as one site
 $body-bg: #121212;
@@ -22,6 +23,16 @@ $table-border-color: #48566b;
 $font-family-sans-serif: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
 
 /*-- scss:rules --*/
+// Memphis / synthwave accents, used sparingly
+:root {
+  --mf-muted: #9ca4af;
+  --mf-strong: #f3f4f5;
+  --mf-teal: #4fd1c5;
+  --mf-violet: #a78bfa;
+  --mf-pink: #ff6ec7;
+  --mf-yellow: #f2d45c;
+}
+
 @import "deq-common";
 
 // great_tables output carries its own light styling
