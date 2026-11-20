@@ -11,6 +11,7 @@ execute:
   enabled: false
 
 website:
+  bread-crumbs: false
   title: "MagicFlea on Draft: Spells and DEq"
   favicon: deq.png
   repo-url: https://github.com/oelarnes/deq
