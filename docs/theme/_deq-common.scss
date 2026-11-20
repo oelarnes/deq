@@ -8,8 +8,20 @@ th {
   font-size: 0.95em;
 }
 
-h1, h2 {
-  font-weight: 500;
+// headings and the wordmark: a soft, slightly wonky serif; body and data stay sans
+$deq-font-heading: "Fraunces", Georgia, serif;
+
+h1, h2, h3,
+.quarto-title .title {
+  font-family: $deq-font-heading;
+  font-optical-sizing: auto;
+  font-variation-settings: "SOFT" 100, "WONK" 1;
+  font-weight: 520;
+  letter-spacing: -0.005em;
+}
+
+h3 {
+  font-weight: 560;
 }
 
 .sidebar-item-section > .sidebar-item-container .sidebar-item-text {
@@ -19,7 +31,21 @@ h1, h2 {
 // Mobile: the top bar shows the site, not the page title repeated from below
 @media (max-width: 991.98px) {
   .quarto-secondary-nav {
+    position: relative;
     min-height: 3.25rem;
+    border-bottom: 0;
+    box-shadow: none;
+  }
+
+  // the one synthwave flourish: a thin neon rule under the bar
+  .quarto-secondary-nav::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--mf-teal), var(--mf-violet), var(--mf-pink), var(--mf-yellow));
   }
 
   .quarto-secondary-nav .container-fluid,
@@ -43,31 +69,35 @@ h1, h2 {
     padding: 0.5rem 0.75rem;
   }
 
+  // wordmark: "MagicFlea" in the page font, "on draft" in the logo's retro script
   .quarto-secondary-nav .quarto-secondary-nav-title {
     display: flex;
-    align-items: center;
-    gap: 0.6rem;
+    align-items: baseline;
+    gap: 0.4rem;
     margin: 0;
     font-size: 0;
     white-space: nowrap;
-    overflow: hidden;
   }
 
   .quarto-secondary-nav .quarto-secondary-nav-title::before {
-    content: "";
-    flex: none;
-    width: 2.75rem;
-    height: 2rem;
-    border-radius: 4px;
-    background: url("mfod-logo.png") center / cover no-repeat;
+    content: "MagicFlea";
+    font-family: $deq-font-heading;
+    font-optical-sizing: auto;
+    font-variation-settings: "SOFT" 100, "WONK" 1;
+    font-size: 1.3rem;
+    font-weight: 650;
+    letter-spacing: 0.005em;
+    // the card back's MAGIC blue, solid so it stays easy to read
+    color: var(--mf-mark);
   }
 
   .quarto-secondary-nav .quarto-secondary-nav-title::after {
-    content: "MagicFlea on Draft";
-    font-size: 1.05rem;
-    font-weight: 500;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    content: "on draft";
+    font-family: "Yellowtail", cursive;
+    font-size: 1.5rem;
+    line-height: 1;
+    padding-right: 0.2em;
+    color: var(--mf-pink);
   }
 
   // Opened menu: wrap long titles and give each entry a comfortable tap target
@@ -82,7 +112,38 @@ h1, h2 {
   }
 
   #quarto-sidebar .sidebar-item-section {
-    margin-top: 0.6rem;
+    margin-top: 0.9rem;
+  }
+
+  // section labels: small spaced caps marked by a Memphis triangle
+  #quarto-sidebar .sidebar-item-section > .sidebar-item-container .sidebar-item-text {
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--mf-muted);
+  }
+
+  #quarto-sidebar .sidebar-item-section > .sidebar-item-container .sidebar-item-text::before {
+    content: "";
+    display: inline-block;
+    width: 0.55rem;
+    height: 0.55rem;
+    margin-right: 0.5rem;
+    clip-path: polygon(0 100%, 50% 0, 100% 100%);
+    background: var(--mf-section-accent, var(--mf-teal));
+  }
+
+  #quarto-sidebar .sidebar-item-section:nth-of-type(4n + 1) { --mf-section-accent: var(--mf-teal); }
+  #quarto-sidebar .sidebar-item-section:nth-of-type(4n + 2) { --mf-section-accent: var(--mf-pink); }
+  #quarto-sidebar .sidebar-item-section:nth-of-type(4n + 3) { --mf-section-accent: var(--mf-yellow); }
+  #quarto-sidebar .sidebar-item-section:nth-of-type(4n + 4) { --mf-section-accent: var(--mf-violet); }
+
+  // current page: a pink edge marker
+  #quarto-sidebar .sidebar-link.active {
+    border-left: 3px solid var(--mf-pink);
+    padding-left: 0.6rem;
+    margin-left: -0.6rem;
   }
 
   #quarto-sidebar .sidebar-tools-main a {
