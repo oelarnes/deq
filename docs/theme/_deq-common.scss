@@ -8,8 +8,20 @@ th {
   font-size: 0.95em;
 }
 
-h1, h2 {
-  font-weight: 500;
+// headings and the wordmark: a soft, slightly wonky serif; body and data stay sans
+$deq-font-heading: "Fraunces", Georgia, serif;
+
+h1, h2, h3,
+.quarto-title .title {
+  font-family: $deq-font-heading;
+  font-optical-sizing: auto;
+  font-variation-settings: "SOFT" 100, "WONK" 1;
+  font-weight: 520;
+  letter-spacing: -0.005em;
+}
+
+h3 {
+  font-weight: 560;
 }
 
 .sidebar-item-section > .sidebar-item-container .sidebar-item-text {
@@ -69,9 +81,12 @@ h1, h2 {
 
   .quarto-secondary-nav .quarto-secondary-nav-title::before {
     content: "MagicFlea";
-    font-size: 1.15rem;
-    font-weight: 700;
-    letter-spacing: 0.01em;
+    font-family: $deq-font-heading;
+    font-optical-sizing: auto;
+    font-variation-settings: "SOFT" 100, "WONK" 1;
+    font-size: 1.25rem;
+    font-weight: 650;
+    letter-spacing: -0.005em;
     color: var(--mf-strong);
   }
 
