@@ -632,12 +632,14 @@ th[data-sort]:hover {
 
 .info-deq-title {
     font-size: 1.9em;
-    font-weight: 600;
     line-height: 1;
-    color: #d0d4db;
-    text-shadow: 0 -1px 2px rgba(0,0,0,0.6);
-    text-decoration: underline;
-    text-underline-offset: 3px;
+    /* a small version of the page logo's badge */
+    padding: 0 0.3em 0.06em;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    background:
+        linear-gradient(180deg, #252c38, #191d25) padding-box,
+        linear-gradient(90deg, #4fd1c5, #a78bfa, #ff6ec7, #f2d45c) border-box;
 }
 
 .info-score-credit {
