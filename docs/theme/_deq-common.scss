@@ -67,6 +67,49 @@ h3 {
   color: var(--mf-pink);
 }
 
+// Table of contents rhythm: tight lines within a title, small even gaps between links,
+// a clearly larger gap between sections
+#quarto-sidebar .sidebar-item-text {
+  line-height: 1.3;
+}
+
+#quarto-sidebar .sidebar-item-container .sidebar-link {
+  padding-top: 0.18rem;
+  padding-bottom: 0.18rem;
+}
+
+#quarto-sidebar .sidebar-item-section {
+  margin-top: 1rem;
+}
+
+#quarto-sidebar .sidebar-item-section > .sidebar-item-container {
+  margin-bottom: 0.15rem;
+}
+
+// section labels: small spaced caps marked by a Memphis triangle
+#quarto-sidebar .sidebar-item-section > .sidebar-item-container .sidebar-item-text {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--mf-muted);
+}
+
+#quarto-sidebar .sidebar-item-section > .sidebar-item-container .sidebar-item-text::before {
+  content: "";
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-right: 0.5rem;
+  clip-path: polygon(0 100%, 50% 0, 100% 100%);
+  background: var(--mf-section-accent, var(--mf-teal));
+}
+
+#quarto-sidebar .sidebar-item-section:nth-of-type(4n + 1) { --mf-section-accent: var(--mf-teal); }
+#quarto-sidebar .sidebar-item-section:nth-of-type(4n + 2) { --mf-section-accent: var(--mf-pink); }
+#quarto-sidebar .sidebar-item-section:nth-of-type(4n + 3) { --mf-section-accent: var(--mf-yellow); }
+#quarto-sidebar .sidebar-item-section:nth-of-type(4n + 4) { --mf-section-accent: var(--mf-violet); }
+
 // Mobile: the top bar shows the site, not the page title repeated from below
 @media (max-width: 991.98px) {
   .quarto-secondary-nav {
@@ -146,37 +189,14 @@ h3 {
   }
 
   #quarto-sidebar .sidebar-item-container .sidebar-link {
-    padding-top: 0.45rem;
-    padding-bottom: 0.45rem;
+    padding-top: 0.2rem;
+    padding-bottom: 0.2rem;
   }
 
-  #quarto-sidebar .sidebar-item-section {
-    margin-top: 0.9rem;
+  // the menu sits under the top bar's wordmark, so the badge would repeat it
+  .sidebar-title > a {
+    display: none;
   }
-
-  // section labels: small spaced caps marked by a Memphis triangle
-  #quarto-sidebar .sidebar-item-section > .sidebar-item-container .sidebar-item-text {
-    font-size: 0.78rem;
-    font-weight: 700;
-    letter-spacing: 0.09em;
-    text-transform: uppercase;
-    color: var(--mf-muted);
-  }
-
-  #quarto-sidebar .sidebar-item-section > .sidebar-item-container .sidebar-item-text::before {
-    content: "";
-    display: inline-block;
-    width: 0.55rem;
-    height: 0.55rem;
-    margin-right: 0.5rem;
-    clip-path: polygon(0 100%, 50% 0, 100% 100%);
-    background: var(--mf-section-accent, var(--mf-teal));
-  }
-
-  #quarto-sidebar .sidebar-item-section:nth-of-type(4n + 1) { --mf-section-accent: var(--mf-teal); }
-  #quarto-sidebar .sidebar-item-section:nth-of-type(4n + 2) { --mf-section-accent: var(--mf-pink); }
-  #quarto-sidebar .sidebar-item-section:nth-of-type(4n + 3) { --mf-section-accent: var(--mf-yellow); }
-  #quarto-sidebar .sidebar-item-section:nth-of-type(4n + 4) { --mf-section-accent: var(--mf-violet); }
 
   // current page: a pink edge marker
   #quarto-sidebar .sidebar-link.active {
