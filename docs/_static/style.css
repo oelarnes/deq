@@ -30,21 +30,19 @@ body {
 }
 
 
+/* the logo as a badge: the docs' neon gradient as its border, a soft lift inside */
 .deq-logo {
-    color: var(--pst-color-light);
+    display: inline-block;
     font-size: 400%;
     line-height: 1.1;
-}
-
-/* the neon rule from the docs' header, short, under the logo */
-.deq-logo::after {
-    content: "";
-    display: block;
-    height: 3px;
-    width: 72%;
-    margin: 0.06em auto 0.12em;
-    border-radius: 2px;
-    background: linear-gradient(90deg, #4fd1c5, #a78bfa, #ff6ec7, #f2d45c);
+    padding: 0.04em 0.34em 0.1em;
+    margin: 1.1rem 0 1.4rem;
+    border: 3px solid transparent;
+    border-radius: 16px;
+    background:
+        linear-gradient(180deg, #252c38, #191d25) padding-box,
+        linear-gradient(90deg, #4fd1c5, #a78bfa, #ff6ec7, #f2d45c) border-box;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
 }
 
 /* the wordmark's two voices: "DE" in Fraunces, MAGIC blue; "q" in the pink script */
