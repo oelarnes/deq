@@ -34,7 +34,7 @@ h3 {
   flex-direction: column;
   align-items: flex-start;
   margin: 0.35rem 0 0.75rem;
-  padding: 0.45rem 0.95rem 0.4rem;
+  padding: 0.45rem 0.95rem 0.35rem;
   font-size: 0;
   text-decoration: none;
   border: 2px solid transparent;
@@ -59,7 +59,7 @@ h3 {
 .sidebar-title > a::after {
   content: "on draft";
   align-self: flex-end;
-  margin-top: -0.85rem;
+  margin-top: -1.5rem;
   padding-right: 0.1em;
   font-family: "Yellowtail", cursive;
   font-size: 1.55rem;
