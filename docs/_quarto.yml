@@ -18,8 +18,7 @@ website:
   repo-subdir: docs
   sidebar:
     style: docked
-    logo: mfod-logo.png
-    title: false
+    title: "MagicFlea on draft"
     search: true
     tools:
       - icon: table

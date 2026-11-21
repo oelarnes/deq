@@ -28,6 +28,45 @@ h3 {
   font-weight: 700;
 }
 
+// Sidebar wordmark: "MagicFlea" over "on draft" in a badge, like the DEq page's logo
+.sidebar-title > a {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin: 0.35rem 0 0.75rem;
+  padding: 0.45rem 0.95rem 0.4rem;
+  font-size: 0;
+  text-decoration: none;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, var(--mf-badge-top), var(--mf-badge-bottom)) padding-box,
+    linear-gradient(90deg, var(--mf-teal), var(--mf-violet), var(--mf-pink), var(--mf-yellow)) border-box;
+}
+
+.sidebar-title > a::before {
+  content: "MagicFlea";
+  font-family: $deq-font-heading;
+  font-optical-sizing: auto;
+  font-variation-settings: "SOFT" 100, "WONK" 1;
+  font-size: 1.6rem;
+  font-weight: 650;
+  line-height: 1.05;
+  letter-spacing: 0.005em;
+  color: var(--mf-mark);
+}
+
+.sidebar-title > a::after {
+  content: "on draft";
+  align-self: flex-end;
+  margin-top: -0.85rem;
+  padding-right: 0.1em;
+  font-family: "Yellowtail", cursive;
+  font-size: 1.55rem;
+  line-height: 1;
+  color: var(--mf-pink);
+}
+
 // Mobile: the top bar shows the site, not the page title repeated from below
 @media (max-width: 991.98px) {
   .quarto-secondary-nav {
