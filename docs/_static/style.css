@@ -5,7 +5,7 @@ body {
 
 .deq-container {
     color: var(--pst-color-text-base);
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    font-family: 'Atkinson Hyperlegible Next', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     text-align: center;
     display: flex;
     flex-direction: column;
@@ -30,10 +30,38 @@ body {
 }
 
 
+/* the logo as a badge: the docs' neon gradient as its border, a soft lift inside */
 .deq-logo {
-    color: var(--pst-color-light);
+    display: inline-block;
     font-size: 400%;
-    font-weight: 600;
+    line-height: 1.1;
+    padding: 0.04em 0.34em 0.1em;
+    margin: 1.1rem 0 1.4rem;
+    border: 3px solid transparent;
+    border-radius: 16px;
+    background:
+        linear-gradient(180deg, #252c38, #191d25) padding-box,
+        linear-gradient(90deg, #4fd1c5, #a78bfa, #ff6ec7, #f2d45c) border-box;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+/* the wordmark's two voices: "DE" in Fraunces, MAGIC blue; "q" in the pink script */
+.deq-logo-de {
+    font-family: 'Fraunces', Georgia, serif;
+    font-optical-sizing: auto;
+    font-variation-settings: "SOFT" 100, "WONK" 1;
+    font-weight: 650;
+    letter-spacing: 0.01em;
+    color: #8ab8f5;
+}
+
+.deq-logo-q {
+    font-family: 'Yellowtail', cursive;
+    font-weight: 400;
+    font-size: 1.12em;
+    margin-left: 0.04em;
+    padding-right: 0.08em;
+    color: #ff6ec7;
 }
 
 .doc-button {
